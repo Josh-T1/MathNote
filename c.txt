@@ -1,0 +1,4 @@
+/Applications/inkscape.app/contents/macos/./inkscape --export-type="png" --export-dpi=300 testfile.svg
+osascript -e 'set the clipboard to (read (POSIX file /Users/joshuataylor/Desktop/test.jpeg) as JPEG picture)'
+osascript -e 'set the clipboard to (read (POSIX file /Users/joshuataylor/Desktop/tmp97mpl_3z.png) as  {«class PNGf»})'
+/var/folders/22/jdx_plts6rvcy7w4dx7z3lzm0000gn/T/tmpmdqzltyi.png
