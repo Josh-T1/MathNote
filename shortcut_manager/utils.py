@@ -1,19 +1,45 @@
 import subprocess
+from contextlib import contextmanager
 import sys
-sys.path.insert(0, '../')
 import os
-#config = Config()['inkscape-config']
-#def open_inkscape(path: str):
-#    subprocess.Popen([config['inkscape'], path])
+from pathlib import Path
+import json
+import logging
 
-def clear_tmp_dir(path:str):
-    with open(path, mode='r') as f:
-        files = f.read().split('\n') # how do i do this?
-#    for file in files:
-#        os.remove()
+CONFIG_PATH = Path(__file__).parent / "config.json"
+
+def get_config():
+    with open(CONFIG_PATH, 'r') as f:
+        config = json.load(f)
+    return config
+
+def save_config(updated_config: str):
+    with open(CONFIG_PATH, 'w') as f:
+        json.dump(updated_config, f, indent=6)
 
 def focus(app_name):
     cmd = f'osascript -e \'activate application "{app_name}"\''
     subprocess.call(cmd, shell=True) # unsafe?
 
+def svg_to_pdftex(path: str, ink_exec: str, export_dpi: str):
+    """" dst: file destination
+    ink_exec: path to inkscape executable
+    """
+    logging.getLogger(__name__).info(f"Exporting to {path} to pdf and pdf_tex")
+    subprocess.run(
+            [ink_exec, '--export-area-page', '--export-dpi', export_dpi,
+             '--export-type=pdf', '--export-latex', '--export-filename', path],
+            stdin=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+            )
+    return
 
+@contextmanager
+def silent_stdout():
+    old_target = sys.stdout
+    try:
+        with open(os.devnull, mode='w') as new_target:
+            sys.stdout = new_target
+            yield new_target
+    finally:
+        sys.stdout = old_target

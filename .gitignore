@@ -1,4 +1,18 @@
 __pycache__/
 *py[cod]
-DS_Store
+.DS_Store
 
+# notes
+*.md
+*.txt
+
+!README.md
+
+# ignore shortcut_manager.log
+*.log
+
+# ignore config.json
+*.json
+
+# test ideas
+playground/

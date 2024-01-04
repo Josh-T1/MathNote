@@ -1,20 +1,18 @@
-import sys
 import subprocess
 import tempfile
 import os
 from pathlib import Path
 from glob import glob
-sys.path.insert(0, '../')
-from config import get_config, save_config
 import iterm2
 from functools import partial
-from utils import focus
+from utils import focus, get_config
 import time
+import logging
 
 config = get_config()
-ink_config = config['inkscape-config']
 
-def latex_document(latex): # could i add path to macros and preamble, does this slow down the process?
+def latex_document(latex: str): # could i add path to macros and preamble, does this slow down the process?
+    """ return latex template for embeding latex into inkscape """
     return r"""
 \documentclass[12pt,border=12pt]{standalone}
 \usepackage{amsmath, amssymb}
@@ -33,6 +31,11 @@ def gather_and_del(filename: str):
 
 
 def add_latex(latex_raw:str): # Add ability to add text without compiling latex
+    """ Takes in latex code, converts compiled latex to png from which the png is posted to the system clipboard.
+    Only works with MacOS
+    TODO: allow for latex to be added to inkscape without begin compiled
+    """
+    logging.getLogger(__name__).info("Begging latex to png conversion")
     tmpfile = tempfile.NamedTemporaryFile(mode='w+', delete=False)
     tmpfile.write(latex_document(latex_raw))
     tmpfile.close()
@@ -44,11 +47,12 @@ def add_latex(latex_raw:str): # Add ability to add text without compiling latex
             stderr=subprocess.DEVNULL
             )
     subprocess.run(
-            [ink_config["inkscape"],f'{tmpfile.name}.pdf', "--export-type=png", f'--export-dpi={ink_config["export-dpi"]}', f'--export-filename={tmpfile.name}.png'],
+            [config["inkscape-exec"],f'{tmpfile.name}.pdf', "--export-type=png", f'--export-dpi={config["export-dpi"]}', f'--export-filename={tmpfile.name}.png'],
             cwd=working_dir,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL
             )
+    logging.getLogger(__name__).info(f"Copying png: {tmpfile.name}.png to clipboard")
     subprocess.run(
             ["osascript", "-e", f'set the clipboard to (read (POSIX file "{tmpfile.name}.png") as  {{«class PNGf»}})'],
             )
@@ -58,22 +62,33 @@ def add_latex(latex_raw:str): # Add ability to add text without compiling latex
 
     with open(config['.data'], mode='w') as f:
         pattern = f"{str(tmpfile.name)}.*"
-        files = glob.glob(pattern)
+        files = glob(pattern)
         f.write('\n'.join(files))
 
 
 def open_vim() -> str: # send 'a'
+    """  Opens vim with tmpfile as buffer to which latex code is wrote by user.
+    TODO: Send a to buffer to automate inizializing of write to buffer
+    """
+    logger = logging.getLogger(__name__)
     tmpfile = tempfile.NamedTemporaryFile(mode='w+', suffix=".tex", delete=False)
     tmpfile.write('$$')
     tmpfile.close()
-    run(tmpfile.name)
+    logger.debug(f"Opening vim instance with buffer {tmpfile.name}")
+
+    promt_user_for_latex(tmpfile.name) # lauches Iterm2 with nvim, runs untill window is closed
     with open(tmpfile.name, 'r') as f:
         latex = f.read().strip()
+
+    logger.debug(f"Removing file: {tmpfile.name}")
     os.remove(tmpfile.name)
     return latex
 
 
 def write_latex() -> bool:
+    """ latex wrote by user => png copied to clipboard
+    TODO: This may be the wrong function but remember to put the curso
+    """
     latex = open_vim()
     if latex != '$$':
         add_latex(latex)
@@ -81,12 +96,12 @@ def write_latex() -> bool:
     else:
         return False
 
-def start_inkscape():
-    pass
+#def start_inkscape():
+#    pass
 
-def start_shortcut_manager(figure_path: str):
-    config['inkscape-config'] = figure_path
-    save_config(config)
+#def start_shortcut_manager(figure_path: str):
+#    config['inkscape-config'] = figure_path
+#    save_config(config)
 
 
 def get_num_windows(app):
@@ -94,6 +109,10 @@ def get_num_windows(app):
 
 
 async def _main(connection, filename: str):
+    """ From Iterm2 Api. Opens nvim in a new Iterm2 instance and pauses code execution untill the window is classed.
+    filename: nvim
+    connection: ?
+    """
     app = await iterm2.async_get_app(connection)
     window = app.current_window
 
@@ -110,12 +129,15 @@ async def _main(connection, filename: str):
     else:
         print("No current window")
 
-def run(file_path: str):
+def promt_user_for_latex(file_path: str):
+    """ runs _main """
     #file_path = "/Users/joshuataylor/desktop/test.txt"
+
     if os.path.isfile(file_path):
         main = partial(_main, filename=file_path)
         iterm2.run_until_complete(main)
 
     else:
+        logging.getLogger(__name__).warning(f"Invalid path: {file_path}")
         raise  ValueError("Invalid file Path")
 
