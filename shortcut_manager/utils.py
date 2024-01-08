@@ -6,7 +6,7 @@ from pathlib import Path
 import json
 import logging
 
-CONFIG_PATH = Path(__file__).parent / "config.json"
+CONFIG_PATH = Path(__file__).parent.parent / "config.json"
 
 def get_config():
     with open(CONFIG_PATH, 'r') as f:
@@ -18,8 +18,9 @@ def save_config(updated_config: str):
         json.dump(updated_config, f, indent=6)
 
 def focus(app_name):
-    cmd = f'osascript -e \'activate application "{app_name}"\''
-    subprocess.call(cmd, shell=True) # unsafe?
+    subprocess.call(
+            ["osascript", "-e", f'activate application "{app_name}"']
+            )
 
 def svg_to_pdftex(path: str, ink_exec: str, export_dpi: str):
     """" dst: file destination
@@ -32,7 +33,6 @@ def svg_to_pdftex(path: str, ink_exec: str, export_dpi: str):
             stdin=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL
             )
-    return
 
 @contextmanager
 def silent_stdout():
@@ -43,3 +43,4 @@ def silent_stdout():
             yield new_target
     finally:
         sys.stdout = old_target
+

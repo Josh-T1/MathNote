@@ -1,3 +1,4 @@
+from collections.abc import Callable
 import subprocess
 import tempfile
 import os
@@ -35,7 +36,8 @@ def add_latex(latex_raw:str): # Add ability to add text without compiling latex
     Only works with MacOS
     TODO: allow for latex to be added to inkscape without begin compiled
     """
-    logging.getLogger(__name__).info("Begging latex to png conversion")
+    logger = logging.getLogger(__name__)
+    logger.info("Begging latex to png conversion")
     tmpfile = tempfile.NamedTemporaryFile(mode='w+', delete=False)
     tmpfile.write(latex_document(latex_raw))
     tmpfile.close()
@@ -52,7 +54,7 @@ def add_latex(latex_raw:str): # Add ability to add text without compiling latex
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL
             )
-    logging.getLogger(__name__).info(f"Copying png: {tmpfile.name}.png to clipboard")
+    logger.info(f"Copying png: {tmpfile.name}.png to clipboard")
     subprocess.run(
             ["osascript", "-e", f'set the clipboard to (read (POSIX file "{tmpfile.name}.png") as  {{«class PNGf»}})'],
             )
@@ -93,8 +95,8 @@ def write_latex() -> bool:
     if latex != '$$':
         add_latex(latex)
         return True
-    else:
-        return False
+
+    return False
 
 #def start_inkscape():
 #    pass
@@ -141,3 +143,7 @@ def promt_user_for_latex(file_path: str):
         logging.getLogger(__name__).warning(f"Invalid path: {file_path}")
         raise  ValueError("Invalid file Path")
 
+
+if __name__ == '__main__':
+    latex = write_latex()
+    print(latex)

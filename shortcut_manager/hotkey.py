@@ -1,15 +1,16 @@
 import os
 import logging
 import multiprocessing as mp
+from re import sub
+import subprocess
 from pynput import keyboard
 from enum import Enum
-from utils import svg_to_pdftex
 from typing import Callable, Union, Optional
 import tkinter as tk
 import time
 import threading
 from functools import partial
-from utils import focus
+from utils import focus, svg_to_pdftex
 from vim import write_latex
 
 logger = logging.getLogger(__name__)
@@ -19,56 +20,65 @@ class Modes(Enum):
     Normal = "normal"
     Insert = "insert"
     Close = "close"
+    Pause = "pause"
 
 class IK_ShortcutManager():
-    def __init__(self, config: dict, figure_path: str, key_handler, queue: Optional[mp.Queue] = None):
+    def __init__(self, config: dict, figure_path: str, key_handler, gui_queue: Optional[mp.Queue]):
         """ Shortcuts can not contain esc character or 'i'.
         config: config dictionary
         figure_path: is the desired save location for inkscape figure
+        subprocess_queue: subprocess's are put into subprocess_queue where they are executed in another thread
         """
         self.logger = logging.getLogger(__name__ + "ShortcutManager")
         self.shortcuts = {"normal": {}, "insert": {}}
-        self.queue = queue
+
+        self.gui_queue = gui_queue
         self.key_handler = key_handler(self.shortcuts)
         self._set_sane_defaults()
-
 
         self.config = config
         self.figure_path = figure_path
         self.cont = keyboard.Controller()
         self.mode = Modes.Insert
+
         self.toggle_mode(Modes.Insert) #hack solution to update gui
 
-        self.listener = keyboard.Listener(on_press=self._on_press, on_release=self._on_release, darwin_intercept=self._darwin_intercept)
+
 
     def _set_sane_defaults(self):
+        # I THINK THIS IS BREAKING MY PROGRAM
         self.register_shortcuts([
                 ("cmd+c", self.close, "normal", True),
                 ("esc", partial(self.toggle_mode, mode=Modes.Normal), "insert", True),
                 ('i', partial(self.toggle_mode, mode=Modes.Insert), "normal", True),
+                ('t', self.add_latex, "normal", True)
+                # , how do i allow pausing?
                 ])
 
     def start(self):
-        """ Start keyboard.Listener() thread """
+        """ Creates keyboard.Listener() and starts thread """
+        self.listener = keyboard.Listener(on_press=self._on_press, on_release=self._on_release, darwin_intercept=self._darwin_intercept)
         self.logger.info("Listener thread is starting")
         self.listener.start()
 
     def join(self):
-        """ impliments threading.Thread().join() method and handles key interrupt """
+        """ impliments threading.Thread().join() """
         try:
             self.listener.join()
         except KeyboardInterrupt:
             self.logger.warning("Shortcut Manager was stopped with a KeyboardInterrupt")
             self.close()
 
+    def close_listener(self):
+        """ Terminates self.listener thread """
+        self.listener.stop()
+        self.toggle_mode(Modes.Pause)
+
     def close(self):
-        """ The shortcut mangers is closed when the keyboard listener is terminated. This occurs when there is keyboard interupt or when the
-        close shortcut is called.
-        """
         self.logger.info("Starting ShortcutManager close")
         self._delete_tmp_files()
         self.save_fig()
-        self.toggle_mode(Modes.Close) # this closes listener
+        self.close_listener()
 
     def _delete_tmp_files(self):
         """ Delete all files created as a result of compiling latex code: latex => pdf => png => clipboard """
@@ -82,12 +92,14 @@ class IK_ShortcutManager():
                 os.remove(file)
 
     def toggle_mode(self, mode: Modes) -> None:
+        """ Change object mode state and notify gui window through the queue """
         self.mode = mode
-        if self.queue != None:
-            self.queue.put(mode.value)
+        if self.gui_queue != None:
+            self.gui_queue.put(self.mode.value)
 
     def _darwin_intercept(self, event_type, event):
-        """ Allows for keys to be intercepted and blocked from being sent to stdout by Listener if mode=normal """
+        """ Allows for keys to be intercepted and blocked from being sent to stdout if mode=normal. Darwing_intercept is MacOS specific """
+#        if self.mode == Modes.Pause: return event
         if self.mode == Modes.Normal:
             return None
         else:
@@ -97,25 +109,26 @@ class IK_ShortcutManager():
         self.key_handler.pressed_key(key)
 
     def _on_release(self, key: keyboard.Key) -> Union[bool, None]: # make sure closing the __enter__ condition trigers __exit__
-        """ Check for pattern activation on key release and call corresponding shorcut handler if active. If mode is closing,
-        thread.Listener() object is terminated on release
-        """
-        res = self.key_handler.handle(self.mode.value, key)
-        if callable(res):
-            res()
+        """ Returning False stops keyboard.Listener() """
+        val = self.key_handler.handle(self.mode, key)
+        if callable(val):
+            val()
+            self.logger.debug("Succesfully called shortcut handler")
 
         if self.mode == Modes.Close:
+            self.logger.info("Closing keyboard.Listener() thread")
             return False
 
-    def register_shortcut(self, shortcut: str, handler: Callable, mode: str, method=False):
-        """ Adds shortcut
-        method: True if shortcut handler is IK_ShortcutManager method
-        """
-        if mode not in self.shortcuts.keys():
+    def register_shortcut(self, shortcut: str, handler: Callable, mode: str, obj_method: bool):
+        """obj_method: True if handler is a class method, else False -> sets handler to class method handler.__name__ """
+        if mode not in self.shortcuts:
             self.logger.warning(f"Mode: {mode} is not supported")
             return
-        if not method:
-            handler = partial(handler, inst=self)
+        if not obj_method:
+            setattr(self, handler.__name__, handler)
+#        handler = handler if obj_method else partial(handler, inst=self)
+#        if not method:
+#            handler = partial(handler, inst=self)
         self.shortcuts[mode][shortcut] = handler
         self.key_handler.register_shortcut(shortcut, handler, mode)
 
@@ -125,7 +138,6 @@ class IK_ShortcutManager():
             self.register_shortcut(*shortcut)
 
     def save_fig(self) -> None:
-        """ Saves figure and makes pdf and pdf_tex copies of the figure """
         self.logger.info(f"Saving figure: {self.figure_path}")
         self.toggle_mode(Modes.Insert)
         with self.cont.pressed(keyboard.Key.cmd):
@@ -135,6 +147,20 @@ class IK_ShortcutManager():
         svg_to_pdftex(self.figure_path, self.config['inkscape-exec'], self.config['export-dpi'])
 
 
+    def add_latex(self) -> None:
+        """ Launches new Iterm2 instanace from which vim is opened in a tmp file, if latex is written, it is
+        compiled and pasted to inkscape
+        inst: IK_KeyHandler instance
+        """
+
+        self.close_listener()
+        subprocess.run(["python3", "/Users/joshuataylor/documents/python/myprojects/mathnote/shortcut_manager/vim.py"])
+        self.start()
+        self.toggle_mode(Modes.Insert)
+        focus("Inkscape")
+        with self.cont.pressed(keyboard.Key.cmd):
+            self.cont.tap('v')
+        self.join()
 
 
 class IK_KeyHandler():
@@ -151,30 +177,36 @@ class IK_KeyHandler():
         self.shortcuts[mode][pattern] = func
 
 
-    def handle(self, mode: str, key: keyboard.Key) -> Union[None, Callable]:
-        """ Dynamically handles on_release behaviour """
-        patterns_mode = self.shortcuts[mode]
+    def handle(self, mode: Modes, key: keyboard.Key) -> Union[None, Callable]:
+        """ Rename this """
+        # Instant reject conditions
+        if len(self.pressed) == 0 or mode == Modes.Pause:
+            self.pressed.clear()
+            return None
+
+        patterns_mode = self.shortcuts[mode.value]
         pattern = '+'.join(self.pressed)
 
-        if pattern in patterns_mode.keys():
-            self.logger.debug(f"Calling shortcut handler for shotcut: {pattern}")
-            self.pressed.clear()
-            return patterns_mode[pattern]
+        for key_ in patterns_mode:
+            # Case: full match
+            if pattern == key_:
+                self.logger.debug(f"Calling shortcut handler for shotcut: {pattern}")
+                self.pressed.clear()
+                return patterns_mode[pattern]
 
-        for key_ in self.shortcuts.keys(): # find patterns when keys are pressed to fast
+            # Case: partial match
             if pattern in key_ and pattern != '':
                 self.logger.debug(f"Partial match with '{pattern}'")
                 return None
 
+        # Case: no match
         self.logger.debug(f"No pattern was found, clearing pressed. Pressed: {self.pressed}, Pattern: {pattern}")
         self.pressed.clear()
         return None
 
     @staticmethod
     def key_to_str(key: keyboard.Key) -> str:
-        """
-        Simplifies Key__repr__() to a more readable format. ex: "'Key.cmd: key_code'" -> 'cmd'
-        """
+        """ Simplifies Key__repr__() to a more readable format. ex: "'Key.cmd: key_code'" -> 'cmd' """
         return key.__repr__().replace("'", '').split('.')[-1].split(':')[0]
 
 class StatusWindow:
@@ -188,6 +220,9 @@ class StatusWindow:
         self.status_label = tk.Label(self.root, text="waiting")
         self.status_label.pack()
         self.queue = queue
+        self.logger = logging.getLogger(__name__ + "StatusWindow")
+        self.current_state = None
+
 
     def retreive_mode(self):
         try:
@@ -198,6 +233,7 @@ class StatusWindow:
 
     def close(self):
         # is there a reason quit() not destroy()
+        self.logger.info("Closing gui window")
         self.root.quit()
 
     def start(self):
@@ -206,24 +242,25 @@ class StatusWindow:
         self.root.after(1000,thread.start)
         self.root.mainloop()
 
+
     def after(self):
         """ Logic loop for updating gui mode label. Called after mainloop() is started """
-        current_state = None
+
         while True:
             res = self.retreive_mode()
+            if res != None and res != self.current_state:
+                self.current_state = res
+                self.change_mode(self.current_state)
+                self.logger.debug(f"Gui received message: '{res}'")
 
-            if res != None and res != current_state:
-                self.change_mode(res)
-
-                if res == "close":
-                    self.root.quit()
-                    break
-
-                current_state = res
+            if self.current_state == "close": # I shouldnt need this
+                break
 
             time.sleep(1)
 
-    def change_mode(self, mode):
+        self.close()
+
+    def change_mode(self, mode: str):
         self.status_label.config(text=mode)
 
 # =================================================================
@@ -233,10 +270,14 @@ def add_latex(inst) -> None:
     compiled and pasted to inkscape
     inst: IK_KeyHandler instance
     """
-    wrote = write_latex()
+    path = __file__.rsplit('/', 1)[0] + "/vim.py" # assumes these live in same directory
+    output = write_latex()
+#    output = wrote.stdout.strip()
     focus("Inkscape")
+
     inst.toggle_mode(Modes.Insert)
-    if wrote:
+    if output == "True":
+
         with inst.cont.pressed(keyboard.Key.cmd):
             inst.cont.tap('v')
 
@@ -244,7 +285,51 @@ def add_latex(inst) -> None:
 def user_shortcuts():
     """ returns user shortcuts in form of list of tuples """
     return [
-            ('t', add_latex, "normal")
+            ('t', add_latex, "normal", False)
             ]
+
+
+
+#def subporcess_executer(cont: CommunicationController):
+#    loop = True
+#    while loop:
+#        res = cont.get_subprocess()
+#        if res is not None:
+#            subprocess.run(res)
+#        loop = cont.active
+#        time.sleep(0.5)
+
+
+class CommunicationController:
+    """ Add events and  **HOW DO I CLOSE**"""
+    def __init__(self, gui_queue, subprocess_queue):
+        self.gui_queue = gui_queue
+        self.subprocess_queue = subprocess_queue
+        self.active = True # Does this make sence?
+
+    def get_mode_update(self):
+        pass
+    def get_message_update(self):
+        pass
+    def get_subprocess_update(self):
+        self.get_item(self.subprocess_queue)
+
+    @staticmethod
+    def get_item(queue):
+        try:
+            res = queue.get()
+            return res
+        except mp.Queue.empty:
+            return None
+
+    def get_subprocess(self):
+       return
+    def add_event(self, event, event_type=None):
+        """ Valid type are 'message', 'subprocess', 'mode' """
+        if event_type == "mode":
+            self.gui_queue.put(event)
+# Add event function
+#
+
 
 

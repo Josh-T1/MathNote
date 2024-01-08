@@ -1,12 +1,6 @@
-import shutil
-from datetime import datetime
 import subprocess
 from pathlib import Path
-from config.config import Config
-from typing import Union
-from dataclasses import dataclass
 
-config = Config()
 
 def number2filename(n):
     return 'lec_{0:02d}.tex'.format(n)
@@ -14,36 +8,50 @@ def number2filename(n):
 def filename2number(s):
     return int(str(s).replace('.tex', '').replace('lec_', ''))
 
-@dataclass
 class Lecture():
-    file_path: Path
+    """ Stores content of individual lecture and contains methods for parsing file to get lecture properties such as 'theorems' or 'definitions'
+    TODO: add parsing methods. theorems, statements, definitions. How do I determine relevent lectures by unit?
+    """
+    def __init__(self, file_path: Path) -> None:
+        self.file_path = file_path
 
-    def __post__init__(self):
-        self.number = int(self.file_path.stem)
+    @property
+    def number(self):
+        # ** DOES this Work
+        return int(self.file_path.stem) # this definitly does not work
+
+    @property
+    def last_edit(self) -> float:
+        """ Returns most recent edit in seconds """
+        return self.file_path.stat().st_mtime
 
 class Lectures():
     def __init__(self, path: Path):
         self.root = path
         self.lecture_path = self.root / 'lectures'
-        self.master_file = self.root / 'main_file.tex'
-        self.files = self.read_files()
+        self.master_file = self.root / 'main.tex'
+        self._lectures = []
 
-    def read_files(self) -> list[Lecture]:
+    @property
+    def lectures(self) -> list[Lecture]:
+        if self._lectures:
+            return self._lectures
         files = self.root.glob('lec_*.tex')
-        return sorted((Lecture(f) for f in files), key=lambda l: l.number)
+        self._lectures = sorted((Lecture(f) for f in files), key=lambda l: l.number)
+        return self._lectures
 
     def parse_lecture_range(self, string: str) -> int:
         if string.isdigit():
             return int(string)
         elif string == "last":
-            return self.files[-1].number
+            return self.lectures[-1].number
         elif string == 'prev':
-            return self.files[-1].number -1
+            return self.lectures[-1].number -1
         else:
             return 0
 
     def parse_range_string(self, arg: str) -> list[int]:
-        all_numbers = [lecture.number for lecture in self.files]
+        all_numbers = [lecture.number for lecture in self.lectures]
         if 'all' in arg:
             return all_numbers
         if '-' in arg:
@@ -54,9 +62,10 @@ class Lectures():
 
     @staticmethod
     def get_header_footer(filepath: Path) -> tuple[str, str]:
+        """ Copy header and footer main.tex """
         part = "header"
-        header = ''
-        footer = ''
+        header, footer = '', ''
+
         with filepath.open() as f:
             for line in f:
                 if 'end lectures' in line:
@@ -68,33 +77,28 @@ class Lectures():
                 if part == 'footer':
                     footer += line
 
+                if "start lectures" in line:
+                    part = "body"
+
         return (header, footer)
 
     def update_lectures_in_master(self, lecture_nums: list[int]) -> None: # wtf is r
         header, footer = self.get_header_footer(self.master_file)
-        body = ''.join(
-                ' ' * 4 + r'\input{' + number2filename(number) + '}\n' for number in lecture_nums
-                )
+        body = ''.join(' ' * 4 + r'\input{' + number2filename(number) + '}\n' for number in lecture_nums)
         self.master_file.write_text(header + body + footer)
 
     def new_lecture(self):
-        if len(self.files) != 0:
-            new_lecture_number = self.files[-1].number + 1
-        else:
-            new_lecture_number = 1
+        new_lecture_number = 1 if not self.lectures else self.lectures[-1].number +1
 
         new_lecture_path = self.root / number2filename(new_lecture_number)
-        shutil.copyfile(config[LECTURE_TEMPLATE], new_lecture_path)
-        #new_lecture_path.touch() # Copy file template instead of touch?
-        new_lecture_path.write_text(f'\\begin{{document}}\n\\subsection*{{Lecture{new_lecture_number}}}\n\\end{{document}}\n')
+        new_lecture_path.touch() # Copy file template instead of touch?
+        new_lecture_path.write_text(f'\\{{lecture{{{new_lecture_number}}}}}\n')
 
-        if new_lecture_number == 1:
-            self.update_lectures_in_master([1]) # why the fuck is there a box around 1
-        else:
-            self.update_lectures_in_master([new_lecture_number -1, new_lecture_number])
+        self.update_lectures_in_master([new_lecture_number]) # [new_lecture_number-1, new_lecture_number] when num!=1,  why?
 
-        l = Lecture(new_lecture_path, self.course)
-        return l
+        new_lecture = Lecture(new_lecture_path)
+        self._lectures.append(new_lecture)
+        return new_lecture
 
     def complile_main(self):
         result = subprocess.run(
