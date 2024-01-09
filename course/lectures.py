@@ -1,6 +1,6 @@
 import subprocess
 from pathlib import Path
-
+import logging
 
 def number2filename(n):
     return 'lec_{0:02d}.tex'.format(n)
@@ -18,8 +18,8 @@ class Lecture():
     @property
     def number(self):
         # ** DOES this Work
-        return int(self.file_path.stem) # this definitly does not work
-
+        num = str(self.file_path.stem).split("_")[-1].lstrip("0")
+        return int(num) # this definitly does not work
     @property
     def last_edit(self) -> float:
         """ Returns most recent edit in seconds """
@@ -31,6 +31,7 @@ class Lectures():
         self.lecture_path = self.root / 'lectures'
         self.master_file = self.root / 'main.tex'
         self._lectures = []
+        self._logger = logging.getLogger(__name__)
 
     @property
     def lectures(self) -> list[Lecture]:
@@ -51,6 +52,7 @@ class Lectures():
             return 0
 
     def parse_range_string(self, arg: str) -> list[int]:
+        """ Why tf do I have this """
         all_numbers = [lecture.number for lecture in self.lectures]
         if 'all' in arg:
             return all_numbers
@@ -82,18 +84,26 @@ class Lectures():
 
         return (header, footer)
 
-    def update_lectures_in_master(self, lecture_nums: list[int]) -> None: # wtf is r
+    def update_lectures_in_master(self, lecture_nums: list[int]) -> None:
+        """ Copy contents of main.tex header and footer, find all lecuteres and their correspoding number, join file parts together
+        and write to main.tex
+        """
         header, footer = self.get_header_footer(self.master_file)
         body = ''.join(' ' * 4 + r'\input{' + number2filename(number) + '}\n' for number in lecture_nums)
         self.master_file.write_text(header + body + footer)
 
     def new_lecture(self):
+        """
+        TODO: Test this
+        """
         new_lecture_number = 1 if not self.lectures else self.lectures[-1].number +1
 
         new_lecture_path = self.root / number2filename(new_lecture_number)
+
+        self._logger.info(f"Creating lecture: {new_lecture_path}")
         new_lecture_path.touch() # Copy file template instead of touch?
         new_lecture_path.write_text(f'\\{{lecture{{{new_lecture_number}}}}}\n')
-
+        self._logger.info("Updating main tex file")
         self.update_lectures_in_master([new_lecture_number]) # [new_lecture_number-1, new_lecture_number] when num!=1,  why?
 
         new_lecture = Lecture(new_lecture_path)
@@ -101,6 +111,8 @@ class Lectures():
         return new_lecture
 
     def complile_main(self):
+        # Do i need to convert Path obj's to str? probably not
+        self._logger.debug(f"Attempting to compile {self.master_file}")
         result = subprocess.run(
                 ['latexmk', '-f', '-interaction=nonstopmode', str(self.master_file)],
                 stdout = subprocess.DEVNULL,
