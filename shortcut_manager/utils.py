@@ -25,11 +25,14 @@ def focus(app_name):
 def svg_to_pdftex(path: str, ink_exec: str, export_dpi: str):
     """" dst: file destination
     ink_exec: path to inkscape executable
+    Issures: (1) names are not required (2) Is it possible we do not specify an input file name?
     """
+    #tmp fix
+    path = path.split(".")[0]
     logging.getLogger(__name__).info(f"Exporting to {path} to pdf and pdf_tex")
     subprocess.run(
-            [ink_exec, '--export-area-page', '--export-dpi', export_dpi,
-             '--export-type=pdf', '--export-latex', '--export-filename', path],
+            [ink_exec, path + "svg", '--export-area-page', '--export-dpi', export_dpi,
+             '--export-type=pdf', '--export-latex', '--export-filename', path+"pdf"],
             stdin=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL
             )

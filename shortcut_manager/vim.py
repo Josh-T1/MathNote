@@ -33,7 +33,6 @@ def gather_and_del(filename: str):
 
 def add_latex(latex_raw:str): # Add ability to add text without compiling latex
     """ Takes in latex code, converts compiled latex to png from which the png is posted to the system clipboard.
-    Only works with MacOS
     TODO: allow for latex to be added to inkscape without begin compiled
     """
     logger = logging.getLogger(__name__)
@@ -111,7 +110,7 @@ def get_num_windows(app):
 
 
 async def _main(connection, filename: str):
-    """ From Iterm2 Api. Opens nvim in a new Iterm2 instance and pauses code execution untill the window is classed.
+    """ From Iterm2 Api. Opens nvim in a new Iterm2 instance and pauses code execution untill the window is closed.
     filename: nvim
     connection: ?
     """
@@ -146,4 +145,3 @@ def promt_user_for_latex(file_path: str):
 
 if __name__ == '__main__':
     latex = write_latex()
-    print(latex)

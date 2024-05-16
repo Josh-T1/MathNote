@@ -4,7 +4,7 @@ import subprocess
 import sys
 from shutil import copy
 from utils import get_config
-from hotkey import IK_KeyHandler, IK_ShortcutManager, StatusWindow, user_shortcuts
+from hotkey import IK_ShortcutManager, StatusWindow
 import logging
 import os
 from utils import silent_stdout
@@ -62,17 +62,15 @@ def open_inkscape_with_manager(path: str):
     gui_queue = mp.Queue()
 #    dir = path.rsplit('.', 1)[0]
     logger.debug(f"path: {path}")
-    key_handler = IK_KeyHandler
-    short = IK_ShortcutManager(config, path, key_handler, gui_queue)
+    shortcut_manager = IK_ShortcutManager(config, path, gui_queue=gui_queue)
 #    short.register_shortcuts(user_shortcuts())
-#    window = StatusWindow(gui_queue, short)
-
+    window = StatusWindow(gui_queue)
 
     logger.debug("Starting threads for ShortcutManager and Gui. Opening Inksape")
-    short.start()
+    shortcut_manager.start()
     open_inkscape(config['inkscape-exec'], path)
-#    window.start() # runs on main thread
-    short.join()
+    window.inizialize() # runs on main thread
+    shortcut_manager.join()
 
 def run_test():
     dir = os.getcwd()
@@ -81,6 +79,7 @@ def run_test():
 
 
 def main():
+    # Should I be using .svg to create figure or
     logger.info("test")
     command = sys.argv[1:]
     match command:

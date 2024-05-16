@@ -1,4 +1,18 @@
 
+# Issues
+1. DONT allow files with no name to be created, inscape svg problem
+
+1. Allow for course detection based on existance of course_info.json
+1. Make misc folder and include in main.tex at end
+1. make 1x1 vectors
+1. 
+
+1. organize snippets - create snippet rules
+
+
+
+
+
 # shortcut manager 
 -- resposabilies --
 1. Manage shortcuts
@@ -97,3 +111,8 @@ tomorrow
 1. make function to include latex code in main file
 
 1. figure out what other inkscape shortcuts are required
+
+
+
+
+
