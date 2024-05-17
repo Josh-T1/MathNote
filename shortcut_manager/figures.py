@@ -9,6 +9,8 @@ import logging
 import os
 from utils import silent_stdout
 
+import time
+
 config = get_config()
 
 LEVEL = logging.DEBUG
@@ -59,13 +61,13 @@ def open_inkscape_with_manager(path: str):
     config: WHAT CONFIG TIS THIS SOOOORT OUT CONFIG*************
     path: target figure directory
     """
-    gui_queue = mp.Queue()
 #    dir = path.rsplit('.', 1)[0]
     logger.debug(f"path: {path}")
-    shortcut_manager = IK_ShortcutManager(config, path, gui_queue=gui_queue)
+    shortcut_manager = IK_ShortcutManager(config, path)
+#    shortcut_manager = IK_ShortcutManager(config, path)
 #    short.register_shortcuts(user_shortcuts())
-    window = StatusWindow(gui_queue)
-
+    window = StatusWindow()
+    shortcut_manager.add_obsever(window)
     logger.debug("Starting threads for ShortcutManager and Gui. Opening Inksape")
     shortcut_manager.start()
     open_inkscape(config['inkscape-exec'], path)
@@ -85,10 +87,8 @@ def main():
     match command:
         case ['-c', line, fig_dir]:
             name = line.strip()
-            with redirect_stdout(None):
                 # This supresses stdout, in particular the warning from tkinter
-                create_figure(fig_dir + name + ".svg")
-
+            create_figure(fig_dir + name + ".svg")
             print(include_fig(name))
         case [*_]:
             print("Invalid arguments") # make this logging

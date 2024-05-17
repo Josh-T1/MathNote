@@ -1,5 +1,7 @@
+from multiprocessing import queues
 import os
 import logging
+import queue as queue
 import multiprocessing as mp
 import subprocess
 from pynput import keyboard
@@ -22,26 +24,33 @@ class Modes(Enum):
     Pause = "pause"
 
 class ShortCut():
-    def __init__(self, pattern, callback, mode, builtin = False, name = None, description = None) -> None:
-        self.name: str = name if name != None else pattern
-        self.description: str = description if description != None else pattern
-        self.pattern: str = pattern
-        self.callback: Callable = callback
-        self.mode: Modes = mode
-        self.builtin: bool = builtin
+    def __init__(self,
+                 pattern: str,
+                 callback: Callable,
+                 mode: Modes,
+                 builtin: bool = False,
+                 name = None,
+                 description = None
+                 ) -> None:
+        self.name = name if name != None else pattern
+        self.description = description if description != None else pattern
+        self.pattern = pattern
+        self.callback = callback
+        self.mode = mode
+        self.builtin = builtin
         self.active = True
 
-    def activate(self):
+    def activate(self) -> None:
         self.active = True
 
-    def disable(self):
+    def disable(self) -> None:
         self.active = False
 
     def __repr__(self) -> str:
         return f"{self.__class__} with {{Name: {self.name}, Pattern: {self.pattern}}}"
 
 class IK_ShortcutManager():
-    def __init__(self, config: dict, figure_path: str, gui_queue: Optional[mp.Queue] = None):
+    def __init__(self, config: dict, figure_path: str):
         """ Shortcuts can not contain esc character or 'i'.
         config: config dictionary
         figure_path: is the desired save location for inkscape figure
@@ -50,9 +59,8 @@ class IK_ShortcutManager():
         self.logger = logging.getLogger(__name__ + "ShortcutManager")
         self.shortcuts = {"normal": [], "insert": []}
         self.pressed = []
-        self.gui_queue = gui_queue
         self._set_sane_defaults()
-
+        self.observers = []
         self.config = config
         self.figure_path = figure_path
         self.cont = keyboard.Controller()
@@ -88,21 +96,15 @@ class IK_ShortcutManager():
             self.listener.join()
         except KeyboardInterrupt:
             self.logger.warning("Shortcut Manager was stopped with a KeyboardInterrupt")
-            self.close()
-
-    def close_listener(self):
-        """ Stops self.listener thread """
-        self.listener.stop()
-        self.toggle_mode(Modes.Pause)
+            self.close() # THis does not work as self.close asumeses thread is running
 
     def close(self):
-        self.mode = Modes.Close
         self.logger.info("Starting ShortcutManager close")
         self._delete_tmp_files()
         self.save_fig()
-        self.close_listener()
-        if self.gui_queue != None:
-            self.gui_queue.put(self.mode.value)
+        self.toggle_mode(Modes.Close)
+        self.listener.stop()
+
 
     def _delete_tmp_files(self):
         """ Delete all tmp files resulting from compilation of latex code. Clean up of the process: .tex => .pdf => .png => clipboard """
@@ -118,8 +120,7 @@ class IK_ShortcutManager():
     def toggle_mode(self, mode: Modes) -> None:
         """ Change object mode state and notify gui window through the queue """
         self.mode = mode
-        if self.gui_queue != None:
-            self.gui_queue.put(self.mode.value)
+        self.notify_observers()
 
     def _darwin_intercept(self, event_type, event):
         """ Allows for keys to be intercepted and blocked from being sent to stdout if mode=normal. Darwing_intercept is MacOS specific """
@@ -196,6 +197,14 @@ class IK_ShortcutManager():
         self.pressed.clear()
         return None
 
+    def add_obsever(self, observer):
+        self.observers.append(observer)
+
+    def notify_observers(self):
+        for observer in self.observers:
+            observer.update(self.mode.value)
+
+
     @staticmethod
     def key_to_str(key: keyboard.Key) -> str:
         """ Simplifies Key__repr__() to a more readable format. ex: "'Key.cmd: key_code'" -> 'cmd' """
@@ -215,32 +224,43 @@ class IK_ShortcutManager():
                          stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         self.toggle_mode(Modes.Insert)
         focus("Inkscape") # Why the fuck does this not work
+        with self.cont.pressed(keyboard.Key.cmd):
+            self.cont.tap('v')
+
+
 
 
 class StatusWindow:
     """ MacOS sonoma => warning message displayed when pygui window is created
     - Currently supressing warning
     """
-    def __init__(self, queue: mp.Queue, height=30, width=150) -> None:
+    def __init__(self, height: int = 30, width: int = 150) -> None:
         self.root = tk.Tk()
         self.root.geometry(f"{width}x{height}+{self.root.winfo_screenheight()}+{0}")
         self.status_label = tk.Label(self.root, text="waiting")
         self.status_label.pack()
-        self.queue = queue
+        self.queue = queue.Queue()
         self.logger = logging.getLogger(__name__ + "StatusWindow")
         self.current_state = None
+        self.runnig = True
 
     def retreive_mode(self):
         try:
-            mode = self.queue.get()
+            mode = self.queue.get_nowait()
             return mode
-        except mp.Queue.empty:
+        except queue.Empty:
             return None
+
+    def update(self, state):
+        self.queue.put(state)
 
     def close(self):
         # is there a reason quit() not destroy()
+        self.runnig = False
         self.logger.info("Closing gui window")
+        self.root.destroy()
         self.root.quit()
+
 
     def inizialize(self):
         """ inizialize gui mainloop then start gui logic thread """
@@ -250,7 +270,7 @@ class StatusWindow:
 
     def after(self):
         """ Logic loop for updating gui mode label. Called after mainloop() is started """
-        while True:
+        if self.runnig:
             res = self.retreive_mode()
             if res != None and res != self.current_state:
                 self.current_state = res
@@ -258,11 +278,11 @@ class StatusWindow:
                 self.logger.debug(f"Gui received message: '{res}'")
 
             if self.current_state == "close":
-                break
+                self.close()
 
-            time.sleep(1)
+            else:
+                self.root.after(1000, self.after)
 
-        self.close()
 
     def change_mode(self, mode: str):
         self.status_label.config(text=mode)

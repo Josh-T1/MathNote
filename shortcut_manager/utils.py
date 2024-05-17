@@ -19,8 +19,11 @@ def save_config(updated_config: str):
 
 def focus(app_name):
     subprocess.call(
-            ["osascript", "-e", f'activate application "{app_name}"']
+            ["osascript", "-e", f"'tell application \"{app_name}\" to activate'"]
             )
+#    subprocess.call(
+#            ["osascript", "-e", f'activate application "{app_name}"']
+#            )
 
 def svg_to_pdftex(path: str, ink_exec: str, export_dpi: str):
     """" dst: file destination
@@ -39,11 +42,14 @@ def svg_to_pdftex(path: str, ink_exec: str, export_dpi: str):
 
 @contextmanager
 def silent_stdout():
-    old_target = sys.stdout
+    old_target_stdout = sys.stdout
+    old_target_stderr = sys.stderr
     try:
         with open(os.devnull, mode='w') as new_target:
             sys.stdout = new_target
+            sys.stderr = new_target
             yield new_target
     finally:
-        sys.stdout = old_target
+        sys.stdout = old_target_stdout
+        sys.stderr = old_target_stderr
 
