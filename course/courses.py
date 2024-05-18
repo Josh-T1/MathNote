@@ -254,5 +254,5 @@ class Courses():
 
     # make dict dunder?
     def __contains__(self, course_name):
-        if not isinstance(course_name, str): return False
+        if not type(course_name) == type(str): return False
         return course_name in self.courses
