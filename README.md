@@ -1,6 +1,3 @@
-# Motivation
-This prject consists of two main parts
-
 
 # Configuration
 In the folder `mathnote` there is a `config.json` file which stores project
@@ -17,7 +14,3 @@ section
 # Course Module
 The course module implements a command line interface with several subcommands.
 * Include bash code
-
-
-
-

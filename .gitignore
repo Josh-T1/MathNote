@@ -10,6 +10,8 @@ __pycache__/
 
 # ignore shortcut_manager.log
 *.log
+# Not sure what this is
+.data
 
 # ignore config.json
 *.json

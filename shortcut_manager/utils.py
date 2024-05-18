@@ -17,7 +17,9 @@ def save_config(updated_config: str):
     with open(CONFIG_PATH, 'w') as f:
         json.dump(updated_config, f, indent=6)
 
-def focus(app_name):
+def focus(app_name: str):
+    """ Bring application 'app_name' to foreground
+    :param app_name: str"""
     subprocess.call(
             ["osascript", "-e", f"'tell application \"{app_name}\" to activate'"]
             )
@@ -26,11 +28,12 @@ def focus(app_name):
 #            )
 
 def svg_to_pdftex(path: str, ink_exec: str, export_dpi: str):
-    """" dst: file destination
-    ink_exec: path to inkscape executable
-    Issures: (1) names are not required (2) Is it possible we do not specify an input file name?
+    """"
+    :param dst: file destination
+    :param ink_exec: path to inkscape executable
+    ** Issures: (1) names are not required (2) Is it possible we do not specify an input file name?
     """
-    #tmp fix
+    # tmp fix
     path = path.split(".")[0]
     logging.getLogger(__name__).info(f"Exporting to {path} to pdf and pdf_tex")
     subprocess.run(
