@@ -12,6 +12,8 @@
     - Rename project to Notes?
 1. Allow for variable operating systems
 1. Figure out how to make this a package?
+1. Extend dynamic loading of a file of shortcuts to dynamic loading of a folder
+   or file
 
 # [Fix]
 ## ShortCutManager

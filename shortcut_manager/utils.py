@@ -1,10 +1,18 @@
 import subprocess
-from contextlib import contextmanager
-import sys
-import os
 from pathlib import Path
 import json
 import logging
+import os
+from functools import partial
+import subprocess
+from glob import glob
+import tempfile
+from types import FunctionType, ModuleType
+from shortcut_manager import StatusWindow, IK_StatusWindow
+import importlib
+import sys as sys
+import time
+import iterm2
 
 CONFIG_PATH = Path(__file__).parent.parent / "config.json"
 
@@ -13,9 +21,34 @@ def get_config():
         config = json.load(f)
     return config
 
+config = get_config()
+logger = logging.getLogger("ShortCutManager")
+
+
 def save_config(updated_config: str):
     with open(CONFIG_PATH, 'w') as f:
         json.dump(updated_config, f, indent=6)
+
+def include_fig(name):
+    """ returns latex code to include figure, where figure is assumed to live in figures folder (/class/figures) """
+    return fr"""
+\begin{{figure}}[ht]\n
+    \centering
+    \incfig{{{name}}}
+    \label{{{name}}}
+\end{{figure}}
+"""
+
+def latex_document(latex: str): # could i add path to macros and preamble, does this slow down the process?
+    """ return latex template for embeding latex into inkscape """
+    return r"""
+\documentclass[12pt,border=12pt]{standalone}
+\usepackage{amsmath, amssymb}
+\newcommand{\R}{\mathbb R}
+\begin{document}
+    """ + latex + r"""
+\end{document}"""
+
 
 def focus(app_name: str):
     """ Bring application 'app_name' to foreground
@@ -43,16 +76,194 @@ def svg_to_pdftex(path: str, ink_exec: str, export_dpi: str):
             stderr=subprocess.DEVNULL
             )
 
-@contextmanager
-def silent_stdout():
-    old_target_stdout = sys.stdout
-    old_target_stderr = sys.stderr
-    try:
-        with open(os.devnull, mode='w') as new_target:
-            sys.stdout = new_target
-            sys.stderr = new_target
-            yield new_target
-    finally:
-        sys.stdout = old_target_stdout
-        sys.stderr = old_target_stderr
+def gather_and_del(filename: str):
+    """ Delete all files in a directory by name ignoring extension """
+    path = Path(filename)
+    file_path = str(path.parent / path.stem)
+    files = glob(f'{file_path}.*')
+    for file in files:
+        os.remove(file)
 
+
+def add_latex(latex_raw:str): # Add ability to add text without compiling latex
+    """ Takes in latex code, converts compiled latex to png from which the png is posted to the system clipboard.
+    TODO: allow for latex to be added to inkscape without begin compiled
+    """
+    logger = logging.getLogger(__name__)
+    logger.info("Begging latex to png conversion")
+    tmpfile = tempfile.NamedTemporaryFile(mode='w+', delete=False)
+    tmpfile.write(latex_document(latex_raw))
+    tmpfile.close()
+    working_dir = tempfile.gettempdir()
+    subprocess.run(
+            ['pdflatex', tmpfile.name],
+            cwd=working_dir,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+            )
+    subprocess.run(
+            [config["inkscape-exec"],f'{tmpfile.name}.pdf', "--export-type=png", f'--export-dpi={config["export-dpi"]}', f'--export-filename={tmpfile.name}.png'],
+            cwd=working_dir,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+            )
+    logger.info(f"Copying png: {tmpfile.name}.png to clipboard")
+    subprocess.run(
+            ["osascript", "-e", f'set the clipboard to (read (POSIX file "{tmpfile.name}.png") as  {{«class PNGf»}})'],
+            )
+
+    if not os.path.exists(config['.data']):
+        Path(config['.data']).touch()
+
+    with open(config['.data'], mode='w') as f:
+        pattern = f"{str(tmpfile.name)}.*"
+        files = glob(pattern)
+        f.write('\n'.join(files))
+
+def open_vim() -> str: # send 'a'
+    """  Opens vim with tmpfile as buffer to which latex code is wrote by user.
+    TODO: Send a to buffer to automate inizializing of write to buffer
+    """
+    logger = logging.getLogger(__name__)
+    tmpfile = tempfile.NamedTemporaryFile(mode='w+', suffix=".tex", delete=False)
+    tmpfile.write('$$')
+    tmpfile.close()
+    logger.debug(f"Opening vim instance with buffer {tmpfile.name}")
+
+    promt_user_for_latex(tmpfile.name) # lauches Iterm2 with nvim, runs untill window is closed
+    with open(tmpfile.name, 'r') as f:
+        latex = f.read().strip()
+
+    logger.debug(f"Removing file: {tmpfile.name}")
+    os.remove(tmpfile.name)
+    return latex
+
+
+def write_latex() -> bool:
+    """ latex wrote by user => png copied to clipboard
+    TODO: This may be the wrong function but remember to put the curso
+    """
+    latex = open_vim()
+    if latex != '$$':
+        add_latex(latex)
+        return True
+
+    return False
+
+def get_num_windows(app):
+    return len(app.terminal_windows)
+
+async def _main(connection, filename: str):
+    """ From Iterm2 Api. Opens nvim in a new Iterm2 instance and pauses code execution untill the window is closed.
+    filename: nvim
+    connection: ?
+    """
+    app = await iterm2.async_get_app(connection)
+    window = app.current_window
+
+    if window is not None:
+        new_window = await window.async_create(connection, command=f"/bin/bash -l -c 'nvim {filename}'")
+        await new_window.async_set_frame(iterm2.Frame(iterm2.Point(500,500), iterm2.Size(600, 100)))
+        focus("Iterm")
+        # This is a questionable way to keep script running while user writes latex, hack solution for vim.py
+        num_windows = 2
+        while num_windows > 1:
+            time.sleep(0.1)
+            app = await iterm2.async_get_app(connection)
+            num_windows = get_num_windows(app)
+    else:
+        print("No current window")
+
+def promt_user_for_latex(file_path: str):
+    """ runs _main """
+    #file_path = "/Users/joshuataylor/desktop/test.txt"
+
+    if os.path.isfile(file_path):
+        main = partial(_main, filename=file_path)
+        iterm2.run_until_complete(main)
+
+    else:
+        logging.getLogger(__name__).error(f"Invalid path: {file_path}")
+        raise  ValueError("Invalid file path: {file_path}")
+
+
+
+def load_shortcuts(module_path: str) -> list[FunctionType]:
+    """ Loads modules from path set in config file. Then finds all functions in the module that start with
+    shortcut_prefix
+    :param module_path: path to module
+    """
+    shortcuts = []
+    shortcut_prefix = "shortcut"
+
+    # Add module dir to path
+    module_dir = os.path.dirname(module_path)
+    sys.path.insert(0, module_dir)
+    module_name = os.path.splitext(os.path.basename(module_path))[0]
+
+    try:
+        module = importlib.import_module(module_name)
+    except ImportError as e:
+        logger.error(f"Failed to load module with name: {module_name}, path: {module_path}, error: {e}")
+        return shortcuts
+
+    for val in module.__dict__.values(): # type: ignore
+        if not isinstance(val, FunctionType):
+            continue
+        if val.__name__.startswith(shortcut_prefix):
+            shortcuts.append(val)
+
+    return shortcuts
+
+
+def open_inkscape(exe_path:str, path: str) -> None:
+    """
+    path: target figure path
+    exe_path: path to inkcape executable
+    """
+    subprocess.Popen([exe_path, path])
+
+def create_figure(fig_path: str) -> None:
+    logger.info(f"Fig path: {fig_path}")
+    # check to see if path already exists
+    # have a fig directory from root give project location
+    copy(config['figure-template'], fig_path)
+    logging.info(f"Creating inkscape figure: {fig_path} and opening inkscape with ShortcutManager")
+    open_inkscape_with_manager(fig_path)
+
+def edit_figure(name, dir):
+    raise NotImplemented
+
+def open_inkscape_with_manager(path: str):
+    """ Instanciates queue pipeline between IK_ShortcutManager and IK_StatusWindow
+    config: WHAT CONFIG TIS THIS SOOOORT OUT CONFIG*************
+    path: target figure directory
+    """
+    shortcut_manager = IK_ShortcutManager(config, path)
+    window = StatusWindow()
+
+    shortcut_callbacks = load_shortcuts(config["user-shortcuts-path"])
+
+    shortcut_manager.register_shortcuts(shortcut_callbacks)
+    shortcut_manager.add_obsever(window)
+    logger.debug("Starting threads for ShortcutManager and Gui. Opening Inksape")
+    shortcut_manager.start()
+    open_inkscape(config['inkscape-exec'], path)
+    window.inizialize()
+    shortcut_manager.join()
+
+
+def main():
+    # Should I be using .svg to create figure or
+    logger.info("test")
+    command = sys.argv[1:]
+    match command:
+        case ['-c', line, fig_dir]:
+            name = line.strip()
+            if not name:
+                raise ValueError("No figure name specified")
+                # This supresses stdout, in particular the warning from tkinter
+            create_figure(fig_dir + name + ".svg")
+            print(include_fig(name))
+        case [*_]:
+            logger.error("Invalid arguments")
