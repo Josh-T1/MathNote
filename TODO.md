@@ -1,4 +1,5 @@
 # [General TODO]
+1. AM I EVEN writting to tmp files
 1. Make tests dir under MathNote
 1. Write tests
 1. Write documentation

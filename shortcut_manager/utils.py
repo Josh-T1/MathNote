@@ -8,7 +8,6 @@ import subprocess
 from glob import glob
 import tempfile
 from types import FunctionType, ModuleType
-from shortcut_manager import StatusWindow, IK_StatusWindow
 import importlib
 import sys as sys
 import time
@@ -222,48 +221,3 @@ def open_inkscape(exe_path:str, path: str) -> None:
     exe_path: path to inkcape executable
     """
     subprocess.Popen([exe_path, path])
-
-def create_figure(fig_path: str) -> None:
-    logger.info(f"Fig path: {fig_path}")
-    # check to see if path already exists
-    # have a fig directory from root give project location
-    copy(config['figure-template'], fig_path)
-    logging.info(f"Creating inkscape figure: {fig_path} and opening inkscape with ShortcutManager")
-    open_inkscape_with_manager(fig_path)
-
-def edit_figure(name, dir):
-    raise NotImplemented
-
-def open_inkscape_with_manager(path: str):
-    """ Instanciates queue pipeline between IK_ShortcutManager and IK_StatusWindow
-    config: WHAT CONFIG TIS THIS SOOOORT OUT CONFIG*************
-    path: target figure directory
-    """
-    shortcut_manager = IK_ShortcutManager(config, path)
-    window = StatusWindow()
-
-    shortcut_callbacks = load_shortcuts(config["user-shortcuts-path"])
-
-    shortcut_manager.register_shortcuts(shortcut_callbacks)
-    shortcut_manager.add_obsever(window)
-    logger.debug("Starting threads for ShortcutManager and Gui. Opening Inksape")
-    shortcut_manager.start()
-    open_inkscape(config['inkscape-exec'], path)
-    window.inizialize()
-    shortcut_manager.join()
-
-
-def main():
-    # Should I be using .svg to create figure or
-    logger.info("test")
-    command = sys.argv[1:]
-    match command:
-        case ['-c', line, fig_dir]:
-            name = line.strip()
-            if not name:
-                raise ValueError("No figure name specified")
-                # This supresses stdout, in particular the warning from tkinter
-            create_figure(fig_dir + name + ".svg")
-            print(include_fig(name))
-        case [*_]:
-            logger.error("Invalid arguments")
