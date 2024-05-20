@@ -215,7 +215,8 @@ class IK_ShortcutManager:
         for observer in self.observers:
             observer.update(self.mode.value)
 
-
+#    def __exit__(self):
+#        pass
     @staticmethod
     def key_to_str(key: keyboard.Key) -> str:
         """ Simplifies Key__repr__() to a more readable format. ex: "'Key.cmd: key_code'" -> 'cmd' """

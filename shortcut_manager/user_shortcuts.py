@@ -3,7 +3,7 @@ from pynput import  keyboard
 from utils import focus
 from shortcut_manager import IK_ShortcutManager, Modes, ShortCut
 from typing import Type
-
+from utils import write_latex
 
 # I need some sort of error handling for invalid tex compilation. What if I made a guid logger
 def add_latex(self: Type['IK_ShortcutManager']) -> None:
@@ -15,12 +15,13 @@ def add_latex(self: Type['IK_ShortcutManager']) -> None:
 
     normal_shortcut.disable()
     self.logger.debug(f"Normal shortcut: {normal_shortcut.active}")
+
     subprocess.Popen(["python3", "/Users/joshuataylor/documents/python/myprojects/mathnote/shortcut_manager/latex_utils.py"],
-                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).wait()
     self.toggle_mode(Modes.Insert)
-    focus("Inkscape") # Why the fuck does this not work
-    with self.cont.pressed(keyboard.Key.cmd):
-        self.cont.tap('v')
+    #focus("Inkscape") # Why the fuck does this not work
+#    with self.cont.pressed(keyboard.Key.cmd):
+#        self.cont.tap('v')
 
 SHORTCUTS = [
         ShortCut("t", add_latex, Modes.Normal, description="Open instance of vim, to which all tex will be compiled and saved to clipboard")

@@ -10,7 +10,7 @@ import tempfile
 from types import FunctionType, ModuleType
 import importlib
 import sys as sys
-import time
+import asyncio
 import iterm2
 
 CONFIG_PATH = Path(__file__).parent.parent / "config.json"
@@ -22,7 +22,7 @@ def get_config():
 
 config = get_config()
 logger = logging.getLogger("ShortCutManager")
-
+logger.debug("CONFIG WORKS")
 
 def save_config(updated_config: str):
     with open(CONFIG_PATH, 'w') as f:
@@ -63,7 +63,6 @@ def svg_to_pdftex(path: str, ink_exec: str, export_dpi: str):
     """"
     :param dst: file destination
     :param ink_exec: path to inkscape executable
-    ** Issures: (1) names are not required (2) Is it possible we do not specify an input file name?
     """
     # tmp fix
     path = path.split(".")[0]
@@ -88,11 +87,12 @@ def add_latex(latex_raw:str): # Add ability to add text without compiling latex
     """ Takes in latex code, converts compiled latex to png from which the png is posted to the system clipboard.
     TODO: allow for latex to be added to inkscape without begin compiled
     """
-    logger = logging.getLogger(__name__)
-    logger.info("Begging latex to png conversion")
+    logger.debug("Starting latex to png conversion")
     tmpfile = tempfile.NamedTemporaryFile(mode='w+', delete=False)
-    tmpfile.write(latex_document(latex_raw))
-    tmpfile.close()
+
+    with open(tmpfile.name, "w") as tmpf:
+        tmpf.write(latex_document(latex_raw))
+
     working_dir = tempfile.gettempdir()
     subprocess.run(
             ['pdflatex', tmpfile.name],
@@ -123,13 +123,13 @@ def open_vim() -> str: # send 'a'
     """  Opens vim with tmpfile as buffer to which latex code is wrote by user.
     TODO: Send a to buffer to automate inizializing of write to buffer
     """
-    logger = logging.getLogger(__name__)
     tmpfile = tempfile.NamedTemporaryFile(mode='w+', suffix=".tex", delete=False)
-    tmpfile.write('$$')
-    tmpfile.close()
-    logger.debug(f"Opening vim instance with buffer {tmpfile.name}")
+    with open(tmpfile.name, 'w') as tmpf:
+        tmpf.write('$$')
 
+    logger.debug(f"Opening vim instance with buffer {tmpfile.name}")
     promt_user_for_latex(tmpfile.name) # lauches Iterm2 with nvim, runs untill window is closed
+
     with open(tmpfile.name, 'r') as f:
         latex = f.read().strip()
 
@@ -138,52 +138,51 @@ def open_vim() -> str: # send 'a'
     return latex
 
 
-def write_latex() -> bool:
+def write_latex() -> None:
     """ latex wrote by user => png copied to clipboard
     TODO: This may be the wrong function but remember to put the curso
     """
+    logger.debug("starting to write tex")
     latex = open_vim()
     if latex != '$$':
         add_latex(latex)
-        return True
+        logger.debug("finished writing tex") # TODO
 
-    return False
-
-def get_num_windows(app):
+def get_num_windows(app) -> int:
     return len(app.terminal_windows)
 
-async def _main(connection, filename: str):
+async def _main(connection, filename: str) -> None:
     """ From Iterm2 Api. Opens nvim in a new Iterm2 instance and pauses code execution untill the window is closed.
     filename: nvim
     connection: ?
     """
     app = await iterm2.async_get_app(connection)
     window = app.current_window
+    if window is None:
+        raise Exception("Windown is none")
 
-    if window is not None:
-        new_window = await window.async_create(connection, command=f"/bin/bash -l -c 'nvim {filename}'")
-        await new_window.async_set_frame(iterm2.Frame(iterm2.Point(500,500), iterm2.Size(600, 100)))
-        focus("Iterm")
-        # This is a questionable way to keep script running while user writes latex, hack solution for vim.py
-        num_windows = 2
-        while num_windows > 1:
-            time.sleep(0.1)
-            app = await iterm2.async_get_app(connection)
-            num_windows = get_num_windows(app)
-    else:
-        print("No current window")
+    num_windows = get_num_windows(app)
+    new_window = await window.async_create(connection, command=f"/bin/bash -l -c 'nvim {filename}'")
+    await new_window.async_set_frame(iterm2.Frame(iterm2.Point(500,500), iterm2.Size(600, 100)))
+#    focus("Iterm") # there is an error with this
+    # TODO: This breaks if user opens or closes iterm instance while editing tmp file ** This description is terrible
+    # This is a questionable way to keep script running while user writes latex, hack solution for vim.py
 
-def promt_user_for_latex(file_path: str):
+    while get_num_windows(app) > num_windows:
+        app = await iterm2.async_get_app(connection)
+        await asyncio.sleep(0.1)
+
+
+def promt_user_for_latex(file_path: str) -> None:
     """ runs _main """
     #file_path = "/Users/joshuataylor/desktop/test.txt"
-
-    if os.path.isfile(file_path):
-        main = partial(_main, filename=file_path)
-        iterm2.run_until_complete(main)
-
-    else:
-        logging.getLogger(__name__).error(f"Invalid path: {file_path}")
+    if not os.path.isfile(file_path):
+        logger.error(f"Invalid path: {file_path}")
         raise  ValueError("Invalid file path: {file_path}")
+
+    main = partial(_main, filename=file_path)
+    iterm2.run_until_complete(main)
+
 
 
 
@@ -211,11 +210,6 @@ def load_shortcuts(module_path: str) -> list[FunctionType]:
             continue
         if name == shortcuts_name:
             return obj
-#    for val in module.__dict__.values():
-#        if not isinstance(val, FunctionType):
-#            continue
-#        if val.__name__.startswith(shortcut_prefix):
-#            shortcuts.append(val)
     return shortcuts
 
 
