@@ -28,17 +28,17 @@ def save_config(updated_config: str):
     with open(CONFIG_PATH, 'w') as f:
         json.dump(updated_config, f, indent=6)
 
-def include_fig(name):
+def include_fig(name: str) -> str:
     """ returns latex code to include figure, where figure is assumed to live in figures folder (/class/figures) """
     return fr"""
-\begin{{figure}}[ht]\n
+\begin{{figure}}[ht]
     \centering
     \incfig{{{name}}}
     \label{{{name}}}
 \end{{figure}}
 """
 
-def latex_document(latex: str): # could i add path to macros and preamble, does this slow down the process?
+def latex_document(latex: str) -> str: # could i add path to macros and preamble, does this slow down the process?
     """ return latex template for embeding latex into inkscape """
     return r"""
 \documentclass[12pt,border=12pt]{standalone}
@@ -193,7 +193,7 @@ def load_shortcuts(module_path: str) -> list[FunctionType]:
     :param module_path: path to module
     """
     shortcuts = []
-    shortcut_prefix = "shortcut"
+    shortcuts_name = "SHORTCUTS"
 
     # Add module dir to path
     module_dir = os.path.dirname(module_path)
@@ -206,12 +206,16 @@ def load_shortcuts(module_path: str) -> list[FunctionType]:
         logger.error(f"Failed to load module with name: {module_name}, path: {module_path}, error: {e}")
         return shortcuts
 
-    for val in module.__dict__.values(): # type: ignore
-        if not isinstance(val, FunctionType):
+    for name, obj in module.__dict__.items():
+        if not isinstance(obj, list):
             continue
-        if val.__name__.startswith(shortcut_prefix):
-            shortcuts.append(val)
-
+        if name == shortcuts_name:
+            return obj
+#    for val in module.__dict__.values():
+#        if not isinstance(val, FunctionType):
+#            continue
+#        if val.__name__.startswith(shortcut_prefix):
+#            shortcuts.append(val)
     return shortcuts
 
 

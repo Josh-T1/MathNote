@@ -1,4 +1,8 @@
 # [General TODO]
+1. Load list of shortcuts
+1. Figure out how to do saftey checks ...
+1. Send 'a' to buffer in fucntion write latex if possible
+    - Can I distinguish between two vim instances?
 1. AM I EVEN writting to tmp files
 1. Make tests dir under MathNote
 1. Write tests

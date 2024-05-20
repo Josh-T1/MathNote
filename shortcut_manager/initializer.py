@@ -36,9 +36,9 @@ def open_inkscape_with_manager(path: str):
     shortcut_manager = IK_ShortcutManager(config, path)
     window = StatusWindow()
 
-    shortcut_callbacks = utils.load_shortcuts(config["user-shortcuts-path"])
+    shortcuts_obj = utils.load_shortcuts(config["user-shortcuts-path"])
 
-    shortcut_manager.register_shortcuts(shortcut_callbacks)
+    shortcut_manager.register_shortcuts(shortcuts_obj)
     shortcut_manager.add_obsever(window)
     logger.debug("Starting threads for ShortcutManager and Gui. Opening Inksape")
     shortcut_manager.start()
@@ -52,16 +52,17 @@ def test_shortcuts():
 
 def main():
     # Should I be using .svg to create figure or
-    logger.info("test")
     command = sys.argv[1:]
+    logger.debug(f"System args: {sys.argv}")
     match command:
         case ['-c', line, fig_dir]:
             name = line.strip()
             if not name:
                 raise ValueError("No figure name specified")
-                # This supresses stdout, in particular the warning from tkinter
             create_figure(fig_dir + name + ".svg")
-            print(utils.include_fig(name))
+            tex = utils.include_fig(name)
+            print(tex)
+
         case [*_]:
             logger.error("Invalid arguments")
 
@@ -74,15 +75,7 @@ def disassemble_bytecode(func: FunctionType) -> str:
 
 
 
+
 if __name__ == '__main__':
     # Shortcut that calls this script is located at ../nvim/ftplugin/tex.vim
-    module = importlib.import_module("user_shortcuts", ".")
-    for val in module.__dict__.values():
-        if type(val) == FunctionType:
-            try:
-                print("ya")
-                bytecode_str = disassemble_bytecode(val)
-                compile(bytecode_str, "shortcuts", "exec")
-            except SyntaxError as e:
-                print(e)
-            print(val)
+    main()

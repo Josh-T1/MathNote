@@ -1,6 +1,7 @@
 import os
 import logging
 import queue as queue
+from types import FunctionType
 from pynput import keyboard
 from enum import Enum
 from typing import Callable
@@ -33,9 +34,16 @@ class ShortCut:
         self.description = description if description != None else pattern
         self.pattern = pattern
         self.callback = callback
-        self.mode = mode
+        self._mode = mode
         self.builtin = builtin
         self.active = True
+
+    @property
+    def mode(self) -> str:
+        return self._mode.value
+
+    def execute(self) -> None:
+        self.callback()
 
     def activate(self) -> None:
         self.active = True
@@ -60,15 +68,14 @@ class IK_ShortcutManager:
         self.mode = Modes.Insert
         self._set_sane_defaults()
 
-        self.toggle_mode(Modes.Insert) #hack solution to update gui
+#        self.toggle_mode(Modes.Insert)
 
     def _set_sane_defaults(self):
         self.register_shortcuts([
-                (ShortCut("cmd+c", self.close, "normal", builtin=True, name="Close")),
-                (ShortCut("esc", partial(self.toggle_mode, mode=Modes.Normal), "insert", builtin=True, name = "NormalMode")),
-                (ShortCut("tab", self.activate_all, "insert", builtin=True, name = "Unpause")),
-                (ShortCut("i", partial(self.toggle_mode, mode=Modes.Insert), "normal", builtin=True, name = "InsertMode")),
-                (ShortCut("t", self.add_latex, "normal", builtin=True, name = "Term")),
+                (ShortCut("cmd+c", self.close, Modes.Normal, builtin=True, name="Close")),
+                (ShortCut("esc", partial(self.toggle_mode, mode=Modes.Normal), Modes.Insert, builtin=True, name = "NormalMode")),
+                (ShortCut("tab", self.activate_all, Modes.Insert, builtin=True, name = "Unpause")),
+                (ShortCut("i", partial(self.toggle_mode, mode=Modes.Insert), Modes.Normal, builtin=True, name = "InsertMode")),
                 ])
 
     def start(self):
@@ -136,10 +143,10 @@ class IK_ShortcutManager:
         :param key: passed by keyboard.Listener
         Note: returning False stops keyboard.Listener()
         """
-        val = self.match_keys(self.mode)
-        if callable(val):
-            val()
-            self.logger.debug("Succesfully called shortcut callback")
+        shortcut = self.match_keys(self.mode)
+        if type(shortcut) == ShortCut:
+            shortcut.execute()
+            self.logger.debug(f"Succesfully called shortcut callback: {shortcut.callback}")
 
         if self.mode == Modes.Close:
             self.logger.info("Closing keyboard.Listener() thread")
@@ -150,9 +157,10 @@ class IK_ShortcutManager:
         :param shortcut: ShorctCut object
         """
         if shortcut.mode not in self.shortcuts:
-            raise NotImplemented(f"Mode: {shortcut.mode} is not a currently supported shortcut mode")
+            raise NotImplementedError(f"Not supported mode: {shortcut.mode}")
         if not shortcut.builtin:
-            setattr(self, shortcut.callback.__name__, shortcut.callback)
+            shortcut.callback = partial(shortcut.callback, self)
+#            setattr(self, shortcut.callback.__name__, partial(shortcut.callback, self=self))
         self.shortcuts[shortcut.mode].append(shortcut)
 
     def register_shortcuts(self, shortcuts: list[ShortCut]) -> None:
@@ -168,7 +176,7 @@ class IK_ShortcutManager:
 
         svg_to_pdftex(self.figure_path, self.config['inkscape-exec'], self.config['export-dpi'])
 
-    def match_keys(self, mode: Modes) -> None | Callable:
+    def match_keys(self, mode: Modes) -> None | ShortCut:
         """ Implements logic for keys pattern matching.
         :return: key_callback (callable) if list of keys matches pattern else None """
         # Instant reject conditions
@@ -188,10 +196,10 @@ class IK_ShortcutManager:
             if pattern == key_:
                 self.logger.debug(f"Calling shortcut callback, Pattern = {pattern}")
                 self.pressed.clear()
-                return shortcut.callback
+                return shortcut
 
             # Case: partial match
-            if pattern in key_ and pattern != '':
+            if key_.startswith(pattern) and pattern != '': # changed from pattern in key_. Test this
                 self.logger.debug(f"Partial match with '{pattern}'")
                 return None
 
@@ -228,7 +236,7 @@ class StatusWindow:
         self.runnig = True
         self.status_label.pack()
 
-    def retreive_mode(self) -> Modes | None:
+    def retreive_mode(self) -> str | None:
         try:
             mode = self.queue.get_nowait()
             return mode
@@ -256,16 +264,15 @@ class StatusWindow:
         if self.runnig:
             res = self.retreive_mode()
             if res != None and res != self.current_mode:
-                self.current_state = res
-                self.change_mode(self.current_state.value)
+                self.current_mode = res
+                self.change_mode(self.current_mode)
                 self.logger.debug(f"Gui received message: '{res}'")
 
-            if self.current_state == "close":
+            if self.current_mode == "close":
                 self.close()
 
             else:
                 self.root.after(1000, self.after)
-
 
     def change_mode(self, mode: str) -> None:
         self.status_label.config(text=mode)
