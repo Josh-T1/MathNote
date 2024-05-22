@@ -1,7 +1,6 @@
 import os
 import logging
 import queue as queue
-from types import FunctionType
 from pynput import keyboard
 from enum import Enum
 from typing import Callable
@@ -10,10 +9,13 @@ import threading
 from functools import partial
 from utils import svg_to_pdftex
 from dataclasses import dataclass
-import subprocess
+from filelock import FileLock
+from config import LOCK_FILENAME, PIPELINE_FILENAME
 
 logger = logging.getLogger("ShortCutManager")
 logger.setLevel(level=logging.DEBUG)
+
+lock = FileLock(LOCK_FILENAME)
 
 class Modes(Enum):
     Normal = "normal"
@@ -67,6 +69,7 @@ class IK_ShortcutManager:
         self.figure_path: str = figure_path
         self.cont: keyboard.Controller = keyboard.Controller()
         self.mode = Modes.Insert
+        self.shortcut_in_progress: bool = False
         self._set_sane_defaults()
 
 #        self.toggle_mode(Modes.Insert)
@@ -128,7 +131,7 @@ class IK_ShortcutManager:
         :param event: ??? passed by keyboard.Listener
         :param event_type: ??? passed by keyboard.Listener
         """
-        if self.mode == Modes.Normal:
+        if self.mode == Modes.Normal or self.shortcut_in_progress == True:
             return None
         else:
             return event
@@ -153,6 +156,19 @@ class IK_ShortcutManager:
         if self.mode == Modes.Close:
             self.logger.info("Closing keyboard.Listener() thread")
             return False
+
+        if self.shortcut_in_progress:
+            lock.acquire()
+            try:
+                with open(PIPELINE_FILENAME, "r") as file:
+                    contents = file.read()
+                    if contents == "done":
+                        self.shortcut_in_progress = False
+                        file.seek(0)
+                        file.truncate()
+            finally:
+                lock.release()
+
 
     def register_shortcut(self, shortcut: ShortCut) -> None:
         """ If shortcut has callback function that has not yet been passed class instance, class instance is passed.
