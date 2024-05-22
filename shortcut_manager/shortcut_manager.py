@@ -10,6 +10,7 @@ import threading
 from functools import partial
 from utils import svg_to_pdftex
 from dataclasses import dataclass
+import subprocess
 
 logger = logging.getLogger("ShortCutManager")
 logger.setLevel(level=logging.DEBUG)
@@ -136,9 +137,10 @@ class IK_ShortcutManager:
         """ Callback for action key pressed
         :param key: passed by keyboard.Listener
         """
+        self.logger.debug(f"pressed: {key}")
         self.pressed.append(self.key_to_str(key))
 
-    def _on_release(self, key: keyboard.Key) -> bool | None: # make sure closing the __enter__ condition trigers __exit__
+    def _on_release(self, key: keyboard.Key) -> bool | None:
         """ Callback for action key release
         :param key: passed by keyboard.Listener
         Note: returning False stops keyboard.Listener()
@@ -180,7 +182,7 @@ class IK_ShortcutManager:
         """ Implements logic for keys pattern matching.
         :return: key_callback (callable) if list of keys matches pattern else None """
         # Instant reject conditions
-        if len(self.pressed) == 0 or mode == Modes.Pause: # Pretty sure there is no need for Modes.Pause
+        if len(self.pressed) == 0: # Pretty sure there is no need for Modes.Pause
             self.pressed.clear()
             return None
 

@@ -1,10 +1,4 @@
 # [General TODO]
-1. Load list of shortcuts
-1. Figure out how to do saftey checks ...
-1. Send 'a' to buffer in fucntion write latex if possible
-    - Can I distinguish between two vim instances?
-1. AM I EVEN writting to tmp files
-1. Make tests dir under MathNote
 1. Write tests
 1. Write documentation
 1. Consider making shortcut manager its own package (inkscape shortcut manager)
@@ -17,15 +11,21 @@
     - Rename project to Notes?
 1. Allow for variable operating systems
 1. Figure out how to make this a package?
-1. Extend dynamic loading of a file of shortcuts to dynamic loading of a folder
-   or file
 
-# [Fix]
+
+# === [Fix] ===
 ## ShortCutManager
-1. DON'T allow files with no name to be created, inscape svg problem
-1. Make sure focus works for inkscape
+1. Figure out how to do saftey checks for user defined shortcuts
+1. Send 'a' to buffer in fucntion write latex if possible
+    - Can I distinguish between two vim instances?
+1. Figure out add_latex shortcut 
+    - The issue is I can not wait for the process to finish, so I can not
+      implement paste
+1. Fix focus()
 1. Either open inkscape of use open instance??? How do I know if a file is begin
    used?? Figure out how to make it load faster
+1. Extend dynamic loading of a file of shortcuts to dynamic loading of a folder
+   or file
 
 ## Course
 1. Fix or verify that course start time feature works
@@ -33,8 +33,7 @@
 ## FlashCards
 
 
-
-# [New Features to Implement]
+# === [New Features to Implement] ===
 ## Flash Cards
 1. Make formatting nice
 1. Figure out how to get theorem proof flash cards
@@ -54,9 +53,10 @@
 
 
 
-# [Snippets]
+# === [Snippets] ===
 1. Figure out a better system for creating snippets, can I make a script to
    check and see if snippets 'collide'
+1. Consider keymaps that send buffer contents to script
 
 
 

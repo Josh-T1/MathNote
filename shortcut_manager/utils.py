@@ -83,7 +83,7 @@ def gather_and_del(filename: str):
         os.remove(file)
 
 
-def add_latex(latex_raw:str): # Add ability to add text without compiling latex
+def add_latex(latex_raw: str): # Add ability to add text without compiling latex
     """ Takes in latex code, converts compiled latex to png from which the png is posted to the system clipboard.
     TODO: allow for latex to be added to inkscape without begin compiled
     """
@@ -94,20 +94,20 @@ def add_latex(latex_raw:str): # Add ability to add text without compiling latex
         tmpf.write(latex_document(latex_raw))
 
     working_dir = tempfile.gettempdir()
-    subprocess.run(
+    subprocess.Popen(
             ['pdflatex', tmpfile.name],
             cwd=working_dir,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL
             )
-    subprocess.run(
+    subprocess.Popen(
             [config["inkscape-exec"],f'{tmpfile.name}.pdf', "--export-type=png", f'--export-dpi={config["export-dpi"]}', f'--export-filename={tmpfile.name}.png'],
             cwd=working_dir,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL
             )
     logger.info(f"Copying png: {tmpfile.name}.png to clipboard")
-    subprocess.run(
+    subprocess.Popen(
             ["osascript", "-e", f'set the clipboard to (read (POSIX file "{tmpfile.name}.png") as  {{«class PNGf»}})'],
             )
 
@@ -165,8 +165,6 @@ async def _main(connection, filename: str) -> None:
     new_window = await window.async_create(connection, command=f"/bin/bash -l -c 'nvim {filename}'")
     await new_window.async_set_frame(iterm2.Frame(iterm2.Point(500,500), iterm2.Size(600, 100)))
 #    focus("Iterm") # there is an error with this
-    # TODO: This breaks if user opens or closes iterm instance while editing tmp file ** This description is terrible
-    # This is a questionable way to keep script running while user writes latex, hack solution for vim.py
 
     while get_num_windows(app) > num_windows:
         app = await iterm2.async_get_app(connection)
