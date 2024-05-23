@@ -30,8 +30,7 @@ def edit_figure(name, dir):
 
 def open_inkscape_with_manager(path: str):
     """ Instanciates queue pipeline between IK_ShortcutManager and IK_StatusWindow
-    config: WHAT CONFIG TIS THIS SOOOORT OUT CONFIG*************
-    path: target figure directory
+    path: save location for figure
     """
     shortcut_manager = IK_ShortcutManager(config, path)
     window = StatusWindow()

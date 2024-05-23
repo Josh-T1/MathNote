@@ -1,6 +1,8 @@
 import os
 import logging
+from collections import UserDict, deque
 import queue as queue
+from subprocess import call
 from pynput import keyboard
 from enum import Enum
 from typing import Callable
@@ -31,7 +33,8 @@ class ShortCut:
                  mode: Modes,
                  builtin: bool = False,
                  name: str | None = None,
-                 description: str | None = None
+                 description: str | None = None,
+                 contains_subprocess: bool = False
                  ) -> None:
         self.name = name if name != None else pattern
         self.description = description if description != None else pattern
@@ -39,46 +42,51 @@ class ShortCut:
         self.callback = callback
         self._mode = mode
         self.builtin = builtin
-        self.active = True
+        self._enabled = True
+        self.contains_subprocess = contains_subprocess
 
     @property
     def mode(self) -> str:
         return self._mode.value
 
+    @property
+    def enabled(self) -> bool:
+        return self._enabled
+
     def execute(self) -> None:
         self.callback()
 
-    def activate(self) -> None:
-        self.active = True
+    def enable(self) -> None:
+        self._enabled = True
 
     def disable(self) -> None:
-        self.active = False
+        self._enabled = False
 
 class IK_ShortcutManager:
+    """
+    Info
+    """
     def __init__(self, config: dict, figure_path: str):
         """ Shortcuts can not contain esc character or 'i'.
-        config: config dictionary
-        figure_path: is the desired save location for inkscape figure
-        subprocess_queue: subprocess's are put into subprocess_queue where they are executed in another thread
+        :param config: config dictionary
+        :param figure_path: save location for figure (path)
         """
         self.logger = logging.getLogger(__name__ + "ShortcutManager")
         self.shortcuts: dict[str, list] = {"normal": [], "insert": []}
-        self.pressed: list = []
+        self.pressed: list[str] = []
         self.observers: list = []
         self.config: dict = config
         self.figure_path: str = figure_path
         self.cont: keyboard.Controller = keyboard.Controller()
         self.mode = Modes.Insert
         self.shortcut_in_progress: bool = False
+        self.callable_queue = deque()
         self._set_sane_defaults()
-
-#        self.toggle_mode(Modes.Insert)
 
     def _set_sane_defaults(self):
         self.register_shortcuts([
                 (ShortCut("cmd+c", self.close, Modes.Normal, builtin=True, name="Close")),
                 (ShortCut("esc", partial(self.toggle_mode, mode=Modes.Normal), Modes.Insert, builtin=True, name = "NormalMode")),
-                (ShortCut("tab", self.activate_all, Modes.Insert, builtin=True, name = "Unpause")),
                 (ShortCut("i", partial(self.toggle_mode, mode=Modes.Insert), Modes.Normal, builtin=True, name = "InsertMode")),
                 ])
 
@@ -88,19 +96,12 @@ class IK_ShortcutManager:
         self.logger.info("Listener thread is starting")
         self.listener.start()
 
-    def activate_all(self):
-        """ Activate all shortcuts and puts user into normal mode. This is a bad attempt at fixing the issue of esc key interference with the latex shortcut"""
-        for _, v in self.shortcuts.items():
-            for shortcut in v:
-                shortcut.activate()
-        self.toggle_mode(Modes.Normal)
-
     def join(self):
         """ Implements threading.Thread().join() """
         try:
             self.listener.join()
-        except KeyboardInterrupt:
-            self.logger.warning("Shortcut Manager was stopped with a KeyboardInterrupt")
+        except KeyboardInterrupt as e:
+            self.logger.warning(f"ShortcutManager interupted: {e}")
             self.close() # THis does not work as self.close asumeses thread is running
 
     def close(self):
@@ -131,44 +132,58 @@ class IK_ShortcutManager:
         :param event: ??? passed by keyboard.Listener
         :param event_type: ??? passed by keyboard.Listener
         """
-        if self.mode == Modes.Normal or self.shortcut_in_progress == True:
+        if self.mode == Modes.Normal:
             return None
-        else:
-            return event
+        return event
 
     def _on_press(self, key: keyboard.Key) -> None:
         """ Callback for action key pressed
         :param key: passed by keyboard.Listener
         """
-        self.logger.debug(f"pressed: {key}")
+        self.logger.debug(f"key pressed: {self.key_to_str(key)}")
         self.pressed.append(self.key_to_str(key))
 
     def _on_release(self, key: keyboard.Key) -> bool | None:
-        """ Callback for action key release
+        """ Callback upon key release
         :param key: passed by keyboard.Listener
-        Note: returning False stops keyboard.Listener()
+        :returns: None or bool. Returning False stops keyboard.Listener()
         """
-        shortcut = self.match_keys(self.mode)
-        if type(shortcut) == ShortCut:
-            shortcut.execute()
-            self.logger.debug(f"Succesfully called shortcut callback: {shortcut.callback}")
+        self.match_keys(self.mode)
+
+        if self.callable_queue and not self.shortcut_in_progress:
+            callable_ = self.callable_queue.popleft()
+
+            if type(callable_) == ShortCut:
+                callable_.execute()
+                self.logger.debug(f"Calling shortcut {callable_} with callback: {callable_.callback}, {self.shortcut_in_progress}")
+
+                if callable_.contains_subprocess:
+                    self.shortcut_in_progress = True
+                    self.logger.debug("starting communication with subprocess")
+                    thread = threading.Thread(target=self.communicate_status)
+                    thread.start()
+            else:
+                self.logger.debug(f"Calling function: {callable_}")
+                callable_()
 
         if self.mode == Modes.Close:
             self.logger.info("Closing keyboard.Listener() thread")
             return False
 
-        if self.shortcut_in_progress:
+    def communicate_status(self):
+        """  """
+        while True:
             lock.acquire()
             try:
-                with open(PIPELINE_FILENAME, "r") as file:
+                with open(PIPELINE_FILENAME, "r+") as file:
                     contents = file.read()
                     if contents == "done":
                         self.shortcut_in_progress = False
+                        file.truncate(0)
                         file.seek(0)
-                        file.truncate()
+                        break
             finally:
                 lock.release()
-
 
     def register_shortcut(self, shortcut: ShortCut) -> None:
         """ If shortcut has callback function that has not yet been passed class instance, class instance is passed.
@@ -178,7 +193,6 @@ class IK_ShortcutManager:
             raise NotImplementedError(f"Not supported mode: {shortcut.mode}")
         if not shortcut.builtin:
             shortcut.callback = partial(shortcut.callback, self)
-#            setattr(self, shortcut.callback.__name__, partial(shortcut.callback, self=self))
         self.shortcuts[shortcut.mode].append(shortcut)
 
     def register_shortcuts(self, shortcuts: list[ShortCut]) -> None:
@@ -186,19 +200,19 @@ class IK_ShortcutManager:
             self.register_shortcut(shortcut)
 
     def save_fig(self) -> None:
-        """ Saves Inkscape figure and converts to pdftex """
+        """ Saves Inkscape figure and converts to pdftex
+        """
         self.logger.info(f"Saving figure: {self.figure_path}")
         self.toggle_mode(Modes.Insert)
         with self.cont.pressed(keyboard.Key.cmd):
             self.cont.tap('s')
-
         svg_to_pdftex(self.figure_path, self.config['inkscape-exec'], self.config['export-dpi'])
 
-    def match_keys(self, mode: Modes) -> None | ShortCut:
+    def match_keys(self, mode: Modes) -> None:
         """ Implements logic for keys pattern matching.
         :return: key_callback (callable) if list of keys matches pattern else None """
         # Instant reject conditions
-        if len(self.pressed) == 0: # Pretty sure there is no need for Modes.Pause
+        if len(self.pressed) == 0 or self.shortcut_in_progress:
             self.pressed.clear()
             return None
 
@@ -206,15 +220,15 @@ class IK_ShortcutManager:
         pattern = '+'.join(self.pressed)
 
         for shortcut in shortcuts_target_mode:
-            if not shortcut.active: # Some shortcuts may 'disable' others. ie) latex shortcut pauses 'esc' shortcut so that writing to file in vim is possible
+            if not shortcut.enabled: # Some shortcuts may 'disable' others. ie) latex shortcut pauses 'esc' shortcut so that writing to file in vim is possible
                 continue
 
             key_ = shortcut.pattern
             # Case: full match
             if pattern == key_:
-                self.logger.debug(f"Calling shortcut callback, Pattern = {pattern}")
+                self.callable_queue.append(shortcut)
                 self.pressed.clear()
-                return shortcut
+                return None
 
             # Case: partial match
             if key_.startswith(pattern) and pattern != '': # changed from pattern in key_. Test this
@@ -233,17 +247,15 @@ class IK_ShortcutManager:
         for observer in self.observers:
             observer.update(self.mode.value)
 
-#    def __exit__(self):
-#        pass
     @staticmethod
     def key_to_str(key: keyboard.Key) -> str:
-        """ Simplifies Key__repr__() to a more readable format. ex: "'Key.cmd: key_code'" -> 'cmd' """
+        """ Simplifies Key__repr__() to a more readable format. ex: "'Key.cmd: key_code'" -> 'cmd'
+        TODO: figure out what keycodes are..."""
         return key.__repr__().replace("'", '').split('.')[-1].split(':')[0]
 
 
 class StatusWindow:
     """ MacOS sonoma => warning message displayed when pygui window is created
-    - Currently supressing warning
     """
     def __init__(self, height: int = 30, width: int = 150) -> None:
         self.root = tk.Tk()
@@ -267,7 +279,7 @@ class StatusWindow:
 
     def close(self) -> None:
         self.runnig = False
-        self.logger.info("Closing gui window and exiting mainloop")
+        self.logger.debug("Closing gui window and exiting mainloop")
         self.root.destroy()
         self.root.quit()
 
@@ -291,7 +303,7 @@ class StatusWindow:
                 self.close()
 
             else:
-                self.root.after(1000, self.after)
+                self.root.after(500, self.after)
 
     def change_mode(self, mode: str) -> None:
         self.status_label.config(text=mode)

@@ -1,14 +1,17 @@
-from utils import write_latex
+from utils import write_latex, open_vim
 from filelock import FileLock
 from config import PIPELINE_FILENAME, LOCK_FILENAME
+import time
 
-lock = FileLock(LOCK_FILENAME)
+
 
 if __name__ == '__main__':
+    lock = FileLock(LOCK_FILENAME)
+    lock.acquire()
     try:
-       write_latex()
+        write_latex()
     finally:
-        lock.acquire()
         with open(PIPELINE_FILENAME, "w") as file:
             file.write("done")
+        lock.release()
 

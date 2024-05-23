@@ -1,3 +1,4 @@
+from logging.config import fileConfig
 import subprocess
 from pathlib import Path
 import json
@@ -21,7 +22,13 @@ def get_config():
     return config
 
 config = get_config()
-logger = logging.getLogger("ShortCutManager")
+logging.basicConfig(
+        level = logging.DEBUG,
+        format='%(asctime)s %(name)s %(levelname)s: %(message)s',
+        filename = "utils.log",
+        force=True
+        )
+logger = logging.getLogger(__name__)
 logger.debug("CONFIG WORKS")
 
 def save_config(updated_config: str):
@@ -94,20 +101,20 @@ def add_latex(latex_raw: str): # Add ability to add text without compiling latex
         tmpf.write(latex_document(latex_raw))
 
     working_dir = tempfile.gettempdir()
-    subprocess.Popen(
+    subprocess.run(
             ['pdflatex', tmpfile.name],
             cwd=working_dir,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL
             )
-    subprocess.Popen(
+    subprocess.run(
             [config["inkscape-exec"],f'{tmpfile.name}.pdf', "--export-type=png", f'--export-dpi={config["export-dpi"]}', f'--export-filename={tmpfile.name}.png'],
             cwd=working_dir,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL
             )
     logger.info(f"Copying png: {tmpfile.name}.png to clipboard")
-    subprocess.Popen(
+    subprocess.run(
             ["osascript", "-e", f'set the clipboard to (read (POSIX file "{tmpfile.name}.png") as  {{«class PNGf»}})'],
             )
 
@@ -148,7 +155,7 @@ def write_latex() -> None:
         add_latex(latex)
         logger.debug("finished writing tex") # TODO
 
-def get_num_windows(app) -> int:
+async def get_num_windows(app) -> int:
     return len(app.terminal_windows)
 
 async def _main(connection, filename: str) -> None:
@@ -161,15 +168,14 @@ async def _main(connection, filename: str) -> None:
     if window is None:
         raise Exception("Windown is none")
 
-    num_windows = get_num_windows(app)
+    num_windows = await get_num_windows(app)
     new_window = await window.async_create(connection, command=f"/bin/bash -l -c 'nvim {filename}'")
     await new_window.async_set_frame(iterm2.Frame(iterm2.Point(500,500), iterm2.Size(600, 100)))
 #    focus("Iterm") # there is an error with this
 
-    while get_num_windows(app) > num_windows:
-        app = await iterm2.async_get_app(connection)
+    while await get_num_windows(app) > num_windows:
         await asyncio.sleep(0.1)
-
+    print("done")
 
 def promt_user_for_latex(file_path: str) -> None:
     """ runs _main """

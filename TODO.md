@@ -15,6 +15,12 @@
 
 # === [Fix] ===
 ## ShortCutManager
+1. Soft open... ie dont open new instance of inkscape but rather a new tab
+1. Test new functionality allowed by using locks
+1. Implement method for 'chaining shortcuts'
+1. Close inkscape along with shortcut manager -- add a second 'soft close'
+   shortcut to user_shortcuts
+
 1. Figure out how to do saftey checks for user defined shortcuts
 1. Send 'a' to buffer in fucntion write latex if possible
     - Can I distinguish between two vim instances?
@@ -52,11 +58,10 @@
         - probably inkscape
 
 
-
 # === [Snippets] ===
 1. Figure out a better system for creating snippets, can I make a script to
    check and see if snippets 'collide'
 1. Consider keymaps that send buffer contents to script
-
+1. Dynamical generate use lists
 
 
