@@ -1,12 +1,9 @@
-import importlib
-import subprocess
 import sys
 from shutil import copy
 from types import ModuleType, FunctionType
 import utils as utils
 from shortcut_manager import IK_ShortcutManager, StatusWindow
 import logging
-import os
 import logging.config
 
 config = utils.get_config()
@@ -41,7 +38,7 @@ def open_inkscape_with_manager(path: str):
     shortcut_manager.add_obsever(window)
     logger.debug("Starting threads for ShortcutManager and Gui. Opening Inksape")
     shortcut_manager.start()
-    utils.open_inkscape(config['inkscape-exec'], path)
+    utils.launch_inkscape_with_figure(path)
     window.inizialize()
     shortcut_manager.join()
 
@@ -59,7 +56,7 @@ def main():
             if not name:
                 raise ValueError("No figure name specified")
             create_figure(fig_dir + name + ".svg")
-            tex = utils.include_fig(name)
+            tex = config.include_fig(name)
             print(tex)
 
         case [*_]:
@@ -71,8 +68,6 @@ def disassemble_bytecode(func: FunctionType) -> str:
     import dis
     bytecode_instructions = dis.Bytecode(func)
     return ''.join([instruction.opname + '\n' for instruction in bytecode_instructions])
-
-
 
 
 if __name__ == '__main__':

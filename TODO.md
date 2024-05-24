@@ -15,6 +15,7 @@
 
 # === [Fix] ===
 ## ShortCutManager
+
 1. Soft open... ie dont open new instance of inkscape but rather a new tab
 1. Test new functionality allowed by using locks
 1. Implement method for 'chaining shortcuts'
@@ -32,6 +33,9 @@
    used?? Figure out how to make it load faster
 1. Extend dynamic loading of a file of shortcuts to dynamic loading of a folder
    or file
+1. Currently you are unable to 'saftely' close shortcut_manager while a shortcut
+   iis in progress. Look at comminicate_status. Consider threads checking
+   self.mode to determine if they should terminate
 
 ## Course
 1. Fix or verify that course start time feature works

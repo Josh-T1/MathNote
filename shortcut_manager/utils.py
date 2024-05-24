@@ -1,70 +1,51 @@
-from logging.config import fileConfig
 import subprocess
 from pathlib import Path
 import json
 import logging
 import os
-from functools import partial
 import subprocess
 from glob import glob
 import tempfile
-from types import FunctionType, ModuleType
+from types import FunctionType
 import importlib
 import sys as sys
-import asyncio
-import iterm2
+import config as config
+import platform
+
+"""
+OS specific Imports
+"""
+if platform.system() == "Darwin":
+    import macos_specific as os_specific
+else:
+    raise OSError(f"Unsupported operating system: {platform.system()}")
+
 
 CONFIG_PATH = Path(__file__).parent.parent / "config.json"
+logger = logging.getLogger("ShortCutManager")
+
+
+def is_app_running(app_name):
+    os_specific.is_app_running(app_name)
+
+def bring_app_to_foreground(app_name):
+    os_specific.bring_app_to_foreground(app_name)
+
+def close(app_name):
+    os_specific.close_app(app_name)
 
 def get_config():
     with open(CONFIG_PATH, 'r') as f:
         config = json.load(f)
     return config
 
-config = get_config()
-logging.basicConfig(
-        level = logging.DEBUG,
-        format='%(asctime)s %(name)s %(levelname)s: %(message)s',
-        filename = "utils.log",
-        force=True
-        )
-logger = logging.getLogger(__name__)
-logger.debug("CONFIG WORKS")
+def promt_user_for_latex(file_path: str) -> None:
+    os_specific.promt_user_for_latex(file_path)
+
 
 def save_config(updated_config: str):
     with open(CONFIG_PATH, 'w') as f:
         json.dump(updated_config, f, indent=6)
-
-def include_fig(name: str) -> str:
-    """ returns latex code to include figure, where figure is assumed to live in figures folder (/class/figures) """
-    return fr"""
-\begin{{figure}}[ht]
-    \centering
-    \incfig{{{name}}}
-    \label{{{name}}}
-\end{{figure}}
-"""
-
-def latex_document(latex: str) -> str: # could i add path to macros and preamble, does this slow down the process?
-    """ return latex template for embeding latex into inkscape """
-    return r"""
-\documentclass[12pt,border=12pt]{standalone}
-\usepackage{amsmath, amssymb}
-\newcommand{\R}{\mathbb R}
-\begin{document}
-    """ + latex + r"""
-\end{document}"""
-
-
-def focus(app_name: str):
-    """ Bring application 'app_name' to foreground
-    :param app_name: str"""
-    subprocess.call(
-            ["osascript", "-e", f"'tell application \"{app_name}\" to activate'"]
-            )
-#    subprocess.call(
-#            ["osascript", "-e", f'activate application "{app_name}"']
-#            )
 
 def svg_to_pdftex(path: str, ink_exec: str, export_dpi: str):
     """"
@@ -98,7 +79,7 @@ def add_latex(latex_raw: str): # Add ability to add text without compiling latex
     tmpfile = tempfile.NamedTemporaryFile(mode='w+', delete=False)
 
     with open(tmpfile.name, "w") as tmpf:
-        tmpf.write(latex_document(latex_raw))
+        tmpf.write(config.latex_document(latex_raw))
 
     working_dir = tempfile.gettempdir()
     subprocess.run(
@@ -153,42 +134,6 @@ def write_latex() -> None:
     latex = open_vim()
     if latex != '$$':
         add_latex(latex)
-        logger.debug("finished writing tex") # TODO
-
-async def get_num_windows(app) -> int:
-    return len(app.terminal_windows)
-
-async def _main(connection, filename: str) -> None:
-    """ From Iterm2 Api. Opens nvim in a new Iterm2 instance and pauses code execution untill the window is closed.
-    filename: nvim
-    connection: ?
-    """
-    app = await iterm2.async_get_app(connection)
-    window = app.current_window
-    if window is None:
-        raise Exception("Windown is none")
-
-    num_windows = await get_num_windows(app)
-    new_window = await window.async_create(connection, command=f"/bin/bash -l -c 'nvim {filename}'")
-    await new_window.async_set_frame(iterm2.Frame(iterm2.Point(500,500), iterm2.Size(600, 100)))
-#    focus("Iterm") # there is an error with this
-
-    while await get_num_windows(app) > num_windows:
-        await asyncio.sleep(0.1)
-    print("done")
-
-def promt_user_for_latex(file_path: str) -> None:
-    """ runs _main """
-    #file_path = "/Users/joshuataylor/desktop/test.txt"
-    if not os.path.isfile(file_path):
-        logger.error(f"Invalid path: {file_path}")
-        raise  ValueError("Invalid file path: {file_path}")
-
-    main = partial(_main, filename=file_path)
-    iterm2.run_until_complete(main)
-
-
-
 
 def load_shortcuts(module_path: str) -> list[FunctionType]:
     """ Loads modules from path set in config file. Then finds all functions in the module that start with
@@ -217,9 +162,6 @@ def load_shortcuts(module_path: str) -> list[FunctionType]:
     return shortcuts
 
 
-def open_inkscape(exe_path:str, path: str) -> None:
-    """
-    path: target figure path
-    exe_path: path to inkcape executable
-    """
-    subprocess.Popen([exe_path, path])
+def launch_inkscape_with_figure(figure_path: str):
+    subprocess.Popen(["open", "-a", INKSCAPE_PATH, figure_path])
+

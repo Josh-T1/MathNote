@@ -89,9 +89,7 @@ def add_latex(self: Type['IK_ShortcutManager']) -> None:
     subprocess.Popen(["python3", "/Users/joshuataylor/documents/python/myprojects/mathnote/shortcut_manager/latex_utils.py"],
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     self.callable_queue.append(partial(nested_callback, _self=self, normal_shortcut=normal_shortcut))
-
-
-    #focus("Inkscape") # Why the fuck does this not work
+    utils.bring_app_to_foreground("Inkscape")
 
 
 SHORTCUTS = [
