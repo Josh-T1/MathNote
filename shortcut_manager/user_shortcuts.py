@@ -68,7 +68,7 @@ from functools import partial
 Example Shortcut
 """
 
-def add_latex(self: Type['IK_ShortcutManager']) -> None:
+def add_latex(self: Type['IK_ShortcutManager'], compile: bool = False) -> None:
     """ Launches new Iterm2 instanace from which vim is opened in a tmp file, if latex is written, it is
     compiled and pasted to inkscape """
     def nested_callback(_self, normal_shortcut) -> None:
@@ -79,6 +79,10 @@ def add_latex(self: Type['IK_ShortcutManager']) -> None:
         return None
 
 
+    if compile:
+        args = ["python3", "/Users/joshuataylor/documents/python/myprojects/mathnote/shortcut_manager/subprocess_.py", "add_compiled_latex"]
+    else:
+        args = ["python3", "/Users/joshuataylor/documents/python/myprojects/mathnote/shortcut_manager/subprocess_.py", "add_latex"]
 
     normal_shortcut = next((obj for obj in self.shortcuts['insert'] if obj.pattern == "esc"), None) # An absolutely horrendous solution. Need to re think how shortcuts are stored.
     if not normal_shortcut: # This shortcuts functionality is dependent on the existance of the toggle normal mode shortcut
@@ -86,12 +90,15 @@ def add_latex(self: Type['IK_ShortcutManager']) -> None:
 
     normal_shortcut.disable()
     self.toggle_mode(Modes.Insert)
-    subprocess.Popen(["python3", "/Users/joshuataylor/documents/python/myprojects/mathnote/shortcut_manager/latex_utils.py"],
-                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.Popen(args)
     self.callable_queue.append(partial(nested_callback, _self=self, normal_shortcut=normal_shortcut))
     utils.bring_app_to_foreground("Inkscape")
 
+add_compiled_latex_shortcut = partial(add_latex, compile = True)
+add_latex_shortcut = partial(add_latex, compile = False)
 
+# Allow for nested shortcuts. Ie add them together so long as 'types match?. Split Shorcut class into Normal Shortcut and Insert shortcut'
 SHORTCUTS = [
-        ShortCut("t", add_latex, Modes.Normal, contains_subprocess = True, description="Open instance of vim, to which all tex will be compiled and saved to clipboard")
+        ShortCut("shift+t", add_compiled_latex_shortcut, Modes.Normal, contains_subprocess = True, description="Open instance of vim, to which all tex will be compiled and saved to clipboard"),
+        ShortCut("t", add_latex_shortcut, Modes.Normal, contains_subprocess = True, description = "Open instance of vim, raw latex code is copied to clipboard and pasted to screen")
         ]

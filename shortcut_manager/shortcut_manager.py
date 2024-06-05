@@ -172,12 +172,13 @@ class IK_ShortcutManager:
 
     def communicate_status(self):
         """  """
-        while True:
+        while True and self.mode != Modes.Close:
             lock.acquire()
             try:
                 with open(PIPELINE_FILENAME, "r+") as file:
-                    contents = file.read()
-                    if contents == "done":
+                    contents = file.read() # contents display error message
+                    if contents:
+                        self.logger.debug(f"Subprocess termination message: {contents}")
                         self.shortcut_in_progress = False
                         file.truncate(0)
                         file.seek(0)
@@ -255,7 +256,9 @@ class IK_ShortcutManager:
 
 
 class StatusWindow:
-    """ MacOS sonoma => warning message displayed when pygui window is created
+    """ MacOS sonoma warning:
+    WARNING: Secure coding is not enabled for restorable state! Enable secure coding by
+    implementing NSApplicationDelegate.applicationSupportsSecureRestorableState: and returning YES.
     """
     def __init__(self, height: int = 30, width: int = 150) -> None:
         self.root = tk.Tk()

@@ -39,11 +39,17 @@
 
 ## Course
 1. Fix or verify that course start time feature works
+1. Re think load_macros. Make dynamic so macros such as definition boxes can be
+   converted to pure tex. Make Macro object that is returned by parse tex and
+   used by remove tex.
 
 ## FlashCards
 
 
 # === [New Features to Implement] ===
+## Build Vector Graphics with PyQt5
+1. This is a mission
+
 ## Flash Cards
 1. Make formatting nice
 1. Figure out how to get theorem proof flash cards
@@ -61,6 +67,7 @@
         - is this in inkscape of vim?
         - probably inkscape
 
+# GUI
 
 # === [Snippets] ===
 1. Figure out a better system for creating snippets, can I make a script to

@@ -1,6 +1,6 @@
 from os.path import isdir
+from PyQt6.QtWidgets import QApplication
 import random
-from re import L
 import threading
 import tempfile
 from pathlib import Path
@@ -9,6 +9,7 @@ import sys
 import os
 import subprocess
 import hashlib
+from .window import MainWindow
 from ..Course import parse_tex
 """
 Figure out a method for cashing results so that I do not need parse latex files everytime
@@ -68,8 +69,8 @@ class TexCompilationManager:
             if result.returncode != 0:
                 return None
 
-            pdf_file_path.rename(self.cache_dir / f"{tex_hash}.pdf")
-        return pdf_file_path
+            new_path = pdf_file_path.rename(self.cache_dir / f"{tex_hash}.pdf")
+        return new_path
 """
 What should empty card look like and how should I display plain text?
 """
@@ -154,5 +155,10 @@ if __name__ == '__main__':
 
 #    print(manager.latex_template(card.answer))
     res = manager.compile_latex(card.answer)
-    print(res)
+    print(str(res))
+    app = QApplication([])
+    window = MainWindow()
+    window.plot_tex(str(res))
+    window.show()
+    app.exec()
 #    manager.compile_card()

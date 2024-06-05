@@ -11,7 +11,7 @@ class FlashcardController:
     def __init__(self, view, model) -> None:
         self.model = model
         self.view = view
-
+        self.app = QApplication([])
         self.current_card = self.model.next_flashcard() # fix this
         self.model.load_flashcards(['defin'])
         self.view.bind_next_flashcard_button(self.next_flashcard)
@@ -22,7 +22,7 @@ class FlashcardController:
 
     def run(self):
         self.view.show()
-        sys.exit(app.exec())
+        sys.exit(self.app.exec())
 
     def next_flashcard(self):
         self.current_card = self.model.next_flashcard()
@@ -47,7 +47,6 @@ class FlashcardController:
 if __name__ == '__main__':
     path = Path("/Users/joshuataylor/documents/notes/uofc/math-445/lectures/lec_03.tex")
     flashcard_model = FlashcardModel([path])
-    app = QApplication([])
     window = MainWindow()
 
     controller = FlashcardController(window, flashcard_model)

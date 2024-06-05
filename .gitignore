@@ -5,6 +5,8 @@ __pycache__/
 # notes
 *.md
 *.txt
+# cached tex
+cached_tex
 
 !README.md
 

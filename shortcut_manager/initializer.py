@@ -5,6 +5,7 @@ import utils as utils
 from shortcut_manager import IK_ShortcutManager, StatusWindow
 import logging
 import logging.config
+import config as config_
 
 config = utils.get_config()
 
@@ -32,9 +33,11 @@ def open_inkscape_with_manager(path: str):
     shortcut_manager = IK_ShortcutManager(config, path)
     window = StatusWindow()
 
-    shortcuts_obj = utils.load_shortcuts(config["user-shortcuts-path"])
+    shortcut_module = utils.lazy_import("user_shortcuts")
+    if shortcut_module:
+        shortcuts_obj = utils.load_shortcuts(shortcut_module)
+        shortcut_manager.register_shortcuts(shortcuts_obj)
 
-    shortcut_manager.register_shortcuts(shortcuts_obj)
     shortcut_manager.add_obsever(window)
     logger.debug("Starting threads for ShortcutManager and Gui. Opening Inksape")
     shortcut_manager.start()
@@ -56,7 +59,7 @@ def main():
             if not name:
                 raise ValueError("No figure name specified")
             create_figure(fig_dir + name + ".svg")
-            tex = config.include_fig(name)
+            tex = config_.include_fig(name)
             print(tex)
 
         case [*_]:

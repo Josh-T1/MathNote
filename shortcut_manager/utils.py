@@ -7,23 +7,32 @@ import subprocess
 from glob import glob
 import tempfile
 from types import FunctionType
-import importlib
-import sys as sys
-import config as config
+import importlib.util
+import sys
+import config as config_
 import platform
 
-"""
-OS specific Imports
-"""
+
+
+""" Config """
+CONFIG_PATH = Path(__file__).parent.parent / "config.json"
+logger = logging.getLogger("ShortCutManager")
+
+def get_config():
+    with open(CONFIG_PATH, 'r') as f:
+        config = json.load(f)
+    return config
+config = get_config()
+
+""" os specific Imports """
 if platform.system() == "Darwin":
     import macos_specific as os_specific
 else:
     raise OSError(f"Unsupported operating system: {platform.system()}")
+INKSCAPE_PATH = os_specific.INKSCAPE_PATH
 
-
-CONFIG_PATH = Path(__file__).parent.parent / "config.json"
-logger = logging.getLogger("ShortCutManager")
-
+def set_png_to_clipboard(png_path):
+    os_specific.set_png_to_clipboard(png_path)
 
 def is_app_running(app_name):
     os_specific.is_app_running(app_name)
@@ -34,13 +43,11 @@ def bring_app_to_foreground(app_name):
 def close(app_name):
     os_specific.close_app(app_name)
 
-def get_config():
-    with open(CONFIG_PATH, 'r') as f:
-        config = json.load(f)
-    return config
+
 
 def promt_user_for_latex(file_path: str) -> None:
     os_specific.promt_user_for_latex(file_path)
+""" ======================================== """
 
 
 def save_config(updated_config: str):
@@ -62,32 +69,40 @@ def svg_to_pdftex(path: str, ink_exec: str, export_dpi: str):
             stderr=subprocess.DEVNULL
             )
 
-def gather_and_del(filename: str):
-    """ Delete all files in a directory by name ignoring extension """
-    path = Path(filename)
-    file_path = str(path.parent / path.stem)
-    files = glob(f'{file_path}.*')
-    for file in files:
-        os.remove(file)
+def add_latex():
+    """
+    Idealy one would write latex, embed it into svg and past the svg from clipboard into inkscape...however mac clipboard does not support svg
+    """
+    raise NotImplemented
+#    latex = open_vim()
+#    subprocess.run(
+#            ["pbcopy"], text = True, input = latex
+#            )
 
-
-def add_latex(latex_raw: str): # Add ability to add text without compiling latex
-    """ Takes in latex code, converts compiled latex to png from which the png is posted to the system clipboard.
+def add_compiled_latex(): # Add ability to add text without compiling latex
+    """TODO: WIRTEO LKSJfl Takes in latex code, converts compiled latex to png from which the png is posted to the system clipboard.
     TODO: allow for latex to be added to inkscape without begin compiled
     """
+    latex = open_vim()
+
+    if latex == '$$':
+        return
+
     logger.debug("Starting latex to png conversion")
     tmpfile = tempfile.NamedTemporaryFile(mode='w+', delete=False)
 
     with open(tmpfile.name, "w") as tmpf:
-        tmpf.write(config.latex_document(latex_raw))
+        tmpf.write(config_.latex_document(latex))
 
     working_dir = tempfile.gettempdir()
+    # latex code -> pdf
     subprocess.run(
             ['pdflatex', tmpfile.name],
             cwd=working_dir,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL
             )
+    # pdf -> png
     subprocess.run(
             [config["inkscape-exec"],f'{tmpfile.name}.pdf', "--export-type=png", f'--export-dpi={config["export-dpi"]}', f'--export-filename={tmpfile.name}.png'],
             cwd=working_dir,
@@ -126,42 +141,32 @@ def open_vim() -> str: # send 'a'
     return latex
 
 
-def write_latex() -> None:
-    """ latex wrote by user => png copied to clipboard
-    TODO: This may be the wrong function but remember to put the curso
-    """
-    logger.debug("starting to write tex")
-    latex = open_vim()
-    if latex != '$$':
-        add_latex(latex)
+# https://stackoverflow.com/a/67692 -> better solutions?
 
-def load_shortcuts(module_path: str) -> list[FunctionType]:
+def launch_inkscape_with_figure(figure_path: str):
+    subprocess.Popen(["open", "-a", INKSCAPE_PATH, figure_path])
+
+def lazy_import(name):
+    spec = importlib.util.find_spec(name)
+    if not spec or not spec.loader:
+        return None
+    loader = importlib.util.LazyLoader(spec.loader)
+    spec.loader = loader
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    loader.exec_module(module)
+    return module
+
+def load_shortcuts(module) -> list[ShortCut]:
     """ Loads modules from path set in config file. Then finds all functions in the module that start with
     shortcut_prefix
-    :param module_path: path to module
+    :param module: module object
     """
-    shortcuts = []
     shortcuts_name = "SHORTCUTS"
-
-    # Add module dir to path
-    module_dir = os.path.dirname(module_path)
-    sys.path.insert(0, module_dir)
-    module_name = os.path.splitext(os.path.basename(module_path))[0]
-
-    try:
-        module = importlib.import_module(module_name)
-    except ImportError as e:
-        logger.error(f"Failed to load module with name: {module_name}, path: {module_path}, error: {e}")
-        return shortcuts
 
     for name, obj in module.__dict__.items():
         if not isinstance(obj, list):
             continue
         if name == shortcuts_name:
             return obj
-    return shortcuts
-
-
-def launch_inkscape_with_figure(figure_path: str):
-    subprocess.Popen(["open", "-a", INKSCAPE_PATH, figure_path])
-
+    return []

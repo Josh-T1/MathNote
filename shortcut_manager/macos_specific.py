@@ -61,3 +61,46 @@ def promt_user_for_latex(file_path: str) -> None:
 
     main = partial(_main, filename=file_path)
     iterm2.run_until_complete(main)
+
+def set_png_to_clipboard(png_path):
+    """ Chat Gpt wrote this... hopefully this works fine. An alternative approach:
+    subprocess.run(
+            ["osascript", "-e", f'set the clipboard to (read (POSIX file "{tmpfile.name}.png") as  {{«class PNGf»}})'],
+            )
+        """
+    # Create an NSPasteboard instance
+    pasteboard = NSPasteboard.generalPasteboard()
+
+    # Clear the current contents of the pasteboard
+    pasteboard.clearContents()
+
+    # Load the PNG image from the file
+    image = NSImage.alloc().initWithContentsOfFile_(png_path)
+    if image is None:
+        print("Failed to load image.")
+        return
+
+    # Create an NSData object from the NSImage
+    tiff_data = image.TIFFRepresentation()
+    if tiff_data is None:
+        print("Failed to get TIFF representation of image.")
+        return
+
+    # Create an NSBitmapImageRep from the TIFF data
+    bitmap = AppKit.NSBitmapImageRep.alloc().initWithData_(tiff_data)
+    if bitmap is None:
+        print("Failed to create NSBitmapImageRep from TIFF data.")
+        return
+
+    # Convert the NSBitmapImageRep to PNG data
+    png_data = bitmap.representationUsingType_properties_(AppKit.NSPNGFileType, None)
+    if png_data is None:
+        print("Failed to create PNG data from NSBitmapImageRep.")
+        return
+
+    # Set the PNG data to the clipboard
+    success = pasteboard.setData_forType_(png_data, NSPasteboardTypePNG)
+    if not success:
+        print("Failed to set PNG data to clipboard.")
+    else:
+        print("PNG data successfully set to clipboard.")
