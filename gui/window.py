@@ -1,27 +1,18 @@
-from PyQt6.QtWidgets import (QComboBox, QHBoxLayout, QSizePolicy, QSpacerItem, QVBoxLayout, QWidget, QPushButton,
+from types import FunctionType
+from PyQt6.QtWidgets import (QComboBox, QHBoxLayout, QLabel, QLineEdit, QListView, QListWidget, QListWidgetItem, QMessageBox, QSizePolicy, QSpacerItem, QVBoxLayout, QWidget, QPushButton,
                              QMainWindow, QSpacerItem, QSizePolicy, QScrollArea)
 from PyQt6.QtPdfWidgets import QPdfView
 from PyQt6.QtPdf import QPdfDocument
-from PyQt6.QtCore import QSize, Qt
-from PyQt6.QtGui import QColor, QPainter, QPalette
-import sys
-from pathlib import Path
-from typing import Optional
-
-class CustomPdfView(QWidget):
-    def __init__(self, pdf_document):
-        super().__init__()
-        layout = QVBoxLayout(self)
-        self.pdf_view = QPdfView(self)
-        self.pdf_view.setStyleSheet("background-color: white;")
-        self.pdf_view.setDocument(pdf_document)
-        layout.addWidget(self.pdf_view)
-        self.setLayout(layout)
+from PyQt6.QtGui import QColor, QPainter, QPalette, QStandardItem, QStandardItemModel
+from ..course.parse_tex import Flashcard
+class LatexCompilationError(Exception):
+    pass
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.initUi()
+        self.close_callback = None
 
     def initUi(self):
         self.resize(1000, 600)
@@ -39,25 +30,76 @@ class MainWindow(QMainWindow):
         main_layout.addLayout(flashcard_layout)
         main_layout.addLayout(config_layout)
 
+    def setCloseCallback(self, callback):
+        self.close_callback = callback
+
+    def closeEvent(self, a0):
+        """a0 is an event. Why the name... to keep the lsp from bitching at me 'incompatible overide of method closeEvent' """
+        if self.close_callback:
+            self.close_callback()
+        a0.accept()
+
     def _set_config_layout(self):
+        # Creating Layout
         config_layout = QVBoxLayout()
-        self.dropdown = QComboBox()
-        self.dropdown.addItems(['item1', 'item2'])
-        config_layout.addWidget(self.dropdown)
+        # Creating Widgets
+        self.search_bar = QLineEdit()
+        course_combo_label = QLabel()
+        self.course_combo= QComboBox()
+        self.section_list = QListView()
+        section_list_label = QLabel()
+        self.create_flashcards_button = QPushButton("Create Flashcards")
+
+#        self.dropdown.setMaximumWidth(100)
+        self.search_bar.setMaximumWidth(100)
+        course_combo_label.setText("Select Course")
+        section_list_label.setText("Select Section")
+        self.search_bar.setPlaceholderText("Search...")
+
+        section_list_model = QStandardItemModel()
+        self.section_list_items = ["definition", "theorem", "derivation", "all"] # Make sure to map this
+        for item in self.section_list_items:
+            list_item = QStandardItem(item)
+            list_item.setCheckable(True)
+            section_list_model.appendRow(list_item)
+        self.section_list.setModel(section_list_model)
+
+        self.section_list.setMaximumWidth(100)
+        self.section_list.setMaximumHeight(100)
+        #Add Widgets to layout
+        config_layout.addWidget(self.search_bar)
+        config_layout.addWidget(course_combo_label)
+        config_layout.addWidget(self.course_combo)
+        config_layout.addWidget(section_list_label)
+        config_layout.addWidget(self.section_list)
+        config_layout.addWidget(self.create_flashcards_button)
         config_layout.addStretch()
         return config_layout
 
-    def _set_flashcard_layout(self):
-        main_flashcard_layout = QVBoxLayout()
-        self.next_flashcard_button = QPushButton("Next", self)
-        self.next_flashcard_button.setFixedSize(75, 30)
-        self.prev_flashcard_button = QPushButton("Prev", self)
-        self.prev_flashcard_button.setFixedSize(75, 30)
-        self.show_answer_button = QPushButton("Show Answer", self)
-        self.show_quesetion_button = QPushButton("Show Question", self)
 
+    def _set_flashcard_layout(self):
+        # Creating layouts
+        main_flashcard_layout = QVBoxLayout()
         button_layout_next_prev = QHBoxLayout()
         button_layout_question_answer = QHBoxLayout()
+        # Creating Widgets
+        self.next_flashcard_button = QPushButton("Next", self)
+        self.prev_flashcard_button = QPushButton("Prev", self)
+        self.show_answer_button = QPushButton("Show Answer", self)
+        self.show_quesetion_button = QPushButton("Show Question", self)
+        self.scroll_area = QScrollArea(self.widget)
+        self.pdf_viewer = QPdfView(self.scroll_area)
+        # Setting Widget Style
+        pallete = QPalette()
+        pallete.setBrush(QPalette.ColorRole.Dark, QColor('white'))
+        self.pdf_viewer.setPalette(pallete)
+        # Setting other widget styles
+        self.prev_flashcard_button.setFixedSize(75, 30)
+        self.next_flashcard_button.setFixedSize(75, 30)
+        # Setting pdf_viewer parent to scroll_area allows QPdfView scroll bar. Setting hidden=True hides scroll_area box used to scroll gui window
+        self.scroll_area.setHidden(True)
+
+        # Adding widgets and stretch
         button_layout_question_answer.addStretch()
         button_layout_question_answer.addWidget(self.show_answer_button)
         button_layout_question_answer.addWidget(self.show_quesetion_button)
@@ -66,48 +108,64 @@ class MainWindow(QMainWindow):
         button_layout_next_prev.addWidget(self.prev_flashcard_button)
         button_layout_next_prev.addWidget(self.next_flashcard_button)
         button_layout_next_prev.addStretch()
-
-        self.scroll_area = QScrollArea(self.widget)
-        # Setting pdf_viewer parent to scroll_area allows QPdfView scroll bar. Setting hidden=True hides scroll_area box used to scroll gui window
-        self.scroll_area.setHidden(True)
-        self.pdf_viewer = QPdfView(self.scroll_area)
-
-        pallete = QPalette()
-        pallete.setBrush(QPalette.ColorRole.Dark, QColor('white'))
-        self.pdf_viewer.setPalette(pallete)
-
+        # Adding Layouts
         main_flashcard_layout.addLayout(button_layout_question_answer)
         main_flashcard_layout.addWidget(self.pdf_viewer, 3)
         main_flashcard_layout.addLayout(button_layout_next_prev)
         return main_flashcard_layout
 
     def _load_pdf(self, pdf_path: str):
-        if not Path(pdf_path).is_file():
-            raise ValueError("Should be of type str not pathlib.Path")
+        """ Loads pdf into pdf_viewer
+        -- Params --
+        :pdf_path (str): absolute path to pdf
+        :returns: None
+        """
         pdf_document = QPdfDocument(self)
         load_status = pdf_document.load(pdf_path)
+
         if load_status == QPdfDocument.Error.None_:
             self.pdf_viewer.setDocument(pdf_document)
-            self.pdf_viewer.setZoomMode(QPdfView.ZoomMode.FitToWidth)
-        else:
-            print(load_status)
-            print("failed to load pdf")
+#            self.pdf_viewer.setZoomMode(QPdfView.ZoomMode.FitToWidth)
+            self.pdf_viewer.setZoomMode(QPdfView.ZoomMode.FitInView)
+            self.pdf_viewer.setZoomFactor(1.0)
+        return load_status
 
-    def plot_tex(self, pdf_path: str):
-        self._load_pdf(pdf_path)
-#        self.canvas.plot_latex(tex)
+    def plot_tex(self, card: Flashcard, question=True):
+        """
+        -- Params --
+        :pdf_path (str): absolute path to pdf
+        :question (bool): True to display question, else display answer
+        """
+        target = card.question if question else card.answer
 
-    def bind_next_flashcard_button(self, callback):
+        load_status = self._load_pdf(target)
+        if load_status != QPdfDocument.Error.None_:
+            raise LatexCompilationError(f"Failed to compile card: add card here*.\n Load status: {load_status}")
+
+    def set_error_message(self, msg: str):
+        """ Creates a pop up with message = msg """
+        msg_box = QMessageBox(self)
+        msg_box.setText(msg)
+        msg_box.exec()
+
+    def bind_next_flashcard_button(self, callback: FunctionType):
+        """ bind next flashcard button in gui with callback function """
         self.next_flashcard_button.clicked.connect(callback)
 
-    def bind_prev_flashcard_button(self, callback):
+    def bind_prev_flashcard_button(self, callback: FunctionType):
+        """ bind previous flashcard button in gui with callback function """
         self.prev_flashcard_button.clicked.connect(callback)
 
-    def bind_show_answer_button(self, callback):
+    def bind_show_answer_button(self, callback: FunctionType):
+        """ bind show answer button in gui with callback function """
         self.show_answer_button.clicked.connect(callback)
 
-    def bind_show_question_button(self, callback):
+    def bind_show_question_button(self, callback: FunctionType):
+        """ bind show question button in gui with callback function """
         self.show_quesetion_button.clicked.connect(callback)
+
+    def bind_create_flashcards_button(self, callback: FunctionType):
+        self.create_flashcards_button.clicked.connect(callback)
 
 
 #    def contextMenuEvent(self, event):

@@ -1,7 +1,8 @@
 from typing import Union
-from lectures import LATEX_CONFIG, LatexParser, Lecture, number2filename, filename2number
+#from .lectures import LATEX_CONFIG, LatexParser, Lecture, number2filename, filename2number
+from .utils import number2filename
 from pathlib import Path
-from utils import get_config
+#from utils import get_config
 import logging
 import os
 from datetime import datetime
@@ -12,21 +13,21 @@ import subprocess
 
 class Lecture():
     def __init__(self, file_path) -> None:
-        self.file_path: Path = file_path
+        self.path: Path = file_path
 
     @property
     def number(self) -> int:
-        num = str(self.file_path.stem).split("_")[-1].lstrip("0")
+        num = str(self.path.stem).split("_")[-1].lstrip("0")
         return int(num)
 
     @property
     def name(self) -> str:
-        return self.file_path.name
+        return self.path.name
 
     @property
     def last_edit(self) -> float:
         """ Returns most recent edit in seconds """
-        return self.file_path.stat().st_mtime
+        return self.path.stat().st_mtime
 
 def requires_parser(func):
 
@@ -39,7 +40,8 @@ def requires_parser(func):
 
 class Course():
     """
-    TODO: How do can i determine lecture number in a more reliable way. ie) What if i missed a lecture. Can I somehow incoperate uofc calander
+    TODO: How do can i determine lecture number in a more reliable way. ie) What if i missed a lecture? Can I somehow incoperate uofc calander
+    TODO: Determine classes on existance of cofig file.. analogous to __init__.py <-> module relationship
     """
     def __init__(self, path: Path):
         self.path: Path = path
@@ -54,16 +56,31 @@ class Course():
         self._logger = logging.getLogger(__name__ + "Course")
 
 
+    @property
+    def last_edit(self):
+        if not self.lectures:
+            return None
+        return max([lecture.last_edit for lecture in self.lectures])
+
     def _load_course_info(self) -> dict:
         with open(self.path / "course_info.json", 'r') as f:
             self._info = json.load(f)
 
-        self._info["weekdays"] = [] if not self._info["weekdays"] else self._string_to_list(self._info["weekdays"])
+        self._info["weekdays"] = [] if not self._info["weekdays"] else self._weekdays_string_to_list(self._info["weekdays"])
         self._info["name"] = self.name
         return self._info
 
+    @property
+    def this_semester(self) -> bool:
+        """ returns True if this class is active this semester """
+        # add logging
+        end_date = self._info.get("end-date", "")
+        if not end_date:
+            return False
+        return datetime.strptime(end_date, "%Y-%m-%d") > datetime.today()
+
     @staticmethod
-    def _string_to_list(data: str):
+    def _weekdays_string_to_list(data: str):
         return [day.strip() for day in data.split(",")]
 
     @property
@@ -172,21 +189,24 @@ class Course():
         self._logger.debug(f"Attempting to compile {self.main_file}")
         result = subprocess.run(
                 ['latexmk', '-f', '-interaction=nonstopmode', str(self.main_file)],
-                stdout = subprocess.STDOUT, # Or Devnull?
+                stdout = subprocess.STDOUT,
                 stderr = subprocess.STDOUT,
                 cwd=self.path
                 )
         return result.returncode
 
     def __eq__(self, other):
-        if type(other) != type(self): return False
+        if type(other) != type(self):
+            return False
         return self.path == other.path
 
     def __repr__(self) -> str:
         """ TODO: Make this better """
         return f"{__class__} {self.name}"
-    def __contains__(self, other) -> bool:
-        if not isinstance(Lecture, other): return False
+
+    def __contains__(self, other) -> bool: # Make sure isinstance is corrent... backwards args?
+        if not isinstance(Lecture, other):
+            return False
         return other in self.lectures
     # add dunder in
 
@@ -195,27 +215,29 @@ class Courses():
         self.config = config
         self.root = Path(config["note-path"])
         self._courses = {}
-        self.logger = logging.getLogger(__name__ + "Courses")
+        self.logger = logging.getLogger("Courses")
 
-    def _find_courses(self, key=lambda c: c.name) -> list[Course]:
+    def _find_courses(self, _key = lambda c: c.name) -> list[Course]:
         """ TODO: sort by last edited """
         course_directories = [x for x in self.root.iterdir() if x.is_dir() and (x / "course_info.json").is_file] # how does iterdir work
         courses = [Course(course) for course in course_directories]
-        return list(sorted(courses, key=key))
+        return list(sorted(courses, key=_key))
 
-    @property
+    def get_course(self, name: str):
+        return self.courses().get(name)
+
     def courses(self) -> dict[str,Course]:
         """ Should this really return a dict? """
         if self._courses:
             return self._courses
-        course_list = self._find_courses(key=lambda c: (c.last_edit is not None, c.last_edit))
+        course_list = self._find_courses(_key=lambda course: (course.last_edit is not None, course.last_edit))
         return {obj.name: obj for obj in course_list}
 
     def get_active_course(self, tolerance=10) -> Union[None, Course]:
         """ tolerance: maximum number of minutes for which a class with start_time = 'x' will be considered active at time ('x' - tolerance)
         TODO: test this """
 
-        for course in self.courses.values():
+        for course in self.courses().values():
             time_now = datetime.now()
             if time_now.weekday() not in course.days or course.start_time is None or course.end_time is None:
                 continue
@@ -231,7 +253,7 @@ class Courses():
         """
         TODO: copy json file template over, allow flag to indicate weather or not not use user input
         """
-        course = self.courses.get(name, None)
+        course = self.courses().get(name, None)
         if course == None:
             self.logger.info(f"Failed to create coure: {name} as course already exists")
             return

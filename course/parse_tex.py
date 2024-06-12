@@ -1,22 +1,16 @@
 from collections.abc import Callable
 from os import stat
+from types import FunctionType
 from . import utils
 from pathlib import Path
-from typing import Union, Tuple, Any
+from typing import Type, Union, Tuple, Any
 import re
 import logging
 from abc import abstractmethod, ABC
-from dataclasses import dataclass
+from dataclasses import KW_ONLY, dataclass, field
+from collections import namedtuple
+import copy
 
-"""
-This module needs re working and testing
-
-"""
-
-"""
-Tex
-
-"""
 MACRO_PATH = utils.get_config()["macros-path"]
 MACRO_NAMES = ["mlim", "norm", "squarebk", "roundbk", "curlybk", "anglebk", "abs", "operator", "rline",
                "uline"]
@@ -27,16 +21,156 @@ TEX_PATTERN_TO_MATHJAX = {r"\\begin\{equation\*\}": r"\[",
                         "<": "&lt;",
                         "&": "&amp;",
                           }
-
+#Metadata = namedtuple("Metadata", ["start_index", "end_index", "text", "path"])
 @dataclass
-class FlashCard:
+class Metadata:
+# should frozen = True?
+    start_index: int
+    text: str
+    path: Path
+    change_log: list[str] = field(default_factory=list)
+
+    @property
+    def end_index(self):
+        """ Inclusive """
+        return self.start_index + len(self.text) -1
+
+class TrackedString:
+    """
+    TrackedString tries to implement 'duck typing' by implementing all behaviour associated with strings with additional features such as storing souce data,
+    such as file_path, if applicable.
+
+
+    --- Limitations:
+        1. self.apply_text_modifier method makes strong assumtion that pattern matching callbacks will trigger same action on both Metadata.text
+        when Metadata.text is standalone string and Metadata.text when its a substring. This fails when we have pattern = <pattern_start>any<pattern_end> and
+        string = '<pattern_start>Metadata.text<pattern_end>',
+        string = '<pattern_start><Metadata.text(when Metadata.text is pattern_end/pattern_start)',
+        ect (way to many cases)
+
+        2. Name needs to be changed or class needs to change. We implement features specific to this project while calling keeping the general name TrackedString.
+        Im not even sure we need this class... Need a way to pass information of string to Flashcard class eventually, this becomes complicated when string is modified.
+        Can we really say the source file is ex.text is every line changes? but those changes where made to text from ex.tex
+
+
+    """
+    def __init__(self, metadata: list[Metadata] | None = None):
+        self.metadata_list = metadata if metadata is not None else []
+
+    def apply_text_modifier(self, callback: Callable[[str], str]):
+        """
+        ** Warning ** will not work with all pattern matching callbacks as we assume that calback(metadata1.text) will trigger the same action on metadata1.text as
+        callback(''.join([metadata.text for metadata in metadatalist])) on the substring metadata1.text.
+        TODO: Implement optional, slower but exauhstive method for catching changes to string.
+        """
+        adjustment = 0
+        for index, meta_obj in enumerate(self.metadata_list):
+            old_text = meta_obj.text
+            new_text = callback(old_text)
+            if old_text != new_text:
+                self.metadata_list[index].text = new_text
+                self.metadata_list[index].start_index = self.metadata_list[index].start_index + adjustment
+                self.metadata_list[index].change_log.append(callback.__name__)
+                adjustment += len(old_text) - len(new_text)
+        return self
+
+    @property
+    def text(self):
+        return "".join([metadata.text for metadata in self.metadata_list])
+
+    def __add__(self, other) -> 'TrackedString':
+        if not isinstance(other, TrackedString):
+            raise TypeError(f"Can only concatinate TrackedString with TrackedString not TrackedString with {type(other)}")
+        last_index = self.metadata_list[-1].end_index
+        for metadata in other.metadata_list:
+            pass
+        combined_metadata = self.metadata_list + other.metadata_list
+        return TrackedString(combined_metadata)
+
+    def __getitem__(self, key) -> str:
+        if not self.metadata_list:
+            return ""
+        if isinstance(key, slice):
+            if key.stop > self.metadata_list[-1].end_index or key.start < 0:
+                raise KeyError(f"{slice} is out of bounds")
+            return self.text[key]
+
+        elif isinstance(key, int):
+            if key > self.metadata_list[-1].end_index:
+                raise KeyError(f"{slice} is out of bounds")
+            return self.text[key]
+
+        else:
+            raise TypeError(f"Invalid key type: {type(key)}")
+
+    def get_slice_metadata(self, key: Union[slice, int] ) -> list[Metadata]:
+        """ Returns list of 'sliced' Metadata objects. These Metadata objects are relative to the TrackedString instance.
+        Meaning that start_index of the first Metadata object is relative to the TrackedString instance and all Metadata objects contained in self.metadata_list.
+        If a Metadata object is partially in bounds of a slice, a 'sliced' Metadata objects is using the sliced data of the original Metadata object.
+        All Metadata objects returned are new objects, as opposed to references to the original objects stored in self.metadata_list
+        -- Params --
+        key: slice object
+        """
+        data = []
+        if isinstance(key, int):
+            key = slice(key, key+1)
+
+        if key.start < 0 or key.stop > self.metadata_list[-1].end_index:
+            raise KeyError(f"Slice: {key} is out of bounds")
+
+        for metadata in self.metadata_list:
+            if metadata.end_index < key.start:
+                continue
+            if metadata.start_index > key.stop:
+                break
+            slice_start = max(metadata.start_index, key.start)
+            slice_end = min(metadata.end_index, key.stop)
+            slice_text = metadata.text[slice_start:slice_end:key.step]
+            data.append(Metadata(slice_start, slice_text, metadata.path))
+        return data
+
+    def __contains__(self, string: str):
+        return string in self.text
+
+    def __len__(self):
+        return len(self.text)
+
+    def __ge__(self, other):
+        if not isinstance(other, TrackedString):
+            raise ValueError("Comparison only available betweeen 'TrackedString' and 'TrackedString'")
+        return self.text > other.text
+
+    def __le__(self, other):
+        if not isinstance(other, TrackedString):
+            raise ValueError("Comparison only available betweeen 'TrackedString' and 'TrackedString'")
+        return self.text <= other.text
+
+    def __eq__(self, other) -> bool:
+        if not isinstance(other, TrackedString):
+            raise ValueError("Comparison only available betweeen 'TrackedString' and 'TrackedString'")
+        return self.text == other.text
+
+    def __str__(self) -> str:
+        return self.text
+
+    def __getattr__(self, name):
+        return getattr(self.text, name)
+    def lower(self):
+        return self.text.lower()
+    def upper(self):
+        return self.text.upper()
+@dataclass
+class Flashcard:
     question: str
     answer: str
+    error_message: str = ""
+    pdf_answer_path: None | str = None
+    pdf_question_path: None | str = None
 
 
-class EmptyFlashCard(FlashCard):
-    def __init__(self, message: str) -> None:
-        super().__init__(question=message, answer=message)
+class EmptyFlashcard(Flashcard):
+    def __init__(self) -> None:
+        super().__init__(question="", answer="", error_message="No flashcards available to display")
 # Macros needs to be re thought.
 
 
@@ -49,12 +183,13 @@ class GetDataStage(Stage):
     def __init__(self, file_paths: list[Path]) -> None:
         super().__init__()
         self.file_paths = file_paths
-        self.file_contents = ""
+        self.file_contents = TrackedString()
 
     def _load_file_contents(self):
-        for file in self.file_paths:
-            file_contents = file.read_text(encoding='utf-8')
-            self.file_contents += file_contents
+        for file_path in self.file_paths:
+            file_contents = file_path.read_text(encoding='utf-8')
+            tracked_file_contents = TrackedString([Metadata(0, file_contents, file_path)])
+            self.file_contents += tracked_file_contents
 
     def process(self, data=None):
         self._load_file_contents()
@@ -65,9 +200,9 @@ class CleanStage(Stage):
         super().__init__()
         self.macros = macros
 
-    def process(self, data):
-        data = self.remove_comments(data)
-        data = self.remove_macros(data)
+    def process(self, data: TrackedString) -> TrackedString:
+        data.apply_text_modifier(self.remove_comments)
+        data.apply_text_modifier(self.remove_macros)
         return data
 
     def replace_macros(self):
@@ -90,7 +225,7 @@ class CleanStage(Stage):
         paren_stack = []
 
         if tex[0] != "{": # } <- this comment is to keep vim lsp happy
-            raise ValueError(f"String passed does not begin with curly opeining brace: {tex}")
+            raise ValueError(f"String passed does not begin with curly opeining brace: {tex[:20]}")
 
         for index, char in enumerate(tex):
             if char == "{":
@@ -238,7 +373,7 @@ class FilterBySectionAndMakeFlashcardsStage(FilterBySectionStage):
             if section_contents == None:
                 break
             flashcards.append(
-                    FlashCard(match.group(2),section_contents)
+                    Flashcard(match.group(2),section_contents)
                     )
             counter = len(section_contents) + end_cmd_index + 1  # This sets counter equal to last character in command, +1 to move to character after command
         return flashcards
@@ -317,5 +452,3 @@ def load_macros(macros_path: Path, macro_names: list[str]) -> dict[str,dict]:
             tex_cmd = line.replace(match.group(0), "").strip()[1:-1] # remove enclosing curly braces
             macros[name] = {"num_args": match.group(2), "command": tex_cmd}
     return macros
-
-
