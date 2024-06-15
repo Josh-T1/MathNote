@@ -14,15 +14,15 @@ import platform
 
 
 
-""" Config """
-CONFIG_PATH = Path(__file__).parent.parent / "config.json"
-logger = logging.getLogger("ShortCutManager")
-
-def get_config():
-    with open(CONFIG_PATH, 'r') as f:
-        config = json.load(f)
-    return config
-config = get_config()
+""" Config """ # relocated to ../global_utils.py ... hopefully I found all instances in the module
+#CONFIG_PATH = Path(__file__).parent.parent / "config.json"
+#logger = logging.getLogger("ShortCutManager")
+#
+#def get_config():
+#    with open(CONFIG_PATH, 'r') as f:
+#        config = json.load(f)
+#    return config
+#config = get_config()
 
 """ os specific Imports """
 if platform.system() == "Darwin":

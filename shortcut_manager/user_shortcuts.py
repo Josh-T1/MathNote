@@ -60,7 +60,7 @@ import subprocess
 from pynput import keyboard
 from shortcut_manager import IK_ShortcutManager, Modes, ShortCut
 from typing import Type
-import utils as utils
+from . import utils
 from functools import partial
 """ ----------------------------- """
 

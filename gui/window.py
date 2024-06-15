@@ -1,3 +1,5 @@
+from logging import log
+from pathlib import Path
 from types import FunctionType
 from PyQt6.QtWidgets import (QComboBox, QHBoxLayout, QLabel, QLineEdit, QListView, QListWidget, QListWidgetItem, QMessageBox, QSizePolicy, QSpacerItem, QVBoxLayout, QWidget, QPushButton,
                              QMainWindow, QSpacerItem, QSizePolicy, QScrollArea)
@@ -5,6 +7,10 @@ from PyQt6.QtPdfWidgets import QPdfView
 from PyQt6.QtPdf import QPdfDocument
 from PyQt6.QtGui import QColor, QPainter, QPalette, QStandardItem, QStandardItemModel
 from ..course.parse_tex import Flashcard
+import logging
+
+logger = logging.getLogger(__name__)
+
 class LatexCompilationError(Exception):
     pass
 
@@ -114,12 +120,15 @@ class MainWindow(QMainWindow):
         main_flashcard_layout.addLayout(button_layout_next_prev)
         return main_flashcard_layout
 
-    def _load_pdf(self, pdf_path: str):
-        """ Loads pdf into pdf_viewer
+    def _load_pdf(self, pdf_path: str) -> QPdfDocument.Error:
+        """ Loads pdf into pdf_viewer and sets some viewer settings
         -- Params --
         :pdf_path (str): absolute path to pdf
-        :returns: None
+        :returns: QPdfDocument.Error
         """
+        if pdf_path is None:
+            return QPdfDocument.Error.FileNotFound
+
         pdf_document = QPdfDocument(self)
         load_status = pdf_document.load(pdf_path)
 
@@ -130,17 +139,18 @@ class MainWindow(QMainWindow):
             self.pdf_viewer.setZoomFactor(1.0)
         return load_status
 
-    def plot_tex(self, card: Flashcard, question=True):
+    def plot_tex(self, pdf_path):
         """
         -- Params --
         :pdf_path (str): absolute path to pdf
         :question (bool): True to display question, else display answer
+        :return load status
         """
-        target = card.question if question else card.answer
+#        target = card.pdf_question_path if question else card.pdf_answer_path # I dont like this. Plot tex should only take in filepath?
 
-        load_status = self._load_pdf(target)
+        load_status = self._load_pdf(pdf_path)
         if load_status != QPdfDocument.Error.None_:
-            raise LatexCompilationError(f"Failed to compile card: add card here*.\n Load status: {load_status}")
+            raise LatexCompilationError(f"Failed to compile card: {pdf_path}. Load status: {load_status}")
 
     def set_error_message(self, msg: str):
         """ Creates a pop up with message = msg """
@@ -148,7 +158,7 @@ class MainWindow(QMainWindow):
         msg_box.setText(msg)
         msg_box.exec()
 
-    def bind_next_flashcard_button(self, callback: FunctionType):
+    def bind_next_flashcard_button(self, callback: FunctionType): # FunctionType or Callable? Should google this at some point...
         """ bind next flashcard button in gui with callback function """
         self.next_flashcard_button.clicked.connect(callback)
 

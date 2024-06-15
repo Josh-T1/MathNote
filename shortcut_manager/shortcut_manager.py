@@ -9,10 +9,10 @@ from typing import Callable
 import tkinter as tk
 import threading
 from functools import partial
-from utils import svg_to_pdftex
+from .utils import svg_to_pdftex
 from dataclasses import dataclass
 from filelock import FileLock
-from config import LOCK_FILENAME, PIPELINE_FILENAME
+from .config import LOCK_FILENAME, PIPELINE_FILENAME
 
 logger = logging.getLogger("ShortCutManager")
 logger.setLevel(level=logging.DEBUG)

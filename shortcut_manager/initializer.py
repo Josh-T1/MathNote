@@ -1,13 +1,14 @@
 import sys
 from shutil import copy
 from types import ModuleType, FunctionType
-import utils as utils
-from shortcut_manager import IK_ShortcutManager, StatusWindow
+from . import utils as shortcut_utils
+from .shortcut_manager import IK_ShortcutManager, StatusWindow
 import logging
 import logging.config
-import config as config_
+from . import config as config_
+from ..global_utils import get_config
 
-config = utils.get_config()
+config = get_config()
 
 logging.config.dictConfig(config = config["shortcutmanager-logging-config"])
 logger = logging.getLogger("ShortCutManager")
@@ -33,15 +34,15 @@ def open_inkscape_with_manager(path: str):
     shortcut_manager = IK_ShortcutManager(config, path)
     window = StatusWindow()
 
-    shortcut_module = utils.lazy_import("user_shortcuts")
+    shortcut_module = shortcut_utils.lazy_import("user_shortcuts")
     if shortcut_module:
-        shortcuts_obj = utils.load_shortcuts(shortcut_module)
+        shortcuts_obj = shortcut_utils.load_shortcuts(shortcut_module)
         shortcut_manager.register_shortcuts(shortcuts_obj)
 
     shortcut_manager.add_obsever(window)
     logger.debug("Starting threads for ShortcutManager and Gui. Opening Inksape")
     shortcut_manager.start()
-    utils.launch_inkscape_with_figure(path)
+    shortcut_utils.launch_inkscape_with_figure(path)
     window.inizialize()
     shortcut_manager.join()
 
