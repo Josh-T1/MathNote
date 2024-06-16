@@ -1,5 +1,6 @@
 from collections.abc import Callable
 from . import utils
+import time
 from pathlib import Path
 from typing import Union,  Any
 import re
@@ -266,8 +267,12 @@ class CleanStage(Stage):
         logger.info(f"Starting {__class__.__name__}.process")
         new_data = []
         for tracked_string in data:
+            start_time = time.time()
             tracked_string = self.remove_comments(tracked_string)
+            logger.debug(f"Tooook {time.time() - start_time}")
+            start_time = time.time()
             tracked_string = self.remove_macros(tracked_string)
+            logger.debug(f"Tooook {time.time() - start_time}")
             new_data.append(tracked_string)
         logger.debug(f"Finished cleaning data, returning {new_data}")
         return new_data
@@ -303,26 +308,27 @@ class CleanStage(Stage):
 
 
 
-    def remove_macros(self, tex: TrackedString) -> str:
+    def remove_macros(self, tex: TrackedString) -> TrackedString:
         """ Replaces all user defined macros with 'pure tex' in the sence that it would compile without a specific macros.tex/preamble.tex
         ** Limited to replacing macros of the form: \\macro_name{title}{tex}. This can not handle more complex macros
         :param tex: latex code as string
         :param macros: dictionary with key values of the form; macro_name: macro_dict_info. ie {defin: {command_in_tex: tex, ....},...}
         """
-        new_tex = ""
+        new_tex = TrackedString("", source_history=None) #type: ignore
         counter = 0
 
         while counter < len(tex): # check this is what i want
 
             if tex[counter] != '\\':
-                new_tex += tex[counter]
+                new_tex = TrackedString(str(new_tex) + str(tex[counter]), source_history=tex[counter].source_history)
                 counter += 1
                 continue
 
             cmd = self._find_cmd(tex[counter+1:], list(self.macros.keys()))
 
             if cmd == None:
-                new_tex += tex[counter]
+                new_tex = TrackedString(str(new_tex)+ str(tex[counter]), source_history=tex[counter].source_history)
+                new_tex = tex[counter] + new_tex # have to be carefull when adding TrackedString's... a sign of good design
                 counter += 1
                 continue
 
@@ -335,9 +341,8 @@ class CleanStage(Stage):
 
             cleaned_arg = self.remove_macros(arg)
             new_cmd = self.macros[cmd]["command"].replace("#1", f" {cleaned_arg} ")
-
             num_brackets_ignored = 2
-            new_tex += f" {new_cmd} " # Aviod issues of the from \norm{f_n}g(x) -> \lVert f_n \rVertg(x), where \rVertg(x) raises an error when compiled
+            new_tex = TrackedString(str(new_tex) + f" {new_cmd} ", cleaned_arg.source_history)# Hack solution to ensure TrackedString.source_history.root is correct
             counter = len(arg) + end_cmd_index + num_brackets_ignored +1 # This sets counter equal to last character in command, +1 to move to character after command
         return new_tex
 
@@ -367,7 +372,7 @@ class FilterBySectionStage(FilterStage):
         return None
 
     @staticmethod
-    def index_of_line_end(tex: str):
+    def index_of_line_end(tex: TrackedString) -> int | None:
         """
         :param tex: latex code as string
         :returns int: index of line end, None if no newline character, could occur on last line in file
@@ -378,12 +383,12 @@ class FilterBySectionStage(FilterStage):
         return None
 
     @staticmethod
-    def _find_arg(tex: str) -> Union[str, None]:
+    def _find_arg(tex: TrackedString) -> Union[TrackedString, None]:
         """ It is assume the tex string passed starts with curly bracket """
         paren_stack = []
 
         if tex[0] != "{": # } <- this comment is to keep vim lsp happy
-            raise ValueError(f"String passed does not begin with curly opeining brace: {tex}")
+            raise ValueError(f"String passed does not begin with curly opening brace: {tex[:50]}, {tex.source_history.root}")
 
         for index, char in enumerate(tex):
             if char == "{":

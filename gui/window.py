@@ -53,14 +53,31 @@ class MainWindow(QMainWindow):
         course_combo_label = QLabel()
         self.course_combo= QComboBox()
         self.section_list = QListView()
+        self.filter_by_week_list = QListView()
+        filter_by_week_list_label = QLabel()
         section_list_label = QLabel()
         self.create_flashcards_button = QPushButton("Create Flashcards")
+
 
 #        self.dropdown.setMaximumWidth(100)
         self.search_bar.setMaximumWidth(100)
         course_combo_label.setText("Select Course")
         section_list_label.setText("Select Section")
+        filter_by_week_list_label.setText("Filter by week")
         self.search_bar.setPlaceholderText("Search...")
+        filter_by_week_list_model = QStandardItemModel()
+
+        num_weeks = 13
+        all_box = QStandardItem('All')
+        all_box.setCheckable(True)
+        filter_by_week_list_model.appendRow(all_box)
+        for i in range(1, num_weeks+1):
+            list_item = QStandardItem(f"Week {i}")
+            list_item.setCheckable(True)
+            filter_by_week_list_model.appendRow(list_item)
+        self.filter_by_week_list.setModel(filter_by_week_list_model)
+        self.filter_by_week_list.setMaximumWidth(100)
+        self.filter_by_week_list.setMaximumHeight(100)
 
         section_list_model = QStandardItemModel()
         self.section_list_items = ["definition", "theorem", "derivation", "all"] # Make sure to map this
@@ -78,6 +95,7 @@ class MainWindow(QMainWindow):
         config_layout.addWidget(self.course_combo)
         config_layout.addWidget(section_list_label)
         config_layout.addWidget(self.section_list)
+        config_layout.addWidget(self.filter_by_week_list)
         config_layout.addWidget(self.create_flashcards_button)
         config_layout.addStretch()
         return config_layout

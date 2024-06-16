@@ -203,7 +203,8 @@ class TexCompilationManager:
         if card.error_message:
             logger.debug(f"Card: {card} contains error message, aborting compilation process")
             return None
-
+        logger.debug(str(card.question))
+        logger.debug(str(card.answer))
         card.pdf_question_path = self.compile_latex(str(card.question)) # most likley does not need to be converted to str... to lazy to test
         card.pdf_answer_path = self.compile_latex(str(card.answer))
 
@@ -218,10 +219,11 @@ class TexCompilationManager:
         """ Add new file to cache and if cache size is reaches limit delete oldest file
         -- Params --
         file_path: Path object of file begin added to cache"""
-        if len(self.cache) >= self.cache_size:
-            files = [Path(file) for file in self.cache.values()]
-            files.sort(key = lambda x: x.stat().st_ctime)
-            files[0].unlink()
+#        if len(self.cache) >= self.cache_size:
+#            files = [Path(file) for file in self.cache.values()]
+#            files.sort(key = lambda x: x.stat().st_ctime)
+#            os.remove(str(files[0].resolve()))
+
         self.cache[file_path.name] = str(file_path)
 
     # @cache
@@ -231,9 +233,10 @@ class TexCompilationManager:
         tex: string containig latex code
         returns: path to compiled pdf or None if compilation fails
         """
-        tex = tex.replace('\n', ' ')
-        tex_hash = self.get_hash(tex)
+#        tex = tex.replace('\n', ' ')
+        tex_hash = "empty" if not tex else self.get_hash(tex)
         if tex_hash in self.cache.keys():
+            logger.debug(f"Getting file {tex_hash} from cache")
             return self.cache[tex_hash]
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -252,6 +255,7 @@ class TexCompilationManager:
             if result.returncode != 0:
                 logger.error(f"Failed to run {' '.join(cmd)}. Tex file contents: {tex}, stderr={result.stderr}")
                 return None
+
             logger.info(f"Successfully ran {' '.join(cmd)}. Tex file contents: {tex}")
             new_path = pdf_file_path.rename(self.cache_dir / f"{tex_hash}.pdf")
             self.add_to_cache(new_path)
@@ -320,13 +324,13 @@ class FlashcardModel:
         with self.flashcard_lock:
             self.compiled_flashcards.append(card)
 
-    def load_flashcards(self, section_names: list[str], paths: list[Path], start_compilation=True) -> None:
+    def load_flashcards(self, section_names: list[str], paths: list[Path]) -> None:
         r""" Load flash cards with raw tex
         -- Params --
         section_names: names of box's defined by user. ie
         \defin{Integer}{Content} is a section called 'defin'
         """
-        logger.info(f"Calling load_flashcards(section_names={section_names}, paths={paths}, start_compilation={start_compilation})")
+        logger.info(f"Calling load_flashcards(section_names={section_names}, paths={paths})")
 
         get_data_stage = parse_tex.GetDataStage(paths)
         clean_data_stage = parse_tex.CleanStage(self.macros)
@@ -356,7 +360,8 @@ class FlashcardModel:
         return self._prev_compiled_flashcard()
 
     def _count_precompiled_cards(self):
-        """ Returns number of compiled cards that are 'next' and have not been viewed in the FlashcardDoubleLinkedList """
+        """ Returns number of compiled cards that are 'next' and have not been viewed in the FlashcardDoubleLinkedList
+        TODO: Decide if 'compiled' cards with no pdf path counti.. probably not """
         counter = 0
         card = None if self.compiled_flashcards.current is None else self.compiled_flashcards.current.next
         while card and not card.data.seen:
@@ -384,6 +389,7 @@ class FlashcardModel:
                 return
 
             card = self.flashcards.pop()
+            logger.debug(card)
             try:
                 self.compiler.compile_card(card)
                 logger.debug(f"Compiled card: {card}")

@@ -1,4 +1,5 @@
 from typing import Union
+from math import ceil
 #from .lectures import LATEX_CONFIG, LatexParser, Lecture, number2filename, filename2number
 from .utils import number2filename
 from pathlib import Path
@@ -23,7 +24,6 @@ class Lecture():
     @property
     def name(self) -> str:
         return self.path.name
-
     @property
     def last_edit(self) -> float:
         """ Returns most recent edit in seconds """
@@ -41,7 +41,6 @@ def requires_parser(func):
 class Course():
     """
     TODO: How do can i determine lecture number in a more reliable way. ie) What if i missed a lecture? Can I somehow incoperate uofc calander
-    TODO: Determine classes on existance of cofig file.. analogous to __init__.py <-> module relationship
     """
     def __init__(self, path: Path):
         self.path: Path = path
@@ -155,6 +154,14 @@ class Course():
             return self.lectures[-1].number -1
         else:
             return 0
+
+    def get_week(self, lecture: Lecture) -> int:
+        """ Returns the week as int (1 indexed).
+        *** Returns 0 when week can not be determined from lecture object
+        """
+        if len(self.days) == 0:
+            return 0
+        return ceil(lecture.number / len(self.days))
 
     def update_lectures_in_master(self, lecture_nums: list[int]) -> None:
         """ Copy contents of main.tex header and footer, find all lecuteres and their correspoding number, join file parts together

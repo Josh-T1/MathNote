@@ -30,7 +30,7 @@ class FlashcardController:
         self.view.course_combo.addItems(courses)
 
     def run(self, app):
-        logger.info("Running FlashcardController")
+        logger.info(f"Running {self.__class__.__name__}")
         self.view.show()
         self.model.compile_thread.start()
         sys.exit(app.exec())
@@ -48,7 +48,7 @@ class FlashcardController:
             self.view.set_error_message(str(e))
 
     def close(self):
-        logger.info("Closing FlashcardController")
+        logger.info(f"Closing {self.__class__.__name__}")
         self.model.compile_thread.stop()
 
     def show_prev_flashcard(self):
@@ -71,7 +71,7 @@ class FlashcardController:
             self.view.plot_tex(self.model.current_card.pdf_question_path)
         except LatexCompilationError as e:
             logging.warning(f"Failed to compile card: {self.model.current_card} with tex: {self.model.current_card.question}, {e}")
-            self.view.set_error_message(f"Failed to compile flashcard question, raw latex: {self.model.current_card.question}")
+            self.view.set_error_message(f"Failed to compile flashcard question. Raw latex: {self.model.current_card.question}")
 
     def show_answer(self):
         if not self.model.current_card:
@@ -85,17 +85,22 @@ class FlashcardController:
 
 
     def create_flashcards(self):
-        course_name, section_names = self.get_flashcard_pipeline_config()
+        course_name, section_names, weeks = self.get_flashcard_pipeline_config()
         course = self.courses.get_course(course_name)
 
-        if not course:
-            logger.error(f"Course: {course} is not a recognized course")
-            self.view.set_error_message(f"There appears to be an issue '{course}' is not recognized")
+        # catch user errors
+        if not section_names or not course:
+            self.view.set_error_message(f"Invalid selection course={course}, section names={section_names}. You must select a course name and at least one section")
+            logger.info(f"Invalid selection (course={course}, section_names={section_names}) for generating flashcards")
             return
 
-        paths = [lecture.path for lecture in course.lectures]
-        self.model.load_flashcards(section_names, paths[:4]) # TDOO: fix this at some point
-
+        paths = [lecture.path for lecture in course.lectures if course.get_week(lecture) in weeks]
+        self.model.load_flashcards(section_names, paths) # TDOO: fix this at some point
+#        try:
+#            self.model.next_flashcard()
+#        except FlashcardNotFoundException as e:
+#            logger.info("No flashcards available")
+#            self.view.set_error_message("No flashcards available for your given selection")
 
 
     def get_flashcard_pipeline_config(self):
@@ -105,14 +110,20 @@ class FlashcardController:
                 }
         course_name = self.view.course_combo.currentText()
         checked_sections = self._get_checked_items_from_listView(self.view.section_list)
-        section_names_pretty = [item.text() for item in checked_sections]
+        weeks = self._get_checked_items_from_listView(self.view.filter_by_week_list)
+        # Clean filter by weeks params
+        if "All" in weeks or not weeks:
+            weeks = {i for i in range(1, 13+1)} # TODO: verify weeks
+        else:
+            weeks = {int(week.text().split(" ")[-1]) for week in weeks}
 
+        # Clean checked section params
+        section_names_pretty = [item.text() for item in checked_sections]
         if "all" in section_names_pretty:
             section_names = [name for name in pretty_section_name_to_section_name.values()]
         else:
             section_names = [pretty_section_name_to_section_name[section_name] for section_name in section_names_pretty]
-        logger.debug(f"Pipeline config, course name: {course_name}, section_names: {section_names}")
-        return course_name, section_names
+        return course_name, section_names, weeks
 
     def _get_checked_items_from_listView(self, listview: QListView):
         """ Given a QListView object, all items that are in the 'checked' state are returned """
