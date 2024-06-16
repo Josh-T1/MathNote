@@ -6,23 +6,24 @@ import os
 import subprocess
 from glob import glob
 import tempfile
-from types import FunctionType
 import importlib.util
 import sys
-import config as config_
+import config as shortcut_utils
+from ..global_utils import CONFIG_PATH
 import platform
+from .shortcut_manager import ShortCut
 
 
 
 """ Config """ # relocated to ../global_utils.py ... hopefully I found all instances in the module
 #CONFIG_PATH = Path(__file__).parent.parent / "config.json"
-#logger = logging.getLogger("ShortCutManager")
+logger = logging.getLogger(__name__)
 #
-#def get_config():
-#    with open(CONFIG_PATH, 'r') as f:
-#        config = json.load(f)
-#    return config
-#config = get_config()
+def get_config():
+    with open(CONFIG_PATH, 'r') as f:
+        config = json.load(f)
+    return config
+config = get_config()
 
 """ os specific Imports """
 if platform.system() == "Darwin":
@@ -92,7 +93,7 @@ def add_compiled_latex(): # Add ability to add text without compiling latex
     tmpfile = tempfile.NamedTemporaryFile(mode='w+', delete=False)
 
     with open(tmpfile.name, "w") as tmpf:
-        tmpf.write(config_.latex_document(latex))
+        tmpf.write(shortcut_utils.latex_document(latex))
 
     working_dir = tempfile.gettempdir()
     # latex code -> pdf

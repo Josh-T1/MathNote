@@ -1,5 +1,6 @@
 import random
 import threading
+import os
 import tempfile
 from pathlib import Path
 import time
@@ -163,7 +164,7 @@ class TexCompilationManager:
         cache_dir: location of cache directory. ie where should pdf_files be saved
         cache_size: limit on number of files allowed in cache_dir. Oldest files are deleted from cache first
         """
-        self.cache_dir: Path = Path(__file__).parent / cache_dir
+        self.cache_dir: Path = Path(__file__).resolve().parent / cache_dir
         self.cache_size = cache_size
         self.cache: dict = self._load_cache()
 
@@ -172,7 +173,12 @@ class TexCompilationManager:
             self.cache_dir.mkdir()
 
     def _load_cache(self) -> dict:
-        return dict()
+        """  """
+        cache = {}
+        for file in self.cache_dir.iterdir():
+            if file.is_file():
+                cache[file.name] = str(file)
+        return cache
 
     @staticmethod
     def get_hash(tex: str, hash_length=8) -> str:
@@ -208,7 +214,17 @@ class TexCompilationManager:
         if not card.pdf_answer_path:
             card.error_message += f"Could not compile answer: {card.answer}"
 
+    def add_to_cache(self, file_path: Path) -> None:
+        """ Add new file to cache and if cache size is reaches limit delete oldest file
+        -- Params --
+        file_path: Path object of file begin added to cache"""
+        if len(self.cache) >= self.cache_size:
+            files = [Path(file) for file in self.cache.values()]
+            files.sort(key = lambda x: x.stat().st_ctime)
+            files[0].unlink()
+        self.cache[file_path.name] = str(file_path)
 
+    # @cache
     def compile_latex(self, tex: str) -> str | None:
         """ Attempts to compile latex string
         -- Params --
@@ -217,6 +233,8 @@ class TexCompilationManager:
         """
         tex = tex.replace('\n', ' ')
         tex_hash = self.get_hash(tex)
+        if tex_hash in self.cache.keys():
+            return self.cache[tex_hash]
 
         with tempfile.TemporaryDirectory() as tmpdir:
             tex_file_path = Path(tmpdir) / "temp.tex"
@@ -236,6 +254,8 @@ class TexCompilationManager:
                 return None
             logger.info(f"Successfully ran {' '.join(cmd)}. Tex file contents: {tex}")
             new_path = pdf_file_path.rename(self.cache_dir / f"{tex_hash}.pdf")
+            self.add_to_cache(new_path)
+
         return str(new_path)
 
 class FlashcardModel:
@@ -253,9 +273,21 @@ class FlashcardModel:
         self.thread_stop_event = threading.Event()
         self.current_card = None
         self.compile_thread = StoppableThread(callback=self._compile)
+        self._macros = None
+
+    @property
+    def macros(self) -> dict:
+        r"""
+        returns the user defined 'macros' that have the form \newcommand[1]{...}{...} that are usually located in macros.tex
+        (they can take other forms but parse_tex has limited parsing capabilities)
+        """
+        if self._macros is None:
+            self._macros = self._load_macros()
+        return self._macros
 
     def _load_macros(self) -> dict:
-        """ Load macros from file used as macros package in tex document """
+        """ Load macros from MACRO_PATH. Note there are limitations on macros that parse_tex can load and MACRO_NAMES are not created dynamically... at some point
+        this should be dynamically loaded."""
         return parse_tex.load_macros(parse_tex.MACRO_PATH, parse_tex.MACRO_NAMES)
 
     def _next_compiled_flashcard(self) -> parse_tex.Flashcard:
@@ -267,7 +299,8 @@ class FlashcardModel:
             return next_card
 
     def remove_flashcard(self, card: parse_tex.Flashcard):
-        pass
+        """"""
+        raise NotImplementedError("I got lazy...")
 
     def _prev_compiled_flashcard(self) -> parse_tex.Flashcard:
         """ Thread safe retreival of previous card  """
@@ -296,7 +329,7 @@ class FlashcardModel:
         logger.info(f"Calling load_flashcards(section_names={section_names}, paths={paths}, start_compilation={start_compilation})")
 
         get_data_stage = parse_tex.GetDataStage(paths)
-        clean_data_stage = parse_tex.CleanStage(self._load_macros())
+        clean_data_stage = parse_tex.CleanStage(self.macros)
         filter_and_make_flashcards_stage = parse_tex.FilterBySectionAndMakeFlashcardsStage(section_names)
         pipeline = parse_tex.FlashcardsPipeline([
             get_data_stage, clean_data_stage, filter_and_make_flashcards_stage
@@ -307,24 +340,19 @@ class FlashcardModel:
 
         self.flashcards = flash_cards
         logger.debug(f"Loaded flashcards: {self.flashcards}")
-        self.compiled_flashcards = FlashcardDoubleLinkedList() # Should I delete old list?
-
-#        if start_compilation:
-#            logger.info("Starting FlashCardModel compile thread")
-#            self.compile_thread.start()
+        self.compiled_flashcards = FlashcardDoubleLinkedList() # Should I delete old list for performance? Why google when it takes just as long to leave a useless commmet to google said issue/question later
 
     def next_flashcard(self) -> parse_tex.Flashcard:
         """ Retreive next flashcard, implements blocking behaviour when there are no compiled cards however one is currently being compiled """
         # If there is a flash card with compiled latex return that card
         while self.flashcards and (not self.compiled_flashcards.current or not self.compiled_flashcards.current.next):
-
             logger.debug(f"{self.next_flashcard} waiting on conditions self.flashcards and (not self.compiled_flashcards or not self.compiled_flashcards.current.next)")
             time.sleep(1)
         return self._next_compiled_flashcard()
 
 
     def prev_flashcard(self) -> parse_tex.Flashcard:
-        """ Should I implement empty card or return None """
+        """ self explanatory... I just like the aesthetic of every method having a doc string (even if its useless... clearly) """
         return self._prev_compiled_flashcard()
 
     def _count_precompiled_cards(self):
@@ -338,6 +366,11 @@ class FlashcardModel:
         return counter
 
     def _compile(self, event: threading.Event, compile_num=2):
+        """ Inteded to be executed by StoppableThread in order to compile flashcards before next/prev flashcard is called.
+        -- Params --
+        compile_num: The number of flashcards that should be pre-compiled. If the user has seen 8 flashcards and compile_num=2, flashcards 1-10 will have compiled latex (assuming thread has time to pre-compile)
+        event: threading event that when set breaks the function out of a 'waiting state' if applicable.
+        """
         logger.debug(f"Calling {self._compile}(event={event}, compile_num={compile_num})")
         while self._count_precompiled_cards() > compile_num or len(self.flashcards) == 0:
             logger.debug(f"_compile waiting for len(self.compiled_flashcards)= {len(self.compiled_flashcards)} < {compile_num}=compiled_num or len(flashcards)={len(self.flashcards)} == 0")

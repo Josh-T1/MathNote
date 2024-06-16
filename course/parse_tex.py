@@ -35,11 +35,11 @@ class SourceRecord:
         self.parent: None | SourceRecord = None
         self.child: None | SourceRecord = None
     def __str__(self):
-        return f"ModifyEvent({self.data})"
+        return f"SourceRecord({self.data})"
     def __repr__(self) -> str:
         parent_exists = 'Yes' if self.parent else 'No'
         child_exists = 'Yes' if self.child else 'No'
-        return (f"ModifyEvent({self.data},"
+        return (f"SourceRecord({self.data},"
                 f"parent={parent_exists},"
                 f"child={child_exists})")
 
@@ -94,17 +94,17 @@ class SourceHistory:
 
 class TrackedString(str):
     """
-    TrackedString tries to implement 'duck typing' by implementing all behaviour associated with strings with additional features such
-    as storing souce data, such as file_path, or callable.
+    TrackedString tries to use 'duck typing' by implementing all behaviour associated with strings, with additional features such
+    as storing souce data. This data could look like a file_path or the name of a callable that 'created' the string.
 
 
     --- Limitations:
         1. We give priority to left TrackedString. If string = TrackedString1(...) + TrackedString2(...) string.source_history will only contain
-        the history of TrackedString1(...). This asserts there will always
-        be exactly one 'root' source at the expense of tracking 'all' sources
-
+        the history of TrackedString1(...). This asserts there will always be exactly one 'root' source at the expense of tracking 'all' sources
+        2. ...
     """
-    def __new__(cls, string,  source_history=Any):
+
+    def __new__(cls, string,  source_history=None):
         instance = super().__new__(cls, string)
         if isinstance(source_history, SourceHistory):
             pass
@@ -113,7 +113,7 @@ class TrackedString(str):
             source_history = SourceHistory()
             source_history.append(record)
         elif source_history is None:
-            source_history = SourceHistory(SourceRecord("None"))
+            source_history = SourceHistory("None")
         else:
             raise TypeError(f"Invalid source_history type: {type(source_history)}")
 
@@ -134,11 +134,16 @@ class TrackedString(str):
         return TrackedString(super().__getitem__(__key), source_history=new_source_history)
 
     def modify_text(self, func: Callable[[str], str]):
-        new_text = func(super().__str__())
+        """  Delete this method ? """
+        new_text = func(self.__str__())
         new_source_history = SourceRecord(func.__name__)
         return TrackedString(new_text,
                              source_history=self._source_history.append_and_copy(new_source_history)
                              )
+    def sub(self, pattern: str, repl: str) -> "TrackedString":
+        new_text = re.sub(pattern, repl, self.__str__())
+        new_source = self._source_history.append_and_copy(SourceRecord(f"re.sub({pattern}, {repl}, {self.__str__()})"))
+        return TrackedString(new_text, new_source)
 
     def __add__(self, other):
         """ Left add has priority. If result = TrackedString1(...) + TrackedString2(...), result.source_history.parent = TrackedString1(...) """
@@ -208,19 +213,17 @@ class Flashcard:
     seen: bool = False
 
     def __str__(self):
+        # TODO fix this, defining all these variables is retarted
         question = "Yes" if self.question else 'No'
         answer = "Yes" if self.answer else 'No'
         pdf_question_path = "Yes" if self.pdf_question_path else 'No'
         pdf_answer_path = "Yes" if self.pdf_answer_path else 'No'
-#        question = self.question.replace('\n', "")
-#        answer = self.answer.replace('\n', "")
         return f"Flashcard(question={question}, answer={answer}, pdf_answer_path={pdf_answer_path}, pdf_question_path={pdf_question_path})" #Blindly using repr() as suggested by chat gpt to escape characters.. that has never created issues for me
 
 class EmptyFlashcard(Flashcard):
-    """ I beleive this can be deleted... Remove all instance from project"""
+    """ I beleive this can be deleted... Ensure all instance have been removed from project"""
     def __init__(self) -> None:
         super().__init__(question="", answer="", error_message="No flashcards available to display")
-# Macros needs to be re thought.
 
 
 class Stage(ABC):
@@ -242,10 +245,11 @@ class GetDataStage(Stage):
                 logger.error(f"Failed to read file {file_path}\n{e}")
                 return
 
-            source_history = SourceHistory(SourceRecord(str(file_path)))
+            source_history = SourceHistory(str(file_path))
             self.file_contents.append(
                     TrackedString(file_contents, source_history=source_history)
                     )
+            print(self.file_contents[-1].source_history)
         logger.debug(f"Finished loading file contents: {self.file_contents}")
 
     def process(self, data=None) -> list[TrackedString]:
@@ -262,31 +266,31 @@ class CleanStage(Stage):
         logger.info(f"Starting {__class__.__name__}.process")
         new_data = []
         for tracked_string in data:
-            tracked_string = tracked_string.modify_text(self.remove_comments)
-            tracked_string = tracked_string.modify_text(self.remove_macros)
+            tracked_string = self.remove_comments(tracked_string)
+            tracked_string = self.remove_macros(tracked_string)
             new_data.append(tracked_string)
         logger.debug(f"Finished cleaning data, returning {new_data}")
         return new_data
 
 
-    def remove_comments(self, tex: str):
+    def remove_comments(self, tex: TrackedString) -> TrackedString:
         pattern = r'% .*?\n'
-        return re.sub(pattern, '', tex)
+        return tex.sub(pattern, '')
 
     def _find_cmd(self, tex: str, macros: list[str]) -> Union[str, None]:
         """ It is assumed tex string starts with backslash character """
         for pattern in macros:
-            if tex.startswith(pattern):
+            if tex.startswith(pattern) and not tex[len(pattern)].isalpha(): # Not sure this covers all cases. We make sure line starts with command and next letter is not alphanumeric as that would indicate we got partial match. ie matching operator on operatorname
                 return pattern
         return None
 
     @staticmethod
-    def _find_arg(tex: str) -> Union[str, None]:
+    def _find_arg(tex: TrackedString) -> Union[TrackedString, None]:
         """ It is assume the tex string passed starts with curly bracket """
         paren_stack = []
 
         if tex[0] != "{": # } <- this comment is to keep vim lsp happy
-            raise ValueError(f"String passed does not begin with curly opeining brace: {tex[:20]}")
+            raise ValueError(f"String passed does not begin with curly opening brace: {tex[:50]}, {tex.source_history.root}")
 
         for index, char in enumerate(tex):
             if char == "{":
@@ -299,7 +303,7 @@ class CleanStage(Stage):
 
 
 
-    def remove_macros(self, tex: str) -> str:
+    def remove_macros(self, tex: TrackedString) -> str:
         """ Replaces all user defined macros with 'pure tex' in the sence that it would compile without a specific macros.tex/preamble.tex
         ** Limited to replacing macros of the form: \\macro_name{title}{tex}. This can not handle more complex macros
         :param tex: latex code as string
@@ -325,7 +329,7 @@ class CleanStage(Stage):
             end_cmd_index = counter + len(cmd)  # -1 to accound for backslash character being in command, we want all end_*_index variables to be inclusive
             arg = self._find_arg(tex[end_cmd_index +1:])
 
-            if arg == None:
+            if arg is None:
                 logging.warn("Something went wrong while calling clean_self.tex")
                 break
 

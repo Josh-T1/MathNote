@@ -63,7 +63,8 @@ from typing import Type
 from . import utils
 from functools import partial
 """ ----------------------------- """
-
+from ..global_utils import get_config
+config = get_config()
 """
 Example Shortcut
 """
@@ -78,11 +79,11 @@ def add_latex(self: Type['IK_ShortcutManager'], compile: bool = False) -> None:
     #            _self.cont.tap('v')
         return None
 
-
+    subprocess_path = config["user-shortcuts-config"]["subprocess_-path"]
     if compile:
-        args = ["python3", "/Users/joshuataylor/documents/python/myprojects/mathnote/shortcut_manager/subprocess_.py", "add_compiled_latex"]
+        args = ["python3", subprocess_path, "add_compiled_latex"]
     else:
-        args = ["python3", "/Users/joshuataylor/documents/python/myprojects/mathnote/shortcut_manager/subprocess_.py", "add_latex"]
+        args = ["python3", subprocess_path, "add_latex"]
 
     normal_shortcut = next((obj for obj in self.shortcuts['insert'] if obj.pattern == "esc"), None) # An absolutely horrendous solution. Need to re think how shortcuts are stored.
     if not normal_shortcut: # This shortcuts functionality is dependent on the existance of the toggle normal mode shortcut
