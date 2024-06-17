@@ -1,3 +1,4 @@
+from random import shuffle
 from PyQt6.QtCore import QAbstractItemModel, Qt
 from PyQt6.QtGui import QStandardItemModel
 from PyQt6.QtWidgets import QListView
@@ -8,6 +9,8 @@ import sys
 import logging
 from ..course.courses import Courses
 from ..global_utils import get_config
+import threading
+from functools import partial
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +25,7 @@ class FlashcardController:
         self.view.bind_show_answer_button(self.show_answer)
         self.view.bind_show_question_button(self.show_question)
         self.view.bind_create_flashcards_button(self.create_flashcards)
+        self.view.bind_flashcard_info_button(self.show_flashcard_info)
         self.populate_view()
 
     def populate_view(self):
@@ -30,7 +34,7 @@ class FlashcardController:
         self.view.course_combo.addItems(courses)
 
     def run(self, app):
-        logger.info(f"Running {self.__class__.__name__}")
+        logger.info(f"Calling {self.run}")
         self.view.show()
         self.model.compile_thread.start()
         sys.exit(app.exec())
@@ -48,7 +52,7 @@ class FlashcardController:
             self.view.set_error_message(str(e))
 
     def close(self):
-        logger.info(f"Closing {self.__class__.__name__}")
+        logger.info(f"Stoping {self.__class__.__name__}")
         self.model.compile_thread.stop()
 
     def show_prev_flashcard(self):
@@ -83,8 +87,21 @@ class FlashcardController:
             logging.warning(f"Failed to compile card: {self.model.current_card} with tex: {self.model.current_card.answer}, {e}")
             self.view.set_error_message(f"Failed to compile flashcard answer, raw latex: {self.model.current_card.answer}")
 
+    def show_flashcard_info(self):
+        if self.model.current_card is None:
+            message = "No flashcard selected. This button display info regarding source of flashcard"
+        else:
+            tracked_string = self.model.current_card.question if self.view.document == self.model.current_card.pdf_question_path else self.model.current_card.answer
+            source = tracked_string._source_history.root_source
+            if len(tracked_string) >= 300:
+                tracked_string = tracked_string[:301]
+            message = f"Source: {source}. Latex: {str(tracked_string)}"
+        self.view.flashcard_info_button.set_message(message)
 
     def create_flashcards(self):
+        """ TODO : Using a thread to load flashcards is essentailly pointless as we dealing with cpu bound task not IO
+        Im we implement multiprocessing we have to avoind lock objects as there is some issues with serializing the object...
+        We an use Queue but then we have no __len__() or clear() methods."""
         course_name, section_names, weeks = self.get_flashcard_pipeline_config()
         course = self.courses.get_course(course_name)
 
@@ -95,13 +112,9 @@ class FlashcardController:
             return
 
         paths = [lecture.path for lecture in course.lectures if course.get_week(lecture) in weeks]
-        self.model.load_flashcards(section_names, paths) # TDOO: fix this at some point
-#        try:
-#            self.model.next_flashcard()
-#        except FlashcardNotFoundException as e:
-#            logger.info("No flashcards available")
-#            self.view.set_error_message("No flashcards available for your given selection")
-
+        load_thread = threading.Thread(target=self.model.load_flashcards, args=(section_names, paths))
+        load_thread.start()
+#        self.model.load_flashcards(section_names, paths)
 
     def get_flashcard_pipeline_config(self):
         """ Retreives user config from widgets. We need to do error checking... what if no boxes are checked """
@@ -110,16 +123,17 @@ class FlashcardController:
                 }
         course_name = self.view.course_combo.currentText()
         checked_sections = self._get_checked_items_from_listView(self.view.section_list)
-        weeks = self._get_checked_items_from_listView(self.view.filter_by_week_list)
+        weeks_items = self._get_checked_items_from_listView(self.view.filter_by_week_list)
+        weeks_text = [week.text() for week in weeks_items]
         # Clean filter by weeks params
-        if "All" in weeks or not weeks:
+        if "All" in weeks_text or not weeks_text:
             weeks = {i for i in range(1, 13+1)} # TODO: verify weeks
         else:
-            weeks = {int(week.text().split(" ")[-1]) for week in weeks}
+            weeks = {int(week.split(" ")[-1]) for week in weeks_text}
 
         # Clean checked section params
         section_names_pretty = [item.text() for item in checked_sections]
-        if "all" in section_names_pretty:
+        if "All" in section_names_pretty:
             section_names = [name for name in pretty_section_name_to_section_name.values()]
         else:
             section_names = [pretty_section_name_to_section_name[section_name] for section_name in section_names_pretty]

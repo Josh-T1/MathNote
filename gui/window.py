@@ -5,6 +5,7 @@ from PyQt6.QtWidgets import (QComboBox, QHBoxLayout, QLabel, QLineEdit, QListVie
                              QMainWindow, QSpacerItem, QSizePolicy, QScrollArea)
 from PyQt6.QtPdfWidgets import QPdfView
 from PyQt6.QtPdf import QPdfDocument
+from PyQt6.QtCore import QRect, pyqtSignal, QPoint
 from PyQt6.QtGui import QColor, QPainter, QPalette, QStandardItem, QStandardItemModel
 from ..course.parse_tex import Flashcard
 import logging
@@ -14,11 +15,38 @@ logger = logging.getLogger(__name__)
 class LatexCompilationError(Exception):
     pass
 
+class InfoButton(QWidget):
+    clicked = pyqtSignal()
+
+    def __init__(self):
+        super().__init__()
+        self.initUI()
+
+    def initUI(self):
+        self.info_button = QPushButton("?")
+        self.info_button.setFixedSize(16, 16)
+        self.info_button.setStyleSheet("border-radius: 8px; background-color: gray; font-weight: bold;")
+        self.info_button.clicked.connect(self.clicked.emit)
+        layout = QVBoxLayout()
+        layout.addWidget(self.info_button)
+        self.setLayout(layout)
+
+    def set_message(self, msg: str):
+        msg_box = QMessageBox(self)
+        msg_box.setText(msg)
+        msg_box.exec()
+
+        msg_box.setGeometry
+    def connect(self, slot):
+        self.clicked.connect(slot)
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.initUi()
         self.close_callback = None
+        self.document = None
 
     def initUi(self):
         self.resize(1000, 600)
@@ -80,7 +108,7 @@ class MainWindow(QMainWindow):
         self.filter_by_week_list.setMaximumHeight(100)
 
         section_list_model = QStandardItemModel()
-        self.section_list_items = ["definition", "theorem", "derivation", "all"] # Make sure to map this
+        self.section_list_items = ["definition", "theorem", "derivation", "All"] # Make sure to map this
         for item in self.section_list_items:
             list_item = QStandardItem(item)
             list_item.setCheckable(True)
@@ -108,6 +136,7 @@ class MainWindow(QMainWindow):
         button_layout_question_answer = QHBoxLayout()
         # Creating Widgets
         self.next_flashcard_button = QPushButton("Next", self)
+        self.flashcard_info_button = InfoButton()
         self.prev_flashcard_button = QPushButton("Prev", self)
         self.show_answer_button = QPushButton("Show Answer", self)
         self.show_quesetion_button = QPushButton("Show Question", self)
@@ -127,6 +156,7 @@ class MainWindow(QMainWindow):
         button_layout_question_answer.addStretch()
         button_layout_question_answer.addWidget(self.show_answer_button)
         button_layout_question_answer.addWidget(self.show_quesetion_button)
+        button_layout_question_answer.addWidget(self.flashcard_info_button)
         button_layout_question_answer.addStretch()
         button_layout_next_prev.addStretch()
         button_layout_next_prev.addWidget(self.prev_flashcard_button)
@@ -138,6 +168,9 @@ class MainWindow(QMainWindow):
         main_flashcard_layout.addLayout(button_layout_next_prev)
         return main_flashcard_layout
 
+    def _set_zoom_mode(self):
+#        if self.document
+        pass
     def _load_pdf(self, pdf_path: str) -> QPdfDocument.Error:
         """ Loads pdf into pdf_viewer and sets some viewer settings
         -- Params --
@@ -151,10 +184,10 @@ class MainWindow(QMainWindow):
         load_status = pdf_document.load(pdf_path)
 
         if load_status == QPdfDocument.Error.None_:
+            self.document = pdf_path
             self.pdf_viewer.setDocument(pdf_document)
-#            self.pdf_viewer.setZoomMode(QPdfView.ZoomMode.FitToWidth)
-            self.pdf_viewer.setZoomMode(QPdfView.ZoomMode.FitInView)
-            self.pdf_viewer.setZoomFactor(1.0)
+#            self.pdf_viewer.setZoomMode(QPdfView.ZoomMode.FitInView)
+            self.pdf_viewer.setZoomFactor(1.5)
         return load_status
 
     def plot_tex(self, pdf_path):
@@ -168,12 +201,14 @@ class MainWindow(QMainWindow):
 
         load_status = self._load_pdf(pdf_path)
         if load_status != QPdfDocument.Error.None_:
+            self.document = None
             raise LatexCompilationError(f"Failed to compile card: {pdf_path}. Load status: {load_status}")
 
     def set_error_message(self, msg: str):
         """ Creates a pop up with message = msg """
         msg_box = QMessageBox(self)
         msg_box.setText(msg)
+        msg_box.setWindowTitle("Error")
         msg_box.exec()
 
     def bind_next_flashcard_button(self, callback: FunctionType): # FunctionType or Callable? Should google this at some point...
@@ -195,7 +230,8 @@ class MainWindow(QMainWindow):
     def bind_create_flashcards_button(self, callback: FunctionType):
         self.create_flashcards_button.clicked.connect(callback)
 
-
+    def bind_flashcard_info_button(self, callback):
+        self.flashcard_info_button.clicked.connect(callback)
 #    def contextMenuEvent(self, event):
 #        context = QMenu(self)
 #        context.addAction(QAction("Test1", self))

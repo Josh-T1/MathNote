@@ -9,7 +9,6 @@ import hashlib
 from ..course import parse_tex
 import logging
 from ..global_utils import get_config
-
 config = get_config()
 
 logger = logging.getLogger(__name__)
@@ -70,6 +69,10 @@ class FlashcardDoubleLinkedList:
         self.current = None
         for arg in args:
             self.append(arg)
+
+    def clear(self):
+        self.head = None
+        self.current = None
 
     def remove(self, index: int):
         """ Remove node at index
@@ -197,43 +200,55 @@ class TexCompilationManager:
 {tex}
 \end{{document}}"""
 
-    def compile_card(self, card: parse_tex.Flashcard) -> None:
+    def compile_card(self, card: parse_tex.Flashcard, pdfs_in_use: list | None = None) -> None:
         """ Attemps to compile flashcard question and answer tex. If compilation fails, card.error_message is set"""
-        # Check for cards that have already beet catagorized as invalid
-        if card.error_message:
-            logger.debug(f"Card: {card} contains error message, aborting compilation process")
-            return None
-        logger.debug(str(card.question))
-        logger.debug(str(card.answer))
-        card.pdf_question_path = self.compile_latex(str(card.question)) # most likley does not need to be converted to str... to lazy to test
+#        pdfs_in_use = [] if pdfs_in_use is None else pdfs_in_use
+        card.pdf_question_path = self.compile_latex(str(card.question)) # str needed to convert TrackedString -> str for hash value
         card.pdf_answer_path = self.compile_latex(str(card.answer))
+#        pdfs_in_use.append(card.pdf_answer_path)
+#        pdfs_in_use.append(card.pdf_question_path)
+#        current_time = time.time()
+#        if card.pdf_question_path:
+#            os.utime(card.pdf_question_path, times=(current_time, current_time))
+#        if card.pdf_answer_path:
+#            os.utime(card.pdf_answer_path, times=(current_time, current_time))
+#
+#        if card.pdf_question_path:
+#            self.add_to_cache(Path(card.pdf_question_path), pdfs_in_use)
+#
+#        if card.pdf_answer_path:
+#            self.add_to_cache(Path(card.pdf_answer_path), pdfs_in_use)
 
-        # If compilation fails set relavent error message
-        # This seems sorta useless...
-        if not card.pdf_question_path:
-            card.error_message = f"Could not compile question: {card.question}"
-        if not card.pdf_answer_path:
-            card.error_message += f"Could not compile answer: {card.answer}"
 
-    def add_to_cache(self, file_path: Path) -> None:
+
+    def add_to_cache(self, file_path: Path, pdfs_in_use: list) -> None:
         """ Add new file to cache and if cache size is reaches limit delete oldest file
         -- Params --
         file_path: Path object of file begin added to cache"""
-#        if len(self.cache) >= self.cache_size:
-#            files = [Path(file) for file in self.cache.values()]
-#            files.sort(key = lambda x: x.stat().st_ctime)
-#            os.remove(str(files[0].resolve()))
-
+        # Ensure 1. file not in compiled flashcards..(what about ones begin compiled)
+        # Ensure 2. Old
+        # Thread adds compiled cards to list. It can check to see of cache_file is needed.
+        # When we load the pdf so long as we have never deleted a file in compiled cards we gucci
         self.cache[file_path.name] = str(file_path)
+#        if not len(self.cache) > self.cache_size:
+#            return
+#
+#        files = [Path(file) for file in self.cache.values()]
+#        files.sort(key = lambda x: x.stat().st_mtime)
+#        for file in files:
+#            logger.debug(f"==============={file}")
+#            if file not in pdfs_in_use:
+#                logger.debug(f"==== file exsts: {file.exists()}")
+#                file.unlink()
+#                logger.debug(f"Removed {file} from cache")
+#                break
 
-    # @cache
     def compile_latex(self, tex: str) -> str | None:
         """ Attempts to compile latex string
         -- Params --
         tex: string containig latex code
         returns: path to compiled pdf or None if compilation fails
         """
-#        tex = tex.replace('\n', ' ')
         tex_hash = "empty" if not tex else self.get_hash(tex)
         if tex_hash in self.cache.keys():
             logger.debug(f"Getting file {tex_hash} from cache")
@@ -256,9 +271,9 @@ class TexCompilationManager:
                 logger.error(f"Failed to run {' '.join(cmd)}. Tex file contents: {tex}, stderr={result.stderr}")
                 return None
 
-            logger.info(f"Successfully ran {' '.join(cmd)}. Tex file contents: {tex}")
-            new_path = pdf_file_path.rename(self.cache_dir / f"{tex_hash}.pdf")
-            self.add_to_cache(new_path)
+            logger.info(f"Successfully ran {' '.join(cmd)}")
+            new_path = pdf_file_path.rename(self.cache_dir / f"{tex_hash}.pdf").resolve()
+#            self.add_to_cache(new_path, pdfs_in_use=None)
 
         return str(new_path)
 
@@ -275,7 +290,7 @@ class FlashcardModel:
         self.compiled_flashcards: FlashcardDoubleLinkedList = FlashcardDoubleLinkedList()
         self.flashcard_lock = threading.RLock()
         self.thread_stop_event = threading.Event()
-        self.current_card = None
+        self.current_card = None # threadsafe, never accessed by thread
         self.compile_thread = StoppableThread(callback=self._compile)
         self._macros = None
 
@@ -324,27 +339,33 @@ class FlashcardModel:
         with self.flashcard_lock:
             self.compiled_flashcards.append(card)
 
-    def load_flashcards(self, section_names: list[str], paths: list[Path]) -> None:
-        r""" Load flash cards with raw tex
+    def load_flashcards(self, section_names: list[str], paths: list[Path], shuffle=True) -> None:
+        r""" Load flash cards with raw tex. Threadsafe... hopefully as I run it on its own thread. Even though this
+        is bound by CPU, threading allows for compilation and generation of flashcard to take turns (not sure if this is actually true)
         -- Params --
         section_names: names of box's defined by user. ie
         \defin{Integer}{Content} is a section called 'defin'
         """
         logger.info(f"Calling load_flashcards(section_names={section_names}, paths={paths})")
+        # Implement thread safe 'clearing'
+        with self.flashcard_lock:
+            self.compiled_flashcards.clear()
+            self.flashcards.clear()
+        # Since FlashcardsPipeline is a generator we can not shuffle all card together. To get as close to as random as possible we shuffle paths and later shuffle cards from those paths
+        if shuffle:
+            random.shuffle(paths)
 
-        get_data_stage = parse_tex.GetDataStage(paths)
+        data_iterable = parse_tex.TexDataGenerator(paths)
         clean_data_stage = parse_tex.CleanStage(self.macros)
-        filter_and_make_flashcards_stage = parse_tex.FilterBySectionAndMakeFlashcardsStage(section_names)
-        pipeline = parse_tex.FlashcardsPipeline([
-            get_data_stage, clean_data_stage, filter_and_make_flashcards_stage
-            ])
-        flash_cards = pipeline.run()
-        if flash_cards:
-            random.shuffle(flash_cards)
+        filter_and_build_flashcards = parse_tex.FilterBySectionAndMakeFlashcardsStage(section_names)
+        pipeline = parse_tex.FlashcardsPipeline(data_iterable, filter_and_build_flashcards, [clean_data_stage])
 
-        self.flashcards = flash_cards
-        logger.debug(f"Loaded flashcards: {self.flashcards}")
-        self.compiled_flashcards = FlashcardDoubleLinkedList() # Should I delete old list for performance? Why google when it takes just as long to leave a useless commmet to google said issue/question later
+        for flash_cards in pipeline:
+            if shuffle:
+                random.shuffle(flash_cards)
+            with self.flashcard_lock:
+                self.flashcards.extend(flash_cards)
+            logger.debug(f"Loaded flashcards: {flash_cards}")
 
     def next_flashcard(self) -> parse_tex.Flashcard:
         """ Retreive next flashcard, implements blocking behaviour when there are no compiled cards however one is currently being compiled """
@@ -353,7 +374,6 @@ class FlashcardModel:
             logger.debug(f"{self.next_flashcard} waiting on conditions self.flashcards and (not self.compiled_flashcards or not self.compiled_flashcards.current.next)")
             time.sleep(1)
         return self._next_compiled_flashcard()
-
 
     def prev_flashcard(self) -> parse_tex.Flashcard:
         """ self explanatory... I just like the aesthetic of every method having a doc string (even if its useless... clearly) """
@@ -369,6 +389,15 @@ class FlashcardModel:
             counter+=1
 
         return counter
+
+    def _get_all_flashcard_paths(self):
+        paths = []
+        for card in self.compiled_flashcards:
+            if card.pdf_answer_path:
+                paths.append(card.pdf_answer_path)
+            if card.pdf_question_path:
+                paths.append(card.pdf_question_path)
+        return paths
 
     def _compile(self, event: threading.Event, compile_num=2):
         """ Inteded to be executed by StoppableThread in order to compile flashcards before next/prev flashcard is called.
@@ -390,8 +419,9 @@ class FlashcardModel:
 
             card = self.flashcards.pop()
             logger.debug(card)
+#            paths = self._get_all_flashcard_paths()
             try:
-                self.compiler.compile_card(card)
+                self.compiler.compile_card(card, pdfs_in_use=None)
                 logger.debug(f"Compiled card: {card}")
                 self._prepend_compiled_flashcard(card)
 
