@@ -11,7 +11,9 @@ import json
 import logging
 import shutil
 import subprocess
-
+"""
+This module could probably use some testing and a re write...
+"""
 class Lecture():
     def __init__(self, file_path) -> None:
         self.path: Path = file_path

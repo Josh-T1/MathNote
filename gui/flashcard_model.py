@@ -310,8 +310,14 @@ class FlashcardModel:
         return parse_tex.load_macros(parse_tex.MACRO_PATH, parse_tex.MACRO_NAMES)
 
     def _next_compiled_flashcard(self) -> parse_tex.Flashcard:
-        """ Thread safe retreival of next card  """
+        """ Thread safe retreival of next card
+        TODO: Clean this up... No need for this many lines of code"""
         with self.flashcard_lock:
+            if self.compiled_flashcards.current and not self.compiled_flashcards.current.data.seen: # Check to see if we are at the begging of flashcards
+                self.compiled_flashcards.current.data.seen = True
+                self.current_card = self.compiled_flashcards.current.data
+                return self.compiled_flashcards.current.data
+
             next_card = self.compiled_flashcards.get_next()
             self.current_card = next_card
             self.current_card.seen = True

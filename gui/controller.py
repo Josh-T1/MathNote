@@ -20,15 +20,18 @@ class FlashcardController:
         self.view = view
         self.courses = Courses(config)
         self.flashcards = []
+        self._setBindings()
+        self._populate_view()
+
+    def _setBindings(self):
         self.view.bind_next_flashcard_button(self.show_next_flashcard)
         self.view.bind_prev_flashcard_button(self.show_prev_flashcard)
         self.view.bind_show_answer_button(self.show_answer)
         self.view.bind_show_question_button(self.show_question)
         self.view.bind_create_flashcards_button(self.create_flashcards)
         self.view.bind_flashcard_info_button(self.show_flashcard_info)
-        self.populate_view()
 
-    def populate_view(self):
+    def _populate_view(self):
         """ Use model data to populate view """
         courses = self.courses.courses().keys()
         self.view.course_combo.addItems(courses)
@@ -68,21 +71,23 @@ class FlashcardController:
             self.view.set_error_message(str(e))
 
     def show_question(self):
-        if not self.model.current_card:
+        card = self.model.current_card
+        if not card:
             self.view.set_error_message("No flashcard has been loaded... TODO write a better message")
             return
         try:
-            self.view.plot_tex(self.model.current_card.pdf_question_path)
+            self.view.plot_tex(card.pdf_question_path, card.question)
         except LatexCompilationError as e:
             logging.warning(f"Failed to compile card: {self.model.current_card} with tex: {self.model.current_card.question}, {e}")
             self.view.set_error_message(f"Failed to compile flashcard question. Raw latex: {self.model.current_card.question}")
 
     def show_answer(self):
-        if not self.model.current_card:
+        card = self.model.current_card
+        if not card:
             self.view.set_error_message("No flashcard has been loaded... TODO write a better message")
             return
         try:
-            self.view.plot_tex(self.model.current_card.pdf_answer_path)
+            self.view.plot_tex(card.pdf_answer_path, card.answer)
         except LatexCompilationError as e:
             logging.warning(f"Failed to compile card: {self.model.current_card} with tex: {self.model.current_card.answer}, {e}")
             self.view.set_error_message(f"Failed to compile flashcard answer, raw latex: {self.model.current_card.answer}")
@@ -92,7 +97,7 @@ class FlashcardController:
             message = "No flashcard selected. This button display info regarding source of flashcard"
         else:
             tracked_string = self.model.current_card.question if self.view.document == self.model.current_card.pdf_question_path else self.model.current_card.answer
-            source = tracked_string._source_history.root_source
+            source = tracked_string.source_history.root
             if len(tracked_string) >= 300:
                 tracked_string = tracked_string[:301]
             message = f"Source: {source}. Latex: {str(tracked_string)}"

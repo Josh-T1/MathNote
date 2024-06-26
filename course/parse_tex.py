@@ -2,7 +2,7 @@ from . import utils
 import time
 from functools import partial
 from pathlib import Path
-from typing import Iterable, Union, Generator, List, Callable
+from typing import Iterable, Required, Union, Generator, List, Callable
 import re
 import logging
 from abc import abstractmethod, ABC
@@ -11,6 +11,22 @@ import copy
 from ..global_utils import get_config
 
 logger = logging.getLogger(__name__)
+
+"""
+This primary purpose is of parse_tex.py is to provide a framework for converting file paths (.tex files) to 'cleaned' tex. This cleaned latex code can then be utilized
+to build 'Flashcards', or converted to other formats such as mathjax
+
+
+--- Limitations
+1. TexDataGenerator is limited in how the 'chunks' are generated. Fairly easy fix... however not necessary when reading small files.
+2. Speed, running the FlashcardsPipeline takes forever. Could not see and obvious fix for this. Very possible using TrackString results in poor performace
+3. Mostly untested code
+
+--- Notes
+The lsp warning Cannot access memeber '._source_history' from TrackString can be ignored. The TrackString class is not inizialized with that property as it subclasses str which is
+immutable. However when __new__ is called the property is set
+"""
+
 
 MACRO_PATH = get_config()["macros-path"]
 
@@ -27,80 +43,11 @@ TEX_PATTERN_TO_MATHJAX = {r"\\begin\{equation\*\}": r"\[",
                         "&": "&amp;",
                           }
 
-class SourceRecord:
-    """
-    Wrapper for abstract 'Node' object in a linked list.
-    Stores data related to the source of a string  """
-    def __init__(self, data: str):
-        self.data = data
-        self.parent: None | SourceRecord = None
-        self.child: None | SourceRecord = None
+@dataclass(frozen=True)
+class PathSourceRecord:
+    root: str
+    line_number: int | None = None
 
-    def __str__(self):
-        return f"SourceRecord({self.data})"
-
-    def __repr__(self) -> str:
-        parent_exists = 'Yes' if self.parent else 'No'
-        child_exists = 'Yes' if self.child else 'No'
-        return (f"SourceRecord({self.data},"
-                f"parent={parent_exists},"
-                f"child={child_exists})")
-
-class SourceHistory:
-    """
-    Wrapper for linked list datastructre.
-    Container for SourceRecord objects """
-    def __init__(self, *args):
-        self.root: None | SourceRecord = None
-        for arg in args:
-            self.append(arg)
-
-    def append(self, data):
-        new_node = SourceRecord(data)
-        if self.root is None:
-            self.root = new_node
-        else:
-            current = self.root
-            while current.child:
-                current = current.child
-
-            current.child = new_node
-            new_node.parent = current
-    @property
-    def root_source(self):
-        if not self.root:
-            return None
-        return self.root.data
-
-    def append_and_copy(self, item: SourceRecord):
-        """ Issues may arise if item.data is mutable """
-        new_source = SourceHistory()
-        current = self.root
-        while current:
-            new_source.append(current.data)
-            current = current.child
-        new_source.append(item.data)
-        return new_source
-
-    def __iter__(self):
-        current = self.root
-        while current:
-            yield current.data
-            current = current.child
-    def __repr__(self):
-        return f"SourceHistory({list(self)})"
-
-    def __str__(self):
-        return '->'.join(event for event in self)
-
-    def __add__(self, other):
-        if not isinstance(other, SourceHistory):
-            raise TypeError(f"Unsupported opperand type(s) for +: 'SourceHistory' and '{type(other)}'")
-        current = other.root
-        while current:
-            self.append(current.data)
-            current.child
-        return self # does this make sense?
 
 class TrackedString(str):
     """
@@ -111,61 +58,47 @@ class TrackedString(str):
     --- Limitations:
         1. We give priority to left TrackedString. If string = TrackedString1(...) + TrackedString2(...) string.source_history will only contain
         the history of TrackedString1(...). This asserts there will always be exactly one 'root' source at the expense of tracking 'all' sources
-        2. ...
+        2. Speed most likley
     """
 
-    def __new__(cls, string,  source_history=None):
+    def __new__(cls, string,  source_history: PathSourceRecord | None = None):
         instance = super().__new__(cls, string)
-        if isinstance(source_history, SourceHistory):
-            pass
-        elif isinstance(source_history, str):
-            record = SourceRecord(source_history)
-            source_history = SourceHistory()
-            source_history.append(record)
-        elif source_history is None:
-            source_history = SourceHistory("None")
-        else:
-            raise TypeError(f"Invalid source_history type: {type(source_history)}")
-
-        instance._source_history = source_history #type: ignore
+        instance.source_history = source_history #type: ignore
         return instance
 
 #    def __init__(self, string: str, source_history: SourceHistory) -> None:
 #        self._source_history = source_history
 #        assert isinstance(self._source_history, SourceHistory); print("print this is not wgoo")
+    def join(self, iterable):
+        if not iterable:
+            return TrackedString("")
 
-    @property
-    def source_history(self):
-        return copy.deepcopy(self._source_history)
+        joined_tex = self.__str__().join([str(tracked_string) for tracked_string in iterable])
+        source_history = iterable[0].source_history
+        return TrackedString(joined_tex, source_history=source_history)
+
 
     def __getitem__(self, __key) -> 'TrackedString':
-        new_source_history = self._source_history.append_and_copy(
-                SourceRecord(f"__getitem__({__key})")
-                )
-        return TrackedString(super().__getitem__(__key), source_history=new_source_history)
+        return TrackedString(super().__getitem__(__key), source_history=self.source_history)
 
     def modify_text(self, func: Callable[[str], str]):
         """ Method for using Trackedstring as argument for function: str -> str and using output to create new Trackedstring
         -- Params --
         func: function with str type param and str return type. functools.partial is helpfull here"""
         new_text = func(self.__str__())
-        new_source_history = SourceRecord(func.__name__)
-        return TrackedString(new_text,
-                             source_history=self._source_history.append_and_copy(new_source_history)
-                             )
+        return TrackedString(new_text, source_history=self.source_history)
+
     def sub(self, pattern: str, repl: str) -> "TrackedString":
         new_text = re.sub(pattern, repl, self.__str__())
-        new_source = self._source_history.append_and_copy(SourceRecord(f"re.sub({pattern}, {repl}, {self.__str__()})"))
-        return TrackedString(new_text, new_source)
+        return TrackedString(new_text, self.source_history)
 
     def __add__(self, other):
         """ Left add has priority. If result = TrackedString1(...) + TrackedString2(...), result.source_history.parent = TrackedString1(...) """
         if not isinstance(other, str):
             raise TypeError(f"Other must be type str not type {type(other)}")
         other_text = other if not isinstance(other, TrackedString) else other.__str__()
-        new_source = self._source_history.append_and_copy(SourceRecord(f"{self} + {other}"))
         return TrackedString(super().__str__() + other_text,
-                             source_history=new_source)
+                             source_history=self.source_history)
 
     # I should not need to specify these... however it is nice to 'see' what is happening
     def __contains__(self, string: str):
@@ -212,12 +145,12 @@ class TrackedString(str):
         return super().upper()
 
 
+
 @dataclass
 class Flashcard:
-    """ Remove error message.. first check all instances in project """
     question: TrackedString
     answer: TrackedString
-    error_message: str = ""
+#    error_message: str = ""
     pdf_answer_path: None | str = None
     pdf_question_path: None | str = None
     seen: bool = False
@@ -258,7 +191,7 @@ class TexDataGenerator:
                 yield None
                 continue
 
-            source_history = SourceHistory(str(file_path))
+            source_history = PathSourceRecord(str(file_path))
             yield TrackedString(file_contents, source_history=source_history) # Borderline retarted to return list with one element
 
 
@@ -309,20 +242,22 @@ class CleanStage(Stage):
         :param tex: latex code as string
         :param macros: dictionary with key values of the form; macro_name: macro_dict_info. ie {defin: {command_in_tex: tex, ....},...}
         """
-        new_tex = TrackedString("", source_history=None) #type: ignore lsp fails to realize that __new__ allows for =None and initializes object with expected SourceHistory obj
+        tex_pcs = []
         counter = 0
 
         while counter < len(tex):
 
             if tex[counter] != '\\':
-                new_tex = tex[counter].modify_text(str(new_tex).__add__) # this is new_tex += tex[counter]
+#                new_tex = tex[counter].modify_text(str(new_tex).__add__) # this is new_tex += tex[counter]
+                tex_pcs.append(tex[counter])
                 counter += 1
                 continue
 
             cmd = self._find_cmd(tex[counter+1:], list(self.macros.keys()))
 
             if cmd == None:
-                new_tex = tex[counter].modify_text(str(new_tex).__add__)
+#                new_tex = tex[counter].modify_text(str(new_tex).__add__)
+                tex_pcs.append(tex[counter])
                 counter += 1
                 continue
 
@@ -343,9 +278,10 @@ class CleanStage(Stage):
             if tex[counter-1].isalpha(): # Add space character to prevent joining text, however ensure previous charcater is
                 new_cmd = " " + new_cmd
             new_cmd += " "
-
-            new_tex = TrackedString(str(new_tex) + new_cmd, cleaned_arg.source_history) # Hack solution to ensure TrackedString.source_history.root is correct
+            tex_pcs.append(TrackedString(new_cmd, source_history=cleaned_arg.source_history))
+#            new_tex = TrackedString(str(new_tex) + new_cmd, cleaned_arg.source_history) # Hack solution to ensure TrackedString.source_history.root is correct
             counter = len(arg) + end_cmd_index + num_brackets_ignored +1 #This sets counter equal to last character in command, +1 to move to character after command
+        new_tex = TrackedString("").join(tex_pcs)
         return new_tex
 
     def add_arg_spaces(self, command: str, arg: TrackedString):
@@ -463,7 +399,6 @@ class FilterBySectionAndMakeFlashcardsStage(BuildFlashcardStage, FilterBySection
             if answer_match is None:
                 break
 
-            question_end_index = end_cmd_index  + len(answer_match) -1  #c
             # re.match start_index inclusinve but re.match end_index exclusive
 #            question = data[counter:][:question_end_index]
 
