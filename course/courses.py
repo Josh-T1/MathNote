@@ -31,28 +31,19 @@ class Lecture():
         """ Returns most recent edit in seconds """
         return self.path.stat().st_mtime
 
-def requires_parser(func):
-
-    def wrapper(self, *args, **kwargs):
-        if getattr(self, "parser") == None:
-            raise UserWarning(f"Attemting to call {func.__name__} before add_tex_parser")
-        return func(*args, **kwargs)
-
-    return wrapper
-
 class Course():
     """
-    TODO: How do can i determine lecture number in a more reliable way. ie) What if i missed a lecture? Can I somehow incoperate uofc calander
+    Represents university course
     """
     def __init__(self, path: Path):
         self.path: Path = path
         self.name: str = path.stem
-        self.dir_names: list[str] = ["lectures", "debug", "main.tex", "backup"]
+#        self.dir_names: list[str] = ["lectures", "debug", "backup"]
         self.lectures_path = path / "lectures"
         self.debug_path = path / "debug"
         self.main_file = path / "main.tex"
         self.backup_path = path / "backup"
-        self.course_info: dict = self._load_course_info()
+        self._course_info: dict | None = None
         self._lectures: Union[None, list] = None
         self._logger = logging.getLogger(__name__ + "Course")
 
@@ -62,6 +53,12 @@ class Course():
         if not self.lectures:
             return None
         return max([lecture.last_edit for lecture in self.lectures])
+
+    @property
+    def course_info(self):
+        if self._course_info is None:
+            self._course_info = self._load_course_info()
+        return self._course_info
 
     def _load_course_info(self) -> dict:
         with open(self.path / "course_info.json", 'r') as f:
@@ -211,7 +208,7 @@ class Course():
 
     def __repr__(self) -> str:
         """ TODO: Make this better """
-        return f"{__class__} {self.name}"
+        return f"{__class__}({self.path})"
 
     def __contains__(self, other) -> bool: # Make sure isinstance is corrent... backwards args?
         if not isinstance(Lecture, other):

@@ -12,6 +12,8 @@
 1. Allow for variable operating systems
 1. Figure out how to make this a package?
 
+1. ** Figure out Cache system
+1. *** Add proof button and functionality/ Derivation
 
 # === [Fix] ===
 ## ShortCutManager

@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from logging import log
 from pathlib import Path
 from types import FunctionType
@@ -279,7 +280,6 @@ class MainWindow(QMainWindow):
         self.main_flashcard_layout = QVBoxLayout()
 
         self.setCentralWidget(self.widget)
-
         self.initUi()
 
         self.close_callback = None
@@ -328,23 +328,23 @@ class MainWindow(QMainWindow):
         msg_box.setWindowTitle("Error")
         msg_box.exec()
 
-    def bind_next_flashcard_button(self, callback: FunctionType): # FunctionType or Callable? Should google this at some point...
+    def bind_next_flashcard_button(self, callback: Callable[[], None]):
         """ bind next flashcard button in gui with callback function """
         self.flashcard_button_bar.connect_clicked_next_button(callback)
 
-    def bind_prev_flashcard_button(self, callback: FunctionType):
+    def bind_prev_flashcard_button(self, callback: Callable[[], None]):
         """ bind previous flashcard button in gui with callback function """
         self.flashcard_button_bar.connect_clicked_prev_button(callback)
 
-    def bind_show_answer_button(self, callback: FunctionType):
+    def bind_show_answer_button(self, callback: Callable[[], None]):
         """ bind show answer button in gui with callback function """
         self.flashcard_button_bar.connect_clicked_show_answer_button(callback)
 
-    def bind_show_question_button(self, callback: FunctionType):
+    def bind_show_question_button(self, callback: Callable[[], None]):
         """ bind show question button in gui with callback function """
         self.flashcard_button_bar.connect_clicked_show_question_button(callback)
 
-    def bind_create_flashcards_button(self, callback: FunctionType):
+    def bind_create_flashcards_button(self, callback: Callable[[], None]):
         self.config_bar.connect_clicked_createFlashcars(callback)
 
     def bind_flashcard_info_button(self, callback):

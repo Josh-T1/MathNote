@@ -13,20 +13,21 @@ from ..global_utils import get_config
 logger = logging.getLogger(__name__)
 
 """
-This primary purpose is of parse_tex.py is to provide a framework for converting file paths (.tex files) to 'cleaned' tex. This cleaned latex code can then be utilized
-to build 'Flashcards', or converted to other formats such as mathjax
+This primary purpose is of parse_tex.py is to provide a customizable pipeline that takes in file paths (.tex files) and returns 'cleaned' tex. This cleaned latex code can then
+be utilized to build Flashcards objects, or converted to other formats such as mathjax. Currenlty this module only provides a pipeline builder and pipeline stages relavent for
+creating flashcard. Any other functionality, such as converting impure latex code (latex code with user defined shortcuts) to mathjax would require the creation of new pipleline stages and builder.
 
 
 --- Limitations
 1. TexDataGenerator is limited in how the 'chunks' are generated. Fairly easy fix... however not necessary when reading small files.
-2. Speed, running the FlashcardsPipeline takes forever. Could not see and obvious fix for this. Very possible using TrackString results in poor performace
-3. Mostly untested code
+2. Speed, running the FlashcardsPipeline takes forever. Very possible using TrackString results in poor performace
+3. TrackString needs to be re wrote, it does not make sence to track every change and its current design is overkill for tracking only the root source
+4. Mostly untested code
 
---- Notes
+--- Notes/TODO
 The lsp warning Cannot access memeber '._source_history' from TrackString can be ignored. The TrackString class is not inizialized with that property as it subclasses str which is
-immutable. However when __new__ is called the property is set
+immutable. However when __new__ is called the property is set. If there is a way to do this 'properly' that would be great
 """
-
 
 MACRO_PATH = get_config()["macros-path"]
 
@@ -35,7 +36,7 @@ MACRO_PATH = get_config()["macros-path"]
 MACRO_NAMES = ["mlim", "norm", "squarebk", "roundbk", "curlybk", "anglebk", "abs", "operator", "rline",
                "uline", "mylist"]
 
-# this is unfinished as I realized I do not need to convert tex to mathjax. Could be usefull eventually tho
+# this is unfinished as I realized I do not need to convert tex to mathjax. Could be usefull eventually
 TEX_PATTERN_TO_MATHJAX = {r"\\begin\{equation\*\}": r"\[",
                         r"\\end\{equation\*\}": r"\]",
                         ">": "&gt;",
@@ -66,9 +67,6 @@ class TrackedString(str):
         instance.source_history = source_history #type: ignore
         return instance
 
-#    def __init__(self, string: str, source_history: SourceHistory) -> None:
-#        self._source_history = source_history
-#        assert isinstance(self._source_history, SourceHistory); print("print this is not wgoo")
     def join(self, iterable):
         if not iterable:
             return TrackedString("")
@@ -100,13 +98,6 @@ class TrackedString(str):
         return TrackedString(super().__str__() + other_text,
                              source_history=self.source_history)
 
-    # I should not need to specify these... however it is nice to 'see' what is happening
-    def __contains__(self, string: str):
-        return super().__contains__(string)
-
-    def __len__(self):
-        return super().__len__()
-
     def __ge__(self, other):
         if not isinstance(other, str):
             raise TypeError(f"'>=' not supported between instances of 'TrackedString' and {type(other)}")
@@ -132,18 +123,8 @@ class TrackedString(str):
             raise TypeError(f"'==' not supported between instances of 'TrackedString' and {type(other)}")
         return super().__eq__(other)
 
-    def __str__(self) -> str:
-        return super().__str__()
-
     def __repr__(self):
         return (f"TrackedString({super().__repr__()}, self._source_history=SourceHistory(...))")
-
-    def lower(self):
-        return super().lower()
-
-    def upper(self):
-        return super().upper()
-
 
 
 @dataclass
@@ -248,7 +229,6 @@ class CleanStage(Stage):
         while counter < len(tex):
 
             if tex[counter] != '\\':
-#                new_tex = tex[counter].modify_text(str(new_tex).__add__) # this is new_tex += tex[counter]
                 tex_pcs.append(tex[counter])
                 counter += 1
                 continue
@@ -256,7 +236,6 @@ class CleanStage(Stage):
             cmd = self._find_cmd(tex[counter+1:], list(self.macros.keys()))
 
             if cmd == None:
-#                new_tex = tex[counter].modify_text(str(new_tex).__add__)
                 tex_pcs.append(tex[counter])
                 counter += 1
                 continue
@@ -298,19 +277,8 @@ class FilterBySectionStage(Stage):
     def __init__(self, section_names: list[str]) -> None:
         self.section_names = section_names
 
-#    def _old_find_section_titles(self, line: TrackedString): # Figure out how to have match type
-#        """ Checks to see if string starts with macro box
-#        returns: math object or None"""
-#
-#        for section_name in self.section_names: #type: ignore
-#            pattern = rf'^\\({section_name}){{(.*?)}}'
-#            match = re.search(pattern, line)
-#            if match:
-#                return match
-#        return None
-
     def _find_section_titles(self, line: TrackedString) -> tuple | None:
-        """ We assume that tex does stats with \\
+        """ We assume that the TrackedString starts with \\
         Returns command with \\ character included"""
         for section_name in self.section_names:
 
@@ -358,8 +326,8 @@ class FilterBySectionStage(Stage):
         """ Got lazy and didnt finish.. not even sure this class makes sense"""
         pass
 
-class TransformStage(Stage):
-    pass
+#class TransformStage(Stage):
+#    pass
 
 class FilterBySectionAndMakeFlashcardsStage(BuildFlashcardStage, FilterBySectionStage):
     def __init__(self, section_names: list[str]) -> None:
@@ -416,9 +384,10 @@ class FilterBySectionAndMakeFlashcardsStage(BuildFlashcardStage, FilterBySection
 
 class FlashcardsPipeline:
     """ Generator Object
-    TODO: Type hinting is kinda fucked. I have a ABC Stage class that must implement process. Different stages can have
+    TODO: Type hinting is kinda fucked. I have a abstract Stage class that must implement process method. Different stages can have
     different return types, so I leave it up to the user to use these stages in correct order (last stage must return list[Flashcard])
-    Implementing some sort of type hinting (or class re design) to make this ordering less ambigous would be nice"""
+    Implementing some sort of type hinting (or class re design) to make this ordering less ambigous would be nice
+    """
     def __init__(self, data_iterable: Iterable, flashcard_builder: BuildFlashcardStage, stages: list[Stage] | None = None):
         self.builder = flashcard_builder
         self.data_iterable = data_iterable

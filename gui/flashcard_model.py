@@ -75,9 +75,7 @@ class FlashcardDoubleLinkedList:
         self.current = None
 
     def remove(self, index: int):
-        """ Remove node at index
-        TODO: Should I be explicitly deleting the node? (obviously not a concern in this 'toy' project). Seems like 'del' only
-        deleates reference not object..."""
+        """ Remove node at index """
         if index > len(self) or index < 0:
             raise IndexError(f"Index {index} is out of range for remove operation")
 
@@ -176,7 +174,8 @@ class TexCompilationManager:
             self.cache_dir.mkdir()
 
     def _load_cache(self) -> dict:
-        """  """
+        """ Returns dictionary {filename: path} containg all files in self.cache_dir.
+        In this directory filenames are the hash values for their respective raw latex strings"""
         cache = {}
         for file in self.cache_dir.iterdir():
             if file.is_file():
