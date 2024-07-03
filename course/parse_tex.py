@@ -13,7 +13,7 @@ from ..global_utils import get_config
 logger = logging.getLogger(__name__)
 
 """
-This primary purpose is of parse_tex.py is to provide a customizable pipeline that takes in file paths (.tex files) and returns 'cleaned' tex. This cleaned latex code can then
+parse_tex.py aims to provide a customizable pipeline that takes in file paths (.tex files) and returns 'cleaned' tex. This cleaned latex code can then
 be utilized to build Flashcards objects, or converted to other formats such as mathjax. Currenlty this module only provides a pipeline builder and pipeline stages relavent for
 creating flashcard. Any other functionality, such as converting impure latex code (latex code with user defined shortcuts) to mathjax would require the creation of new pipleline stages and builder.
 
@@ -53,13 +53,15 @@ class PathSourceRecord:
 class TrackedString(str):
     """
     TrackedString tries to use 'duck typing' by implementing all behaviour associated with strings, with additional features such
-    as storing souce data. This data could look like a file_path or the name of a callable that 'created' the string.
+    as storing souce data. This data could look like a file_path or the name of a callable that 'created' the string. Note that we do a poor job
+    with duck typing as operations like '+' must be implemented in a round about way to maintain proper source record, however passing a TrackedString to
+    a function expecting str will not cause the program to crash
 
 
     --- Limitations:
         1. We give priority to left TrackedString. If string = TrackedString1(...) + TrackedString2(...) string.source_history will only contain
         the history of TrackedString1(...). This asserts there will always be exactly one 'root' source at the expense of tracking 'all' sources
-        2. Speed most likley
+        2. Speed
     """
 
     def __new__(cls, string,  source_history: PathSourceRecord | None = None):
@@ -98,30 +100,30 @@ class TrackedString(str):
         return TrackedString(super().__str__() + other_text,
                              source_history=self.source_history)
 
-    def __ge__(self, other):
-        if not isinstance(other, str):
-            raise TypeError(f"'>=' not supported between instances of 'TrackedString' and {type(other)}")
-        return super().__ge__(other)
-
-    def __le__(self, other: str):
-        if not isinstance(other, str):
-            raise TypeError(f"'<=' not supported between instances of 'TrackedString' and {type(other)}")
-        return super().__le__(other)
-
-    def __lt__(self, other: str):
-        if not isinstance(other, str):
-            raise TypeError(f"'<' not supported between instances of 'TrackedString' and {type(other)}")
-        return super().__lt__(other)
-
-    def __gt__(self, other: str):
-        if not isinstance(other, str):
-            raise TypeError(f"'>' not supported between instances of 'TrackedString' and {type(other)}")
-        return super().__ge__(other)
-
-    def __eq__(self, other) -> bool:
-        if not isinstance(other, str):
-            raise TypeError(f"'==' not supported between instances of 'TrackedString' and {type(other)}")
-        return super().__eq__(other)
+#    def __ge__(self, other):
+#        if not isinstance(other, str):
+#            raise TypeError(f"'>=' not supported between instances of 'TrackedString' and {type(other)}")
+#        return super().__ge__(other)
+#
+#    def __le__(self, other: str):
+#        if not isinstance(other, str):
+#            raise TypeError(f"'<=' not supported between instances of 'TrackedString' and {type(other)}")
+#        return super().__le__(other)
+#
+#    def __lt__(self, other: str):
+#        if not isinstance(other, str):
+#            raise TypeError(f"'<' not supported between instances of 'TrackedString' and {type(other)}")
+#        return super().__lt__(other)
+#
+#    def __gt__(self, other: str):
+#        if not isinstance(other, str):
+#            raise TypeError(f"'>' not supported between instances of 'TrackedString' and {type(other)}")
+#        return super().__ge__(other)
+#
+#    def __eq__(self, other) -> bool:
+#        if not isinstance(other, str):
+#            raise TypeError(f"'==' not supported between instances of 'TrackedString' and {type(other)}")
+#        return super().__eq__(other)
 
     def __repr__(self):
         return (f"TrackedString({super().__repr__()}, self._source_history=SourceHistory(...))")
