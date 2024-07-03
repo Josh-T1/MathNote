@@ -1,11 +1,23 @@
-# Course Package
+# Project Description
+
+## TODO
+- Re organize cli interface. We currently have `main_gui.py` and `main_cli.py`.
+  Would probably make much more sense to merge `main_gui.py` into `main_cli.py`.
+  In addition much of the functionality of `main_cli.py` was poorly thought out
+  and as a result needs some serious re working.
+- Write tests... This entire package is untested for the most part.
+- Delete `shortcuts` package... This was a poor attempt at implementing
+  shortcuts for Inkscape. Realized it is much easier to create a minimalistic
+  vector graphics editor and use that for in class drawing.
+
+## Course Package
 The course package provides an interface for quickly creating, compiling, adding images,
-and doing basic parsing latex files. This functionality is accessed through the CLI;
+and doing basic parsing of latex files. This functionality is accessed through the CLI;
 running the `MathNote/course_cli.py` file *** change this *. 
 
-# Gui Package
+## Gui Package
 Responsible for creating and displaying flashcards containing material from course
-lecture .tex files. In order for this to you must implement formatting of
+lecture .Tex files. In order to use this to package you must implement specific formatting of
 lecture files. Flashcards can be created with the following 'sections':
 definitions, theorems, and derivations. All sections must have the form
 ```
@@ -13,10 +25,10 @@ definitions, theorems, and derivations. All sections must have the form
 latex code
 }
 ```
-Theorem section have the additionaly allow for proofs. The parse will check and
-see if a proof section follows the theorem and will display the first following
-proof section if it exists. In order for this to work your notes must have the
-form
+Theorem sections additionally allow for proofs to be displayed as flashcard
+answers along side the statement. The latex parser will check and
+see if a proof section follows the theorem; displaying the first following
+proof section if it exists. Proof boxes must be of the form:
 ```
 \{sectionName}{theoremName (thoerem) / word (defintion) / equality(derivation)}{
 latex code
@@ -28,7 +40,7 @@ latex code
 For example suppose `"TODO: {"theorem": "theo", "proof": "pf"}"` is set in the
 config file, then all theorems in .tex files must follow the format
 ```
-\theorem{Pythagorean theorem}{
+\theo{Pythagorean theorem}{
 pythagonrean theorem statement
 }
 \pf{}{
@@ -44,8 +56,8 @@ TODO: Make sections configurable and what happens if None is places inside?
 Projection configurations must be set `MathNote/config.json` before the project
 us usable. 
 - `note-path`: full path to directory containing math notes. It is assumed that
-   all `courses` reside in the directory `{note-path}/{course (e.g math-445)}`. Further more
-   lectures if created manually must reside in the directory
+   all `courses` reside in the directory `{note-path}/{course (e.g math-445)}`. 
+   Further more lectures if created manually must reside in the directory
    `{note-path}/course_dir/lectures`. When using the CLI this is default
    behaviour.
 - `lecture-template`: path to latex template used for lectures (is this even
@@ -63,10 +75,7 @@ us usable.
   result all commands following a different format must be removed prior to
   using this package. 
 
-- `svg-gui-exec`: ** implement. Path to executable file responsible for starting
-  your svg drawing software. I personally use a minimalistic vectors graphics
-  PyQt6 application I built [include path clickable]. Inkscape is a far better
-  alternative if speed is not a concer.
+
 
 - `font`: ** not sure
 - "`font-size`: ** not sure
@@ -77,4 +86,11 @@ us usable.
 #### Optional config
 1. `shorcutmanager-logging-config`: standard python logging config
 ** defaults
+- `svg-gui-exec`: ** implement. Command to open vector graphics editor or path to executable responsible for opening editor.
+Inkscape a great open source vector graphics editor, alternatively you could use
+my other project [[]] if you want a faster minimalistic option. Note this
+project has not been finished and has several undesirable side effect and lacks
+basic options
 
+#### Drawing config
+- 

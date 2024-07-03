@@ -1,16 +1,12 @@
-from random import shuffle
-from PyQt6.QtCore import QAbstractItemModel, Qt
+from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QStandardItemModel
 from PyQt6.QtWidgets import QListView
 from .window import LatexCompilationError
-from .flashcard_model import FlashcardNotFoundException, FlashcardModel, TexCompilationManager
-from ..course.parse_tex import FlashcardsPipeline
+from .flashcard_model import FlashcardNotFoundException
 import sys
 import logging
 from ..course.courses import Courses
-from ..global_utils import get_config
 import threading
-from functools import partial
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +29,7 @@ class FlashcardController:
 
     def _populate_view(self):
         """ Use model data to populate view """
-        courses = self.courses.courses().keys()
+        courses = self.courses.courses.keys()
         self.view.course_combo.addItems(courses)
 
     def run(self, app):

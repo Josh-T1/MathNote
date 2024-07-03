@@ -13,6 +13,7 @@ import shutil
 import subprocess
 """
 This module could probably use some testing and a re write...
+Also needs documentation. Getting tired of deciphering old code
 """
 class Lecture():
     def __init__(self, file_path) -> None:
@@ -68,7 +69,6 @@ class Course():
         self._info["name"] = self.name
         return self._info
 
-    @property
     def this_semester(self) -> bool:
         """ returns True if this class is active this semester """
         # add logging
@@ -90,7 +90,6 @@ class Course():
         return self._lectures
 
 
-    @property
     def start_time(self) -> Union[datetime, None]:
         """ Returns time as datetime.datetime object """
         if self.course_info["start-time"]:
@@ -100,23 +99,21 @@ class Course():
     def string_to_time(self, string: str, format="%H:%M") -> datetime:
         return datetime.strptime(string, format)
 
-    @property
     def end_time(self) -> Union[datetime, None]:
         """ Returns time as datetime.datetime object """
         if self.course_info["end-time"]:
             return self.string_to_time(self.course_info["end-time"])
         return None
 
-    @property
     def days(self):
         """ Weekdays zero indexed starting with Monday """
         weeday_int_map = {"Monday": 0, "Tuesday": 1, "Wednesday": 2, "Thursday": 3, "Friday": 4}
         try:
             res = [int(weeday_int_map[day]) for day in self.course_info["weekdays"]]
-            return res
         except KeyError:
             self._logger.warning("Invalid 'Weeday' in course_info.json file")
-            return []
+            res = []
+        return res
 
     @staticmethod
     def get_header_footer(filepath: Path, end_header_pattern="start_lectures", end_body_pattern="end lectures") -> tuple[str, str, str]:
@@ -158,9 +155,9 @@ class Course():
         """ Returns the week as int (1 indexed).
         *** Returns 0 when week can not be determined from lecture object
         """
-        if len(self.days) == 0:
+        if len(self.days()) == 0:
             return 0
-        return ceil(lecture.number / len(self.days))
+        return ceil(lecture.number / len(self.days()))
 
     def update_lectures_in_master(self, lecture_nums: list[int]) -> None:
         """ Copy contents of main.tex header and footer, find all lecuteres and their correspoding number, join file parts together
@@ -184,7 +181,7 @@ class Course():
         self.update_lectures_in_master([new_lecture_number]) # [new_lecture_number-1, new_lecture_number] when num!=1,  why?
 
         new_lecture = Lecture(new_lecture_path)
-        new_lecture.file_path.write_text(fr'\section*{{Lecture {new_lecture.number}}}')
+        new_lecture.path.write_text(fr'\section*{{Lecture {new_lecture.number}}}')
         if self._lectures is None:
             self._lectures = []
         self.lectures.append(new_lecture)
@@ -230,8 +227,9 @@ class Courses():
         return list(sorted(courses, key=_key))
 
     def get_course(self, name: str):
-        return self.courses().get(name)
+        return self.courses.get(name)
 
+    @property
     def courses(self) -> dict[str,Course]:
         """ Should this really return a dict? """
         if self._courses:
@@ -239,35 +237,44 @@ class Courses():
         course_list = self._find_courses(_key=lambda course: (course.last_edit is not None, course.last_edit))
         return {obj.name: obj for obj in course_list}
 
-    def get_active_course(self, tolerance=10) -> Union[None, Course]:
-        """ tolerance: maximum number of minutes for which a class with start_time = 'x' will be considered active at time ('x' - tolerance)
+    def get_active_course(self, tolerance: int = 10) -> Union[None, Course]:
+        """
+        TODO: FIX
+        tolerance: maximum number of minutes for which a class with start_time = 'x' will be considered active at time ('x' - tolerance)
         TODO: test this """
 
-        for course in self.courses().values():
+        for course in self.courses.values():
             time_now = datetime.now()
-            if time_now.weekday() not in course.days or course.start_time is None or course.end_time is None:
+            start, end = course.start_time(), course.end_time()
+            if (time_now.weekday() not in course.days()
+                or start is None
+                or end is None):
                 continue
-            # course_start == None is handled above
-            time_difference = course.start_time - time_now # type: ignore
-            time_difference_minutes = abs(time_difference.total_seconds() / 60)
 
-            if time_difference_minutes < tolerance or (course.start_time <= time_now <= course.end_time):
+            time_difference = start - time_now
+            time_difference_minutes = time_difference.total_seconds() / 60
+
+            if time_difference_minutes < tolerance or (start <= time_now <= end):
                 return course
         return None
 
     def create_course(self, name: str) -> None:
         """
-        TODO: copy json file template over, allow flag to indicate weather or not not use user input
+        TODO: copy json file template over, allow flag to indicate wether or not not use user input
+        TODO: Go over the above TODO, ive got no idea what I had in mind when I wrote it... great.
+        Ive also made changes and have not tested them
         """
-        course = self.courses().get(name, None)
-        if course == None:
-            self.logger.info(f"Failed to create coure: {name} as course already exists")
+        course = self.courses.get(name, None)
+        # prevent overiding course
+        if course != None:
+            self.logger.info(f"Failed to create, course with name={name} already exists")
             return
 
         course_path = self.root / name
-        if course_path.is_dir():
-            self.logger.info(f"Course: {name} already exists")
-            return
+#       Probably unessasary
+#        if course_path.is_dir():
+#            self.logger.info(f"Course: {name} already exists")
+#            return
 
         os.mkdir(course_path)
 
@@ -280,7 +287,7 @@ class Courses():
         template_path = str(Path(__file__).parent / "course_info_template.json") # str conversion is likley unessasary
         shutil.copy(template_path, str(course_path / "course_info.json"))
 
-    # make dict dunder?
-    def __contains__(self, course_name):
-        if not type(course_name) == type(str): return False
+    def __contains__(self, course_name: str):
+        if not type(course_name) == type(str):
+            return False
         return course_name in self.courses

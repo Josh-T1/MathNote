@@ -1,6 +1,5 @@
 import random
 import threading
-import os
 import tempfile
 from pathlib import Path
 import time
@@ -21,7 +20,7 @@ class StoppableThread(threading.Thread):
     """ This is some proper fuckery and poor class naming. The target function for the thread needs access to FlashcardModel properties. In order to
     de couple StoppableThread and FlashcardModel we accept a callback that is called by StoppableThread._run() on every loop for which the _stop_event
     is not set. The issue is that this specific callback requires access to StoppableThread._stop_event. Therefore we pass self._stop_event
-    to callback. This works however it hardly makes sense to only accept callbacks that accept ._stop_event in the general 'StoppableThread'
+    to callback. This works however it hardly makes sense to only accept callbacks with ._stop_event param in the general 'StoppableThread'
     class... What about a CompileTexThread that implements FlashcardModel specific logic?...that solution also sucks
     """
     def __init__(self, *args, **kwargs):

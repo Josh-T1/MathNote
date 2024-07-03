@@ -1,6 +1,6 @@
 #!/bin/bash
 
-PROJECT_NAME="VectorGraphics"
+PROJECT_NAME="MathNote"
 FILE_DIR_NAME="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$FILE_DIR_NAME")"
 VENV_DIR="$PROJECT_DIR/Venv"

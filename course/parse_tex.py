@@ -275,6 +275,7 @@ class CleanStage(Stage):
 
 class FilterBySectionStage(Stage):
     def __init__(self, section_names: list[str]) -> None:
+        super().__init__()
         self.section_names = section_names
 
     def _find_section_titles(self, line: TrackedString) -> tuple | None:

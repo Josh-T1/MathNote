@@ -1,3 +1,4 @@
+import json
 
 def number2filename(n: int):
     return 'lec_{0:02d}.tex'.format(n)
@@ -60,3 +61,13 @@ def parse_command_macro(line) -> str:
         if counter == num_sections:
             return data
     return data
+
+def load_json(path: str):
+    with open(path, 'r') as f:
+        data = json.load(f)
+    return data
+
+def dump_json(path: str, dic: dict):
+    with open(path, 'w') as f:
+        json.dump(dic, f, indent=6)
+
