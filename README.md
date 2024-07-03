@@ -1,6 +1,7 @@
 # Project Description
 
 ## TODO
+- Finish writing documentation
 - Re organize cli interface. We currently have `main_gui.py` and `main_cli.py`.
   Would probably make much more sense to merge `main_gui.py` into `main_cli.py`.
   In addition much of the functionality of `main_cli.py` was poorly thought out
