@@ -5,6 +5,7 @@ from pathlib import Path
 import time
 import subprocess
 import hashlib
+from typing import OrderedDict
 from ..course import parse_tex
 import logging
 from ..global_utils import get_config
@@ -155,18 +156,20 @@ class FlashcardDoubleLinkedList:
 
 
 class TexCompilationManager:
-    """ Handles compilation of latex and caching process """
+    """ Handles compilation of latex and caching process."""
 
-    def __init__(self, cache_dir: str ="cache_tex", cache_size: int =50) -> None:
+    def __init__(self, cache_dir: str ="cache_tex", cache_size: int = 100) -> None:
         """
         -- Params --
         # TODO: Make cache_dir full path and depend on project config
         cache_dir: location of cache directory. ie where should pdf_files be saved
         cache_size: limit on number of files allowed in cache_dir. Oldest files are deleted from cache first
         """
+        self._ignore_hashes = ["empty"]
         self.cache_dir: Path = Path(__file__).resolve().parent / cache_dir
-        self.cache_size = cache_size
+        self.cache_size = cache_size + len(self._ignore_hashes) # Ignore cached files for default messages
         self.cache: dict = self._load_cache()
+
 
         if not self.cache_dir.is_dir():
             logger.debug(f"{self.cache_dir} does not exists, creating {self.cache_dir}")
@@ -180,6 +183,12 @@ class TexCompilationManager:
             if file.is_file():
                 cache[file.name] = str(file)
         return cache
+
+    def list_cache_by_oldest(self):
+        """ List cached files by oldest edit ignoring cached files for default messages """
+        cache_paths = {hash: Path(filepath) for hash, filepath in self.cache.items() if hash + ".pdf" not in self._ignore_hashes}
+        cache_paths_sorted = OrderedDict(sorted(cache_paths.items(), key=lambda item: item[1].stat().st_mtime, reverse=True))
+        return cache_paths_sorted
 
     @staticmethod
     def get_hash(tex: str, hash_length=8) -> str:
@@ -198,48 +207,20 @@ class TexCompilationManager:
 {tex}
 \end{{document}}"""
 
-    def compile_card(self, card: parse_tex.Flashcard, pdfs_in_use: list | None = None) -> None:
+    def compile_card(self, card: parse_tex.Flashcard) -> None:
         """ Attemps to compile flashcard question and answer tex. If compilation fails, card.error_message is set"""
-#        pdfs_in_use = [] if pdfs_in_use is None else pdfs_in_use
         card.pdf_question_path = self.compile_latex(str(card.question)) # str needed to convert TrackedString -> str for hash value
         card.pdf_answer_path = self.compile_latex(str(card.answer))
-#        pdfs_in_use.append(card.pdf_answer_path)
-#        pdfs_in_use.append(card.pdf_question_path)
-#        current_time = time.time()
-#        if card.pdf_question_path:
-#            os.utime(card.pdf_question_path, times=(current_time, current_time))
-#        if card.pdf_answer_path:
-#            os.utime(card.pdf_answer_path, times=(current_time, current_time))
-#
-#        if card.pdf_question_path:
-#            self.add_to_cache(Path(card.pdf_question_path), pdfs_in_use)
-#
-#        if card.pdf_answer_path:
-#            self.add_to_cache(Path(card.pdf_answer_path), pdfs_in_use)
 
-
-
-    def add_to_cache(self, file_path: Path, pdfs_in_use: list) -> None:
+    def add_to_cache(self, file_path: Path) -> None:
         """ Add new file to cache and if cache size is reaches limit delete oldest file
         -- Params --
         file_path: Path object of file begin added to cache"""
-        # Ensure 1. file not in compiled flashcards..(what about ones begin compiled)
-        # Ensure 2. Old
-        # Thread adds compiled cards to list. It can check to see of cache_file is needed.
-        # When we load the pdf so long as we have never deleted a file in compiled cards we gucci
         self.cache[file_path.name] = str(file_path)
-#        if not len(self.cache) > self.cache_size:
-#            return
-#
-#        files = [Path(file) for file in self.cache.values()]
-#        files.sort(key = lambda x: x.stat().st_mtime)
-#        for file in files:
-#            logger.debug(f"==============={file}")
-#            if file not in pdfs_in_use:
-#                logger.debug(f"==== file exsts: {file.exists()}")
-#                file.unlink()
-#                logger.debug(f"Removed {file} from cache")
-#                break
+
+    def remove_from_cache(self, filepath: Path):
+        del self.cache[filepath.name]
+        filepath.unlink()
 
     def compile_latex(self, tex: str) -> str | None:
         """ Attempts to compile latex string
@@ -385,7 +366,7 @@ class FlashcardModel:
 
     def _count_precompiled_cards(self):
         """ Returns number of compiled cards that are 'next' and have not been viewed in the FlashcardDoubleLinkedList
-        TODO: Decide if 'compiled' cards with no pdf path counti.. probably not """
+        TODO: Decide if 'compiled' cards with no pdf path count.. probably not however we currently count them """
         counter = 0
         card = None if self.compiled_flashcards.current is None else self.compiled_flashcards.current.next
         while card and not card.data.seen:
@@ -423,11 +404,29 @@ class FlashcardModel:
 
             card = self.flashcards.pop()
             logger.debug(card)
-#            paths = self._get_all_flashcard_paths()
             try:
-                self.compiler.compile_card(card, pdfs_in_use=None)
+                self.compiler.compile_card(card)
                 logger.debug(f"Compiled card: {card}")
                 self._prepend_compiled_flashcard(card)
 
             except Exception as e:
                 logger.error(f"Failed to compile {e}")
+
+            # Logic block for 'cleaning' cache
+            delete_num = len(self.compiler.cache) - self.compiler.cache_size
+            if delete_num <= 0:
+                return
+
+            cached_paths = self.compiler.list_cache_by_oldest()
+            flashcard_hash = set(self.compiler.get_hash(flashcard.question) for flashcard in self.flashcards)
+
+            # delete cached file starting from oldest if hash(flashcards.question) != hash(cached file)
+            for hash, filepath in cached_paths.items():
+                if hash not in flashcard_hash:
+                    logger.info(f"Removing cached file: {filepath}")
+                    self.compiler.remove_from_cache(filepath)
+                    delete_num -= 1
+                    pass
+                if delete_num == 0:
+                    return
+            return
