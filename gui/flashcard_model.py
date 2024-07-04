@@ -8,7 +8,7 @@ import hashlib
 from typing import OrderedDict
 from ..course import parse_tex
 import logging
-from ..global_utils import get_config
+from ..global_utils import SectionNames, get_config
 config = get_config()
 
 logger = logging.getLogger(__name__)
@@ -211,6 +211,10 @@ class TexCompilationManager:
         """ Attemps to compile flashcard question and answer tex. If compilation fails, card.error_message is set"""
         card.pdf_question_path = self.compile_latex(str(card.question)) # str needed to convert TrackedString -> str for hash value
         card.pdf_answer_path = self.compile_latex(str(card.answer))
+        # TODO make sure this works
+        for key, value in card.additional_info.items():
+            path = self.compile_latex(str(value))
+            setattr(card, f"pdf_{key}_path", path)
 
     def add_to_cache(self, file_path: Path) -> None:
         """ Add new file to cache and if cache size is reaches limit delete oldest file
@@ -342,7 +346,10 @@ class FlashcardModel:
 
         data_iterable = parse_tex.TexDataGenerator(paths)
         clean_data_stage = parse_tex.CleanStage(self.macros)
-        filter_and_build_flashcards = parse_tex.FilterBySectionAndMakeFlashcardsStage(section_names)
+        filter_and_build_flashcards = parse_tex.FlashcardBuilder(parse_tex.MainSectionFinder(section_names))
+        proof_section_name, theorem_section_names = getattr(SectionNames, "PROOFS"), getattr(SectionNames, "THEOREM")
+        if proof_section_name and theorem_section_names:
+            filter_and_build_flashcards.add_subsection_finder(parse_tex.ProofSectionFinder(proof_section_name, parents=[theorem_section_names]))
         pipeline = parse_tex.FlashcardsPipeline(data_iterable, filter_and_build_flashcards, [clean_data_stage])
 
         for flash_cards in pipeline:
@@ -418,7 +425,8 @@ class FlashcardModel:
                 return
 
             cached_paths = self.compiler.list_cache_by_oldest()
-            flashcard_hash = set(self.compiler.get_hash(flashcard.question) for flashcard in self.flashcards)
+            flashcard_hash = (set(self.compiler.get_hash(flashcard.question) for flashcard in self.flashcards)
+                              | set(self.compiler.get_hash(value) for _card in self.flashcards for value in _card.additional_info.values()))
 
             # delete cached file starting from oldest if hash(flashcards.question) != hash(cached file)
             for hash, filepath in cached_paths.items():

@@ -1,15 +1,13 @@
-from . import utils
-import time
-from functools import partial
+import enum
 from pathlib import Path
-from typing import Iterable, Required, Union, Generator, List, Callable
+from typing import Iterable, Union, Generator, List, Callable
 import re
+from collections import namedtuple
 import logging
 from abc import abstractmethod, ABC
 from dataclasses import dataclass
-import copy
 from ..global_utils import get_config
-
+from ..global_utils import config, SectionNames
 logger = logging.getLogger(__name__)
 
 """
@@ -29,7 +27,7 @@ The lsp warning Cannot access memeber '._source_history' from TrackString can be
 immutable. However when __new__ is called the property is set. If there is a way to do this 'properly' that would be great
 """
 
-MACRO_PATH = get_config()["macros-path"]
+MACRO_PATH = config["macros-path"]
 
 
 # TODO:  load these in a more dynmaic way
@@ -136,7 +134,11 @@ class Flashcard:
 #    error_message: str = ""
     pdf_answer_path: None | str = None
     pdf_question_path: None | str = None
+    additional_info = {}
     seen: bool = False
+
+    def add_info(self, name: SectionNames, info: str):
+        self.additional_info[name.value] = info
 
     def __str__(self):
         # TODO re write this
@@ -273,30 +275,95 @@ class CleanStage(Stage):
             arg = arg.modify_text(" ".__add__)
         return arg
 
+Section = namedtuple("MainSection", ["title", "content", "name", "end_index"])
 
+class SectionFinder(ABC):
+    @abstractmethod
+    def find_section(self, text: TrackedString) -> Section | None:
+        pass
 
-class FilterBySectionStage(Stage):
-    def __init__(self, section_names: list[str]) -> None:
+    @staticmethod
+    def _content_inside_paren(tex: TrackedString, paren: tuple[str, str]=("{", "}")) -> TrackedString:
+        """ It is assume the tex string passed starts paren[0] and for every opening paren we have a matching close paren """
+        paren_stack = []
+
+        if tex[0] != paren[0]:
+            raise ValueError(f"String passed does not begin with '{{': {tex[:50]}, {tex.source_history.root}") # }}} <= keep lsp happy
+
+        for index, char in enumerate(tex):
+            if char == paren[0]:
+                paren_stack.append(char)
+            elif char == paren[1]:
+                paren_stack.pop()
+            if not paren_stack:
+                return tex[1:index]
+        raise ValueError("Invalid string")
+
+class SubSectionFinder(SectionFinder):
+    def __init__(self, parents):
         super().__init__()
-        self.section_names = section_names
+        self.parents = parents
 
-    def _find_section_titles(self, line: TrackedString) -> tuple | None:
-        """ We assume that the TrackedString starts with \\
-        Returns command with \\ character included"""
-        for section_name in self.section_names:
+class ProofSectionFinder(SubSectionFinder):
+    def __init__(self, name: SectionNames, parents: list[str]):
+        super().__init__(parents)
+        self.name = name.value
 
-            if line[1:].startswith(section_name):
+    def find_section(self, text: TrackedString) -> Section | None:
+        if not self.is_section(text):
+            return None
+        first_curly_brace_index = len(self.name) + 1
+        _title = self._content_inside_paren(text[first_curly_brace_index:])
+        # index relative to whole text block
+        end_title_index = first_curly_brace_index + len(_title) +1 # first_curly_brace_index includes \\name{, len(title) includes {title}_, -1 to get back to }
+        content = self._content_inside_paren(text[end_title_index +1:])
+        end_content_index = end_title_index + len(content) + 1 # +1 to make non inclusive. ie text[end_content_index] == a closing paren
+        return Section(_title, content, self.name, end_content_index)
 
-                arg = self._find_arg(line[1+ len(section_name):])
-                if not arg:
-                    return None
-                end_index = len(section_name) + len(arg) + 3 # -2 to account for zero index, +1 for \\, +1 for opening curly brace, + 1 for closing curly brace, +1 since its non inclusive,
-                # return wholematch, arg, section_name
-                return (line[:end_index], section_name, arg)
 
-        return None
+    def is_section(self, text):
+        return text[1:].startswith[self.name]
 
 
+class MainSectionFinder(SectionFinder):
+    r"""
+    Finds sections of the form:
+    \name{title}{
+            content
+            }
+    """
+    def __init__(self, names: list[str]):
+        """
+        -- Params --
+        names: list of names the characterize
+        """
+        self.possible_names = names
+
+    def find_section(self, text: TrackedString) -> None | Section:
+        is_section, name = self.is_section(text)
+        if not is_section:
+            return None
+        # text[len(self.name + 1)] is openening bracket character
+        first_curly_brace_index = len(name) + 1
+        title = self._content_inside_paren(text[first_curly_brace_index:])
+        # index relative to whole text block
+        end_title_index = first_curly_brace_index + len(title) +1 # first_curly_brace_index includes \\name{, len(title) includes {title}_, -1 to get back to }
+        content = self._content_inside_paren(text[end_title_index +1:])
+        end_content_index = end_title_index + len(content) + 1 # +1 to make non inclusive. ie text[end_content_index] == a closing paren
+        return Section(title, content, name, end_content_index)
+
+    def is_section(self, line: TrackedString):
+        """ We make the assumtion the only text that starts with a section name and is followd by closing curly brace
+        is a valid MainSection """
+        for name in self.possible_names:
+            if line[1:].startswith(name) and line[len(name) + 1] == "{": #}
+                return (True, name)
+        return (False, "")
+
+class FlashcardBuilder(BuildFlashcardStage):
+    def __init__(self, main_section_finder: MainSectionFinder, sub_section_finders: list[SubSectionFinder] | None = None) -> None:
+        self.main_section_finder = main_section_finder
+        self.sub_section_finders = [] if sub_section_finders is None else sub_section_finders
     @staticmethod
     def index_of_line_end(tex: TrackedString) -> int | None:
         """
@@ -308,34 +375,6 @@ class FilterBySectionStage(Stage):
                 return index +1
         return None
 
-    @staticmethod
-    def _find_arg(tex: TrackedString) -> Union[TrackedString, None]:
-        """ It is assume the tex string passed starts with curly bracket """
-        paren_stack = []
-
-        if tex[0] != "{":
-            raise ValueError(f"String passed does not begin with '{{': {tex[:50]}, {tex.source_history.root}") # }}} <= keep lsp happy
-
-        for index, char in enumerate(tex):
-            if char == "{":
-                paren_stack.append(char)
-            elif char == "}":
-                paren_stack.pop()
-            if not paren_stack:
-                return tex[1:index]
-        return None
-
-    def process(self, tex):
-        """ Got lazy and didnt finish.. not even sure this class makes sense"""
-        pass
-
-#class TransformStage(Stage):
-#    pass
-
-class FilterBySectionAndMakeFlashcardsStage(BuildFlashcardStage, FilterBySectionStage):
-    def __init__(self, section_names: list[str]) -> None:
-        super().__init__(section_names)
-
     def process_chunk(self, data: TrackedString):
         """
         :param data: data as string
@@ -343,6 +382,7 @@ class FilterBySectionAndMakeFlashcardsStage(BuildFlashcardStage, FilterBySection
         :returns list: [(name, section_contents)....] """
         flashcards = []
         counter = 0
+        parent_section = None
         while counter < len(data): # check this is what i want
 
             if data[counter] == "%": # Do this everywhere
@@ -358,25 +398,28 @@ class FilterBySectionAndMakeFlashcardsStage(BuildFlashcardStage, FilterBySection
                 counter += 1
                 continue
 
-            question_match = self._find_section_titles(data[counter:])
+            # add subsections to flashcard
+            if parent_section:
+                for subsection_finder in self.sub_section_finders:
+                    if parent_section not in subsection_finder.parents:
+                        continue
+                    match = subsection_finder.find_section(data[counter])
+                    if match != None:
+                        flashcards[-1].add_info(match.name, match.content)
 
-            if question_match is None:
+
+
+            section = self.main_section_finder.find_section(data[counter:])
+
+            if section is None:
                 counter += 1
                 continue
 
-            end_cmd_index = counter + len(question_match[0]) # index of first char after cmd
-            answer_match = self._find_arg(data[end_cmd_index:])
-
-            if answer_match is None:
-                break
-
-            # re.match start_index inclusinve but re.match end_index exclusive
-#            question = data[counter:][:question_end_index]
-
+            parent_section = section.name
             flashcards.append(
-                    Flashcard(question_match[2],answer_match)
+                    Flashcard(section.title,section.content)
                     )
-            counter = len(answer_match) + end_cmd_index + 1  # This sets counter equal to last character in command, +1 to move to character after command
+            counter += section.end_index + 1  # This sets counter equal to last character in command, +1 to move to character after command
         return flashcards
 
     def build(self, data: TrackedString) -> list[Flashcard]:
@@ -385,6 +428,8 @@ class FilterBySectionAndMakeFlashcardsStage(BuildFlashcardStage, FilterBySection
         logger.debug(f"Returning {chunk_flashcards}")
         return chunk_flashcards
 
+    def add_subsection_finder(self, subsection_finder: SubSectionFinder):
+        self.sub_section_finders.append(subsection_finder)
 class FlashcardsPipeline:
     """ Generator Object
     TODO: Type hinting is kinda fucked. I have a abstract Stage class that must implement process method. Different stages can have

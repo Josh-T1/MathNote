@@ -149,15 +149,16 @@ class HButtonBar(QWidget):
         self.prev_flashcard_button = QPushButton("Prev", self)
         self.show_answer_button = QPushButton("Show Answer", self)
         self.show_question_button = QPushButton("Show Question", self)
+        self.show_proof_button = QPushButton("Show Proof", self)
 
     def _add_widgets(self):
-
         self.bar_layout.addStretch()
-        self.bar_layout.addWidget(self.show_question_button)
-        self.bar_layout.addWidget(self.show_answer_button)
-        self.bar_layout.addStretch()
-        self.bar_layout.addWidget(self.next_flashcard_button)
         self.bar_layout.addWidget(self.prev_flashcard_button)
+        self.bar_layout.addWidget(self.next_flashcard_button)
+        self.bar_layout.addStretch()
+        self.bar_layout.addWidget(self.show_answer_button)
+        self.bar_layout.addWidget(self.show_question_button)
+        self.bar_layout.addWidget(self.show_proof_button)
         self.bar_layout.addStretch()
         self.bar_layout.addStretch()
 
@@ -283,12 +284,15 @@ class MainWindow(QMainWindow):
         self.initUi()
 
         self.close_callback = None
-        self.document = None
 
     def initUi(self):
         # create central widget and set a layout
         self._create_widgets()
         self._add_widgets()
+
+    @property
+    def document(self):
+        return self.pdf_window.document
 
     def setCloseCallback(self, callback):
         self.close_callback = callback
@@ -310,13 +314,10 @@ class MainWindow(QMainWindow):
         self.main_flashcard_layout.addWidget(self.pdf_window, 3)
         self.main_flashcard_layout.addWidget(self.flashcard_button_bar)
 
-        # re design this?
         spacer = QSpacerItem(40, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
         self.main_layout.addItem(spacer)
         self.main_layout.addLayout(self.main_flashcard_layout)
         self.main_layout.addWidget(self.config_bar)
-
-
 
     def plot_tex(self, path, tex):
         self.pdf_window.plot_tex(path, tex)

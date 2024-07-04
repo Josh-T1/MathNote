@@ -7,6 +7,7 @@ import sys
 import logging
 from ..course.courses import Courses
 import threading
+from ..global_utils import SectionNames
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +44,9 @@ class FlashcardController:
         try:
             self.model.next_flashcard()
             self.show_question()
+            # create some general method for handling additional info
+            if "pf" in self.model.current_card.additional_info.keys():
+                pass
         except FlashcardNotFoundException as e: # Implment logging and gui message properties
             logger.error(f"Failed to show next flashcard question, {e}")
             self.view.set_error_message(str(e))
@@ -92,6 +96,7 @@ class FlashcardController:
         if self.model.current_card is None:
             message = "No flashcard selected. This button display info regarding source of flashcard"
         else:
+            print(self.view.document)
             tracked_string = self.model.current_card.question if self.view.document == self.model.current_card.pdf_question_path else self.model.current_card.answer
             source = tracked_string.source_history.root
             if len(tracked_string) >= 300:
@@ -119,9 +124,6 @@ class FlashcardController:
 
     def get_flashcard_pipeline_config(self):
         """ Retreives user config from widgets. We need to do error checking... what if no boxes are checked """
-        pretty_section_name_to_section_name = {
-                "definition": "defin", "theorem": "theo", "derivation": "der"
-                }
         course_name = self.view.course_combo.currentText()
         checked_sections = self._get_checked_items_from_listView(self.view.section_list)
         weeks_items = self._get_checked_items_from_listView(self.view.filter_by_week_list)
@@ -133,11 +135,11 @@ class FlashcardController:
             weeks = {int(week.split(" ")[-1]) for week in weeks_text}
 
         # Clean checked section params
-        section_names_pretty = [item.text() for item in checked_sections]
+        section_names_pretty = [item.text().upper() for item in checked_sections]
         if "All" in section_names_pretty:
-            section_names = [name for name in pretty_section_name_to_section_name.values()]
+            section_names = [section.value for section in SectionNames]
         else:
-            section_names = [pretty_section_name_to_section_name[section_name] for section_name in section_names_pretty]
+            section_names = [getattr(SectionNames, section_pretty).value for section_pretty in section_names_pretty if hasattr(SectionNames, section_pretty)]
         return course_name, section_names, weeks
 
     def _get_checked_items_from_listView(self, listview: QListView):
