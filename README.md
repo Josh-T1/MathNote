@@ -14,7 +14,7 @@
 ## Course Package
 The course package provides an interface for quickly creating, compiling, adding images,
 and doing basic parsing of latex files. This functionality is accessed through the CLI;
-running the `MathNote/course_cli.py` file *** change this *. 
+running the `MathNote/course_cli.py` file --change this . 
 
 ## Gui Package
 Responsible for creating and displaying flashcards containing material from course
@@ -54,6 +54,10 @@ TODO: Make sections configurable and what happens if None is places inside?
 
 
 # Configuration
+Any directory under under the `note-path` (see config.json setup section) with a 
+`course_info.json` file will be detected as course.
+
+## Config.json file setup
 Projection configurations must be set `MathNote/config.json` before the project
 us usable. 
 - `note-path`: full path to directory containing math notes. It is assumed that

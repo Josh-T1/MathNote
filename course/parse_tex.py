@@ -6,7 +6,6 @@ from collections import namedtuple
 import logging
 from abc import abstractmethod, ABC
 from dataclasses import dataclass
-from ..global_utils import get_config
 from ..global_utils import config, SectionNames
 logger = logging.getLogger(__name__)
 
@@ -98,31 +97,6 @@ class TrackedString(str):
         return TrackedString(super().__str__() + other_text,
                              source_history=self.source_history)
 
-#    def __ge__(self, other):
-#        if not isinstance(other, str):
-#            raise TypeError(f"'>=' not supported between instances of 'TrackedString' and {type(other)}")
-#        return super().__ge__(other)
-#
-#    def __le__(self, other: str):
-#        if not isinstance(other, str):
-#            raise TypeError(f"'<=' not supported between instances of 'TrackedString' and {type(other)}")
-#        return super().__le__(other)
-#
-#    def __lt__(self, other: str):
-#        if not isinstance(other, str):
-#            raise TypeError(f"'<' not supported between instances of 'TrackedString' and {type(other)}")
-#        return super().__lt__(other)
-#
-#    def __gt__(self, other: str):
-#        if not isinstance(other, str):
-#            raise TypeError(f"'>' not supported between instances of 'TrackedString' and {type(other)}")
-#        return super().__ge__(other)
-#
-#    def __eq__(self, other) -> bool:
-#        if not isinstance(other, str):
-#            raise TypeError(f"'==' not supported between instances of 'TrackedString' and {type(other)}")
-#        return super().__eq__(other)
-
     def __repr__(self):
         return (f"TrackedString({super().__repr__()}, self._source_history=SourceHistory(...))")
 
@@ -137,8 +111,8 @@ class Flashcard:
     additional_info = {}
     seen: bool = False
 
-    def add_info(self, name: SectionNames, info: str):
-        self.additional_info[name.value] = info
+    def add_info(self, name: str, info: str):
+        self.additional_info[name] = info
 
     def __str__(self):
         # TODO re write this
@@ -305,8 +279,8 @@ class SubSectionFinder(SectionFinder):
         self.parents = parents
 
 class ProofSectionFinder(SubSectionFinder):
-    def __init__(self, name: SectionNames, parents: list[str]):
-        super().__init__(parents)
+    def __init__(self, name: SectionNames, parent_names: list[SectionNames]):
+        super().__init__([parent.value for parent in parent_names])
         self.name = name.value
 
     def find_section(self, text: TrackedString) -> Section | None:
@@ -322,7 +296,9 @@ class ProofSectionFinder(SubSectionFinder):
 
 
     def is_section(self, text):
-        return text[1:].startswith[self.name]
+        if len(text) < 2:
+            return False
+        return text[1:].startswith(self.name)
 
 
 class MainSectionFinder(SectionFinder):
@@ -355,6 +331,9 @@ class MainSectionFinder(SectionFinder):
     def is_section(self, line: TrackedString):
         """ We make the assumtion the only text that starts with a section name and is followd by closing curly brace
         is a valid MainSection """
+        if len(line) < 2:
+            return (False, "")
+
         for name in self.possible_names:
             if line[1:].startswith(name) and line[len(name) + 1] == "{": #}
                 return (True, name)
@@ -403,7 +382,7 @@ class FlashcardBuilder(BuildFlashcardStage):
                 for subsection_finder in self.sub_section_finders:
                     if parent_section not in subsection_finder.parents:
                         continue
-                    match = subsection_finder.find_section(data[counter])
+                    match = subsection_finder.find_section(data[counter:])
                     if match != None:
                         flashcards[-1].add_info(match.name, match.content)
 

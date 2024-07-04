@@ -27,6 +27,7 @@ class FlashcardController:
         self.view.bind_show_question_button(self.show_question)
         self.view.bind_create_flashcards_button(self.create_flashcards)
         self.view.bind_flashcard_info_button(self.show_flashcard_info)
+        self.view.bind_show_proof_button(self.show_proof)
 
     def _populate_view(self):
         """ Use model data to populate view """
@@ -39,14 +40,25 @@ class FlashcardController:
         self.model.compile_thread.start()
         sys.exit(app.exec())
 
+
+
+    def handle_dynamic_data(self):
+        """ Flashcards must have a question and answer, however they may have other optional fields such as a proof or note
+        This methods handles behaviour associated with the optional fields
+        """
+        if SectionNames.PROOF.value in self.model.current_card.additional_info.keys():
+            self.view.show_proof_button.setHidden(False)
+        else:
+            self.view.show_proof_button.setHidden(True)
+
     def show_next_flashcard(self):
         logger.debug(f"Calling {self.show_next_flashcard}")
         try:
             self.model.next_flashcard()
             self.show_question()
             # create some general method for handling additional info
-            if "pf" in self.model.current_card.additional_info.keys():
-                pass
+            self.handle_dynamic_data()
+
         except FlashcardNotFoundException as e: # Implment logging and gui message properties
             logger.error(f"Failed to show next flashcard question, {e}")
             self.view.set_error_message(str(e))
@@ -80,6 +92,17 @@ class FlashcardController:
         except LatexCompilationError as e:
             logging.warning(f"Failed to compile card: {self.model.current_card} with tex: {self.model.current_card.question}, {e}")
             self.view.set_error_message(f"Failed to compile flashcard question. Raw latex: {self.model.current_card.question}")
+
+    def show_proof(self):
+        card = self.model.current_card
+        if not card:
+            self.view.set_error_message("No flashcard has been loaded... TODO write a better message")
+            return
+        try:
+            self.view.plot_tex(card.pdf_proof_path, card.proof)
+        except LatexCompilationError as e:
+            logging.warning(f"Failed to compile card: {self.model.current_card} with tex: {self.model.current_card.proof}, {e}")
+            self.view.set_error_message(f"Failed to compile proof sectoin. Raw latex: {self.model.current_card.proof}")
 
     def show_answer(self):
         card = self.model.current_card

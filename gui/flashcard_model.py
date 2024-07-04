@@ -1,3 +1,4 @@
+from io import SEEK_SET
 import random
 import threading
 import tempfile
@@ -213,8 +214,18 @@ class TexCompilationManager:
         card.pdf_answer_path = self.compile_latex(str(card.answer))
         # TODO make sure this works
         for key, value in card.additional_info.items():
-            path = self.compile_latex(str(value))
-            setattr(card, f"pdf_{key}_path", path)
+            # TODO fix this
+            print(key, "key")
+            member_ = None
+            for member in parse_tex.SectionNames:
+                if member.value == key:
+                    member_ = member.name
+                    break
+            if member_:
+                print(f"setattr: pdf_{member_.lower()}_path")
+                path = self.compile_latex(str(value))
+                setattr(card, f"pdf_{member_.lower()}_path", path)
+                setattr(card, f"{member_.lower()}", value)
 
     def add_to_cache(self, file_path: Path) -> None:
         """ Add new file to cache and if cache size is reaches limit delete oldest file
@@ -256,7 +267,6 @@ class TexCompilationManager:
 
             logger.info(f"Successfully ran {' '.join(cmd)}")
             new_path = pdf_file_path.rename(self.cache_dir / f"{tex_hash}.pdf").resolve()
-#            self.add_to_cache(new_path, pdfs_in_use=None)
 
         return str(new_path)
 
@@ -299,6 +309,7 @@ class FlashcardModel:
             if self.compiled_flashcards.current and not self.compiled_flashcards.current.data.seen: # Check to see if we are at the begging of flashcards
                 self.compiled_flashcards.current.data.seen = True
                 self.current_card = self.compiled_flashcards.current.data
+                print(self.current_card)
                 return self.compiled_flashcards.current.data
 
             next_card = self.compiled_flashcards.get_next()
@@ -347,9 +358,11 @@ class FlashcardModel:
         data_iterable = parse_tex.TexDataGenerator(paths)
         clean_data_stage = parse_tex.CleanStage(self.macros)
         filter_and_build_flashcards = parse_tex.FlashcardBuilder(parse_tex.MainSectionFinder(section_names))
-        proof_section_name, theorem_section_names = getattr(SectionNames, "PROOFS"), getattr(SectionNames, "THEOREM")
-        if proof_section_name and theorem_section_names:
-            filter_and_build_flashcards.add_subsection_finder(parse_tex.ProofSectionFinder(proof_section_name, parents=[theorem_section_names]))
+
+        proof_section_name, theorem_section_names, prop, lemma, coro = getattr(SectionNames, "PROOF", None), getattr(SectionNames, "THEOREM", None), getattr(SectionNames, "PROPOSITION", None), getattr(SectionNames, "LEMMA", None), getattr(SectionNames, "COROllARY", None) # Fix this we need some way to guarantee these attr exist
+        if proof_section_name and theorem_section_names and prop and lemma and coro:
+            filter_and_build_flashcards.add_subsection_finder(parse_tex.ProofSectionFinder(proof_section_name, [theorem_section_names, prop, lemma, coro]))
+
         pipeline = parse_tex.FlashcardsPipeline(data_iterable, filter_and_build_flashcards, [clean_data_stage])
 
         for flash_cards in pipeline:
@@ -368,7 +381,7 @@ class FlashcardModel:
         return self._next_compiled_flashcard()
 
     def prev_flashcard(self) -> parse_tex.Flashcard:
-        """ self explanatory... I just like the aesthetic of every method having a doc string (even if its useless... clearly) """
+        """ Returns previous compiled flashcard """
         return self._prev_compiled_flashcard()
 
     def _count_precompiled_cards(self):

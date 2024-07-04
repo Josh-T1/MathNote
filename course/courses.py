@@ -222,7 +222,7 @@ class Courses():
 
     def _find_courses(self, _key = lambda c: c.name) -> list[Course]:
         """ TODO: sort by last edited """
-        course_directories = [x for x in self.root.iterdir() if x.is_dir() and (x / "course_info.json").is_file] # how does iterdir work
+        course_directories = [x for x in self.root.iterdir() if x.is_dir() and (x / "course_info.json").is_file()] # how does iterdir work
         courses = [Course(course) for course in course_directories]
         return list(sorted(courses, key=_key))
 

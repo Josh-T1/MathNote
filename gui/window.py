@@ -104,7 +104,7 @@ class VConfigBar(QWidget):
         self.filter_by_week_list.setMaximumHeight(100)
 
         section_list_model = QStandardItemModel()
-        self.section_list_items = ["definition", "theorem", "derivation", "All"] # Make sure to map this
+        self.section_list_items = ["definition", "theorem", "derivation", "lemma", "proposition", "corollary" ,"All"] # Make sure to map this
         for item in self.section_list_items:
             list_item = QStandardItem(item)
             list_item.setCheckable(True)
@@ -163,6 +163,7 @@ class HButtonBar(QWidget):
         self.bar_layout.addStretch()
 
     def _configure_widgets(self):
+        self.show_proof_button.setHidden(True)
         self.prev_flashcard_button.setFixedSize(75, 30)
         self.next_flashcard_button.setFixedSize(75, 30)
 
@@ -250,7 +251,7 @@ class PdfWindow(QWidget):
             self.document = pdf_path
             self.pdf_viewer.setDocument(pdf_document)
             if len(tex) > 100:
-                self.pdf_viewer.setZoomMode(QPdfView.ZoomMode.FitInView)
+                self.pdf_viewer.setZoomMode(QPdfView.ZoomMode.FitToWidth)
             else:
                 self.pdf_viewer.setZoomMode(QPdfView.ZoomMode.Custom)
                 self.pdf_viewer.setZoomFactor(ZOOM_FACTOR)
@@ -293,7 +294,6 @@ class MainWindow(QMainWindow):
     @property
     def document(self):
         return self.pdf_window.document
-
     def setCloseCallback(self, callback):
         self.close_callback = callback
 
@@ -350,6 +350,8 @@ class MainWindow(QMainWindow):
 
     def bind_flashcard_info_button(self, callback):
         self.top_bar.connect_clicked_info_button(callback)
+    def bind_show_proof_button(self, callback):
+        self.show_proof_button.clicked.connect(callback)
 
     @property
     def course_combo(self):
@@ -367,6 +369,9 @@ class MainWindow(QMainWindow):
     @property
     def filter_by_week_list(self):
         return self.config_bar.filter_by_week_list
+    @property
+    def show_proof_button(self):
+        return self.flashcard_button_bar.show_proof_button
 #    def contextMenuEvent(self, event):
 #        context = QMenu(self)
 #        context.addAction(QAction("Test1", self))
