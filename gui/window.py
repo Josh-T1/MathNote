@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import (QComboBox, QHBoxLayout, QLabel, QLineEdit, QListVie
 from PyQt6.QtPdfWidgets import QPdfView
 from PyQt6.QtPdf import QPdfDocument
 from PyQt6.QtCore import QRect, pyqtSignal, QPoint
-from PyQt6.QtGui import QColor, QPainter, QPalette, QStandardItem, QStandardItemModel
+from PyQt6.QtGui import QColor, QFont, QPainter, QPalette, QStandardItem, QStandardItemModel
 from ..course.parse_tex import Flashcard
 import logging
 
@@ -104,7 +104,7 @@ class VConfigBar(QWidget):
         self.filter_by_week_list.setMaximumHeight(100)
 
         section_list_model = QStandardItemModel()
-        self.section_list_items = ["definition", "theorem", "derivation", "lemma", "proposition", "corollary" ,"All"] # Make sure to map this
+        self.section_list_items = ["definition", "theorem",  "lemma", "proposition", "corollary", "derivation", "All"] # Make sure to map this
         for item in self.section_list_items:
             list_item = QStandardItem(item)
             list_item.setCheckable(True)
@@ -156,9 +156,9 @@ class HButtonBar(QWidget):
         self.bar_layout.addWidget(self.prev_flashcard_button)
         self.bar_layout.addWidget(self.next_flashcard_button)
         self.bar_layout.addStretch()
+        self.bar_layout.addWidget(self.show_proof_button)
         self.bar_layout.addWidget(self.show_answer_button)
         self.bar_layout.addWidget(self.show_question_button)
-        self.bar_layout.addWidget(self.show_proof_button)
         self.bar_layout.addStretch()
         self.bar_layout.addStretch()
 
@@ -195,13 +195,17 @@ class HBar(QWidget):
 
     def _create_widgets(self):
         self.info_button = InfoButton(diameter=16)
+        self.flashcard_type = QLabel()
 
     def _add_widgets(self):
         self.bar_layout.addWidget(self.info_button)
         self.bar_layout.addStretch()
+        self.bar_layout.addWidget(self.flashcard_type)
+        self.bar_layout.addStretch()
+        self.bar_layout.addStretch()
 
     def _configure_widgets(self):
-        return
+        self.flashcard_type.setStyleSheet("font-size: 20px; color: lightblue;")
 
     def connect_clicked_info_button(self, callback):
         self.info_button.connect(callback)
@@ -352,6 +356,10 @@ class MainWindow(QMainWindow):
         self.top_bar.connect_clicked_info_button(callback)
     def bind_show_proof_button(self, callback):
         self.show_proof_button.clicked.connect(callback)
+
+    @property
+    def flashcard_type_label(self):
+        return self.top_bar.flashcard_type
 
     @property
     def course_combo(self):

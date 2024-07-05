@@ -9,7 +9,7 @@ import hashlib
 from typing import OrderedDict
 from ..course import parse_tex
 import logging
-from ..global_utils import SectionNames, get_config
+from ..global_utils import SectionNames, SectionNamesDescriptor, get_config
 config = get_config()
 
 logger = logging.getLogger(__name__)
@@ -159,7 +159,7 @@ class FlashcardDoubleLinkedList:
 class TexCompilationManager:
     """ Handles compilation of latex and caching process."""
 
-    def __init__(self, cache_dir: str ="cache_tex", cache_size: int = 100) -> None:
+    def __init__(self, cache_dir: str ="cache_tex", cache_size: int = 200) -> None:
         """
         -- Params --
         # TODO: Make cache_dir full path and depend on project config
@@ -212,20 +212,13 @@ class TexCompilationManager:
         """ Attemps to compile flashcard question and answer tex. If compilation fails, card.error_message is set"""
         card.pdf_question_path = self.compile_latex(str(card.question)) # str needed to convert TrackedString -> str for hash value
         card.pdf_answer_path = self.compile_latex(str(card.answer))
-        # TODO make sure this works
-        for key, value in card.additional_info.items():
-            # TODO fix this
-            print(key, "key")
-            member_ = None
-            for member in parse_tex.SectionNames:
-                if member.value == key:
-                    member_ = member.name
-                    break
-            if member_:
-                print(f"setattr: pdf_{member_.lower()}_path")
-                path = self.compile_latex(str(value))
-                setattr(card, f"pdf_{member_.lower()}_path", path)
-                setattr(card, f"{member_.lower()}", value)
+
+        for member_name, content in card.additional_info.items():
+            # TODO improve this code
+            if SectionNames.is_name(member_name):
+                path = self.compile_latex(str(content))
+                setattr(card, f"pdf_{member_name.lower()}_path", path)
+                setattr(card, f"{member_name.lower()}", content)
 
     def add_to_cache(self, file_path: Path) -> None:
         """ Add new file to cache and if cache size is reaches limit delete oldest file
@@ -304,12 +297,12 @@ class FlashcardModel:
 
     def _next_compiled_flashcard(self) -> parse_tex.Flashcard:
         """ Thread safe retreival of next card
-        TODO: Clean this up... No need for this many lines of code"""
+        TODO: Clean this up... """
         with self.flashcard_lock:
+            # if current card is compiled and has not been seen return it
             if self.compiled_flashcards.current and not self.compiled_flashcards.current.data.seen: # Check to see if we are at the begging of flashcards
                 self.compiled_flashcards.current.data.seen = True
                 self.current_card = self.compiled_flashcards.current.data
-                print(self.current_card)
                 return self.compiled_flashcards.current.data
 
             next_card = self.compiled_flashcards.get_next()
@@ -339,7 +332,7 @@ class FlashcardModel:
         with self.flashcard_lock:
             self.compiled_flashcards.append(card)
 
-    def load_flashcards(self, section_names: list[str], paths: list[Path], shuffle=True) -> None:
+    def load_flashcards(self, section_names: list[SectionNamesDescriptor], paths: list[Path], shuffle=True) -> None:
         r""" Load flash cards with raw tex. Threadsafe... hopefully as I run it on its own thread. Even though this
         is bound by CPU, threading allows for compilation and generation of flashcard to take turns (not sure if this is actually true)
         -- Params --
@@ -350,6 +343,7 @@ class FlashcardModel:
         # Implement thread safe 'clearing'
         with self.flashcard_lock:
             self.compiled_flashcards.clear()
+            self.current_card = None
             self.flashcards.clear()
         # Since FlashcardsPipeline is a generator we can not shuffle all card together. To get as close to as random as possible we shuffle paths and later shuffle cards from those paths
         if shuffle:
@@ -359,10 +353,9 @@ class FlashcardModel:
         clean_data_stage = parse_tex.CleanStage(self.macros)
         filter_and_build_flashcards = parse_tex.FlashcardBuilder(parse_tex.MainSectionFinder(section_names))
 
-        proof_section_name, theorem_section_names, prop, lemma, coro = getattr(SectionNames, "PROOF", None), getattr(SectionNames, "THEOREM", None), getattr(SectionNames, "PROPOSITION", None), getattr(SectionNames, "LEMMA", None), getattr(SectionNames, "COROllARY", None) # Fix this we need some way to guarantee these attr exist
-        if proof_section_name and theorem_section_names and prop and lemma and coro:
-            filter_and_build_flashcards.add_subsection_finder(parse_tex.ProofSectionFinder(proof_section_name, [theorem_section_names, prop, lemma, coro]))
-
+        filter_and_build_flashcards.add_subsection_finder(parse_tex.ProofSectionFinder(
+            SectionNames.PROOF, [SectionNames.THEOREM, SectionNames.PROPOSITION, SectionNames.LEMMA, SectionNames.COROLLARY]) #type: ignore __getattr__ returns SectionNamesDescriptor not str
+                                                              )
         pipeline = parse_tex.FlashcardsPipeline(data_iterable, filter_and_build_flashcards, [clean_data_stage])
 
         for flash_cards in pipeline:

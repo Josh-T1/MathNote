@@ -5,8 +5,8 @@ import re
 from collections import namedtuple
 import logging
 from abc import abstractmethod, ABC
-from dataclasses import dataclass
-from ..global_utils import config, SectionNames
+from dataclasses import dataclass, field
+from ..global_utils import SectionNamesDescriptor, config, SectionNames
 logger = logging.getLogger(__name__)
 
 """
@@ -43,6 +43,7 @@ TEX_PATTERN_TO_MATHJAX = {r"\\begin\{equation\*\}": r"\[",
 
 @dataclass(frozen=True)
 class PathSourceRecord:
+    """ Root soure is filepath origin of text """
     root: str
     line_number: int | None = None
 
@@ -103,12 +104,13 @@ class TrackedString(str):
 
 @dataclass
 class Flashcard:
+    section_name: str
     question: TrackedString
     answer: TrackedString
 #    error_message: str = ""
     pdf_answer_path: None | str = None
     pdf_question_path: None | str = None
-    additional_info = {}
+    additional_info: dict = field(default_factory=dict)
     seen: bool = False
 
     def add_info(self, name: str, info: str):
@@ -236,7 +238,6 @@ class CleanStage(Stage):
                 new_cmd = " " + new_cmd
             new_cmd += " "
             tex_pcs.append(TrackedString(new_cmd, source_history=cleaned_arg.source_history))
-#            new_tex = TrackedString(str(new_tex) + new_cmd, cleaned_arg.source_history) # Hack solution to ensure TrackedString.source_history.root is correct
             counter = len(arg) + end_cmd_index + num_brackets_ignored +1 #This sets counter equal to last character in command, +1 to move to character after command
         new_tex = TrackedString("").join(tex_pcs)
         return new_tex
@@ -279,26 +280,31 @@ class SubSectionFinder(SectionFinder):
         self.parents = parents
 
 class ProofSectionFinder(SubSectionFinder):
-    def __init__(self, name: SectionNames, parent_names: list[SectionNames]):
-        super().__init__([parent.value for parent in parent_names])
-        self.name = name.value
+    def __init__(self, names: SectionNamesDescriptor | list[SectionNamesDescriptor], parent_names: list[SectionNamesDescriptor]):
+        super().__init__([parent.name for parent in parent_names])
+        self.section_name_members = names if isinstance(names, list) else [names]
 
     def find_section(self, text: TrackedString) -> Section | None:
-        if not self.is_section(text):
+        section, member = self.is_section(text)
+        if not section or not member:
             return None
-        first_curly_brace_index = len(self.name) + 1
+        first_curly_brace_index = len(member.value) + 1
         _title = self._content_inside_paren(text[first_curly_brace_index:])
         # index relative to whole text block
         end_title_index = first_curly_brace_index + len(_title) +1 # first_curly_brace_index includes \\name{, len(title) includes {title}_, -1 to get back to }
         content = self._content_inside_paren(text[end_title_index +1:])
         end_content_index = end_title_index + len(content) + 1 # +1 to make non inclusive. ie text[end_content_index] == a closing paren
-        return Section(_title, content, self.name, end_content_index)
+        return Section(_title, content, member.name, end_content_index)
 
 
-    def is_section(self, text):
+    def is_section(self, text) -> tuple[bool, SectionNamesDescriptor | None]:
+
         if len(text) < 2:
-            return False
-        return text[1:].startswith(self.name)
+            return (False, None)
+        for member in self.section_name_members:
+            if text[1:].startswith(member.value):
+                return (True, member)
+        return (False, None)
 
 
 class MainSectionFinder(SectionFinder):
@@ -308,36 +314,36 @@ class MainSectionFinder(SectionFinder):
             content
             }
     """
-    def __init__(self, names: list[str]):
+    def __init__(self, names: list[SectionNamesDescriptor] | SectionNamesDescriptor):
         """
         -- Params --
-        names: list of names the characterize
+        names: list of section names. Should probably convert to list[SectionNames]
         """
-        self.possible_names = names
+        self.possible_names = names if isinstance(names, list) else [names]
 
     def find_section(self, text: TrackedString) -> None | Section:
-        is_section, name = self.is_section(text)
-        if not is_section:
+        is_section, member = self.is_section(text)
+        if not is_section or member is None:
             return None
         # text[len(self.name + 1)] is openening bracket character
-        first_curly_brace_index = len(name) + 1
+        first_curly_brace_index = len(member.value) + 1
         title = self._content_inside_paren(text[first_curly_brace_index:])
         # index relative to whole text block
         end_title_index = first_curly_brace_index + len(title) +1 # first_curly_brace_index includes \\name{, len(title) includes {title}_, -1 to get back to }
         content = self._content_inside_paren(text[end_title_index +1:])
         end_content_index = end_title_index + len(content) + 1 # +1 to make non inclusive. ie text[end_content_index] == a closing paren
-        return Section(title, content, name, end_content_index)
+        return Section(title, content, member.name, end_content_index)
 
-    def is_section(self, line: TrackedString):
+    def is_section(self, line: TrackedString) -> tuple[bool, SectionNamesDescriptor | None]:
         """ We make the assumtion the only text that starts with a section name and is followd by closing curly brace
         is a valid MainSection """
         if len(line) < 2:
-            return (False, "")
+            return (False, None)
 
-        for name in self.possible_names:
-            if line[1:].startswith(name) and line[len(name) + 1] == "{": #}
-                return (True, name)
-        return (False, "")
+        for member in self.possible_names:
+            if line[1:].startswith(member.value):
+                return (True, member)
+        return (False, None)
 
 class FlashcardBuilder(BuildFlashcardStage):
     def __init__(self, main_section_finder: MainSectionFinder, sub_section_finders: list[SubSectionFinder] | None = None) -> None:
@@ -385,18 +391,18 @@ class FlashcardBuilder(BuildFlashcardStage):
                     match = subsection_finder.find_section(data[counter:])
                     if match != None:
                         flashcards[-1].add_info(match.name, match.content)
+                        counter += match.end_index
 
-
-
+            # Add main section. i.e question, answer
             section = self.main_section_finder.find_section(data[counter:])
 
             if section is None:
                 counter += 1
                 continue
 
-            parent_section = section.name
+            parent_section = section.name # the command title. e.g \defin{...}{...}
             flashcards.append(
-                    Flashcard(section.title,section.content)
+                    Flashcard(section.name, section.title, section.content)
                     )
             counter += section.end_index + 1  # This sets counter equal to last character in command, +1 to move to character after command
         return flashcards
@@ -404,11 +410,21 @@ class FlashcardBuilder(BuildFlashcardStage):
     def build(self, data: TrackedString) -> list[Flashcard]:
         logger.info(f"Calling {__class__.__name__}.process")
         chunk_flashcards = self.process_chunk(data)
+#        chunk_flashcards = self.re_format_flashcards(chunk_flashcards)
         logger.debug(f"Returning {chunk_flashcards}")
         return chunk_flashcards
 
     def add_subsection_finder(self, subsection_finder: SubSectionFinder):
         self.sub_section_finders.append(subsection_finder)
+
+    def re_format_flashcards(self, flashcards: list[Flashcard]):
+        for flashcard in flashcards:
+            if len(flashcard.question) > 4 or not hasattr(flashcard, "proof"):
+                continue
+            flashcard.question = flashcard.answer
+            flashcard.answer = flashcard.proof
+        return flashcards
+
 class FlashcardsPipeline:
     """ Generator Object
     TODO: Type hinting is kinda fucked. I have a abstract Stage class that must implement process method. Different stages can have
