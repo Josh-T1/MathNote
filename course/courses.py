@@ -1,9 +1,6 @@
 from typing import Union
 from math import ceil
-#from .lectures import LATEX_CONFIG, LatexParser, Lecture, number2filename, filename2number
-from .utils import number2filename
 from pathlib import Path
-#from utils import get_config
 import logging
 import os
 from datetime import datetime
@@ -15,6 +12,12 @@ import subprocess
 This module could probably use some testing and a re write...
 Also needs documentation. Getting tired of deciphering old code
 """
+def number2filename(n: int):
+    return 'lec_{0:02d}.tex'.format(n)
+
+def filename2number(s: int):
+    return int(str(s).replace('.tex', '').replace('lec_', ''))
+
 class Lecture():
     def __init__(self, file_path) -> None:
         self.path: Path = file_path
