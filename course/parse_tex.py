@@ -1,5 +1,5 @@
-import enum
 from pathlib import Path
+import json
 from typing import Iterable, Union, Generator, List, Callable
 import re
 from collections import namedtuple
@@ -135,6 +135,53 @@ class BuildFlashcardStage(ABC):
     def build(self, data: TrackedString) -> list[Flashcard]:
         pass
 
+class FlashcardCache:
+    def __init__(self, cache_dir: Path):
+        super().__init__()
+        self.cache_dir = cache_dir
+        self._cache = {}
+        self._section_names = None
+
+    @property
+    def section_names(self):
+        return self._section_names
+
+    @section_names.setter
+    def section_names(self, section_names: list[SectionNamesDescriptor]):
+        self._section_names = sorted([section_name.value for section_name in section_names])
+
+    @property
+    def cache(self):
+        if not self._cache:
+            self._cache = self._load_cache()
+        return self._cache
+
+    def _load_cache(self):
+        cache = {}
+        for file in self.cache_dir.iterdir():
+            if file.is_file():
+                cache[file.name] = str(file)
+        return cache
+
+    def load_from_cache(self, path: str):
+        with open(path, "r") as f:
+            json.load(f)
+
+    def cache_key(self, path: Path) -> str | None:
+        if self.section_names is None:
+            return None
+        key = "-".join(self.section_names) + str(path)
+        return key
+
+    def get_cache(self, path: Path):
+        cache_key = self.cache_key(path)
+        filename = self.cache.get(cache_key, None)
+        if filename is not None:
+            cache_value = self.load_from_cache(filename)
+            return cache_value
+        return None
+
+
 class TexDataGenerator:
     """ Generates data in chunks. Each chunk corresponds to the contents of a file... Works well with 'lecture' tex files (small files), could use a re design
     to inlcude a chunk_size param if we are reading from any tex file
@@ -153,7 +200,8 @@ class TexDataGenerator:
                 continue
 
             source_history = PathSourceRecord(str(file_path))
-            yield TrackedString(file_contents, source_history=source_history) # Borderline retarted to return list with one element
+            return_value = TrackedString(file_contents, source_history=source_history)
+            yield return_value
 
 
 class CleanStage(Stage):
@@ -440,6 +488,7 @@ class FlashcardsPipeline:
         for chunk in self.data_iterable:
             if chunk is None:
                 yield []
+                continue
             for stage in self.stages:
                 chunk = stage.process(chunk)
             flashcards = self.builder.build(chunk)

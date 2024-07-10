@@ -1,4 +1,3 @@
-from io import SEEK_SET
 import random
 import threading
 import tempfile
@@ -9,8 +8,8 @@ import hashlib
 from typing import OrderedDict
 from ..course import parse_tex
 import logging
-from ..global_utils import SectionNames, SectionNamesDescriptor, get_config
-config = get_config()
+from ..global_utils import SectionNames, SectionNamesDescriptor, config
+
 
 logger = logging.getLogger(__name__)
 
@@ -162,19 +161,24 @@ class TexCompilationManager:
     def __init__(self, cache_dir: str ="cache_tex", cache_size: int = 200) -> None:
         """
         -- Params --
-        # TODO: Make cache_dir full path and depend on project config
         cache_dir: location of cache directory. ie where should pdf_files be saved
         cache_size: limit on number of files allowed in cache_dir. Oldest files are deleted from cache first
         """
         self._ignore_hashes = ["empty"]
-        self.cache_dir: Path = Path(__file__).resolve().parent / cache_dir
+        self.cache_dir: Path = Path(__file__).resolve().parent / cache_dir / "pdf"
         self.cache_size = cache_size + len(self._ignore_hashes) # Ignore cached files for default messages
-        self.cache: dict = self._load_cache()
+        self._cache: dict = {}
 
 
         if not self.cache_dir.is_dir():
             logger.debug(f"{self.cache_dir} does not exists, creating {self.cache_dir}")
             self.cache_dir.mkdir()
+
+    @property
+    def cache(self):
+        if not self._cache:
+            self._cache = self._load_cache()
+        return self._cache
 
     def _load_cache(self) -> dict:
         """ Returns dictionary {filename: path} containg all files in self.cache_dir.
@@ -271,8 +275,10 @@ class FlashcardModel:
         -- Params --
         compiler: manages compilation of flash cards, type TexCompilationManager
         """
+        self.cache_dir = Path(__file__).parent.resolve() / "cache_dir"
         self.compiler = compiler
         self.flashcards: list[parse_tex.Flashcard] = []
+        self.flashcard_cache = parse_tex.FlashcardCache(self.cache_dir / "flashcards")
         self.compiled_flashcards: FlashcardDoubleLinkedList = FlashcardDoubleLinkedList()
         self.flashcard_lock = threading.RLock()
         self.thread_stop_event = threading.Event()
@@ -294,6 +300,7 @@ class FlashcardModel:
         """ Load macros from MACRO_PATH. Note there are limitations on macros that parse_tex can load and MACRO_NAMES are not created dynamically... at some point
         this should be dynamically loaded."""
         return parse_tex.load_macros(parse_tex.MACRO_PATH, parse_tex.MACRO_NAMES)
+
 
     def _next_compiled_flashcard(self) -> parse_tex.Flashcard:
         """ Thread safe retreival of next card
@@ -359,6 +366,7 @@ class FlashcardModel:
         pipeline = parse_tex.FlashcardsPipeline(data_iterable, filter_and_build_flashcards, [clean_data_stage])
 
         for flash_cards in pipeline:
+            print('batch')
             if shuffle:
                 random.shuffle(flash_cards)
             with self.flashcard_lock:

@@ -1,8 +1,5 @@
-from os import kill
 from pathlib import Path
-import logging
 import json
-from enum import Enum, EnumType
 
 """ Config """
 CONFIG_PATH = Path(__file__).parent / "config.json"
@@ -54,7 +51,7 @@ class ImmutableMeta(type):
 
     def __setattr__(cls, key, value):
         if cls._is_initialized and key in cls.__dict__:
-            raise AttributeError(f"Cannot modify attribute '{key}'. SectionJ attributes are immutable.")
+            raise AttributeError(f"Cannot modify attribute '{key}'. SectionNames attributes are immutable.")
         super().__setattr__(key, value)
 
     def __iterable__(cls):
