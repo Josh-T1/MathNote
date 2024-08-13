@@ -17,8 +17,7 @@ global_parser = arg.ArgumentParser(prog="lecture", description="Set of commands 
 subparsers = global_parser.add_subparsers(title="Subcommands", help="Note taking commands", dest="Subcommands")
 
 class_parser = subparsers.add_parser("class", help="Create class file structure and inizialize class json file")
-file_parser = subparsers.add_parser("lec", help="Select lecture to open with nvim or 'debug'")
-tex_parser = subparsers.add_parser("tex", help="TODO")
+flashcard_parser = subparsers.add_parser("flashcard", help="Generate flashcards from .tex files")
 
 class_parser_arguments = [
         ("name",{"nargs": "?",
@@ -27,44 +26,22 @@ class_parser_arguments = [
                             "help" :"Inizializes json file with user input otherwise a template json file is created"}),
         ("-i", "--information", {"action": "store_true",
                                  "help": "Displays class information"}), # seperate between private and public class info
-        ("-a", "--active", {"action": "store_true", "help": "Opens a new latex lecture in the 'active' class if applicable"}),
+        ("-a", "--active", {"action": "store_true",
+                            "help": "Opens a new latex lecture in the 'active' class if applicable"}),
         ("-u", "--user-input", {"action": "store_true",
                                 "help": "Inizializes course_info.json through user input. Must be used with --create -c flag"}),
         ]
-
-
-# At some point I will realize that debug and clean are useless and that I should make file_parser, tex_parser into one
-file_parser_arguments = [
-        ("name", {"nargs": "?", "action": "store", "default": 'active',
-                  "help": "Possible values: 'recent', 'active'(default), 'class name'"}),
-        ("-d", "--debug", {"action": "store_true",
-                           "help": """Copy's lecture contents into a seperate file containing the required latex code to be compiled.
-                           How is this dir clearned and file move back? Who the fuck knows"""}),
-        ("-c", "--clean", {"action": "store_true",
-                           "help": """Takes body of debug-lecture(s) and replaces their corresponding lecture contents,
-                           then contents in the directory are deleted, defaults to all files in debug dir"""})
-        ]
-
-# delete tex parser comands... probably
-tex_parser = [
-        ("name", {"nargs": "?", "action": "store", "default": 'active',
-                  "help": "file path, class name, or directory path. Relative or full paths"}),
-        ("-d", "--directory", {"action": "store_true", "help": "Use flag if you would like to parse all files in directory"}),
-        ("-f", "--file", {"action": "store_true", "help": "Use flag if you would like to parse file with 'name'"}),
-        ("-c", "--compile", {"action": "store_true", "help": "Compile main.tex, name must be name of class"})
-        ]
+# add m option for compilling and opening mainfile
 
 for arg in class_parser_arguments:
     class_parser.add_argument(*arg[:-1], **arg[-1])
 
-for arg in file_parser_arguments:
-    file_parser.add_argument(*arg[:-1], **arg[-1])
 
 args = global_parser.parse_args()
 
 command_mapping = {
         "class": ClassCommand,
-        "lec": LecCommand,
+        "flashcard": LecCommand,
         }
 
 def main():
