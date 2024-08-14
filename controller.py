@@ -1,13 +1,15 @@
 import os
+import subprocess
 from abc import ABC, abstractmethod
-from courses import Courses, Course
+from .course.courses import Courses, Course
 from pathlib import Path
 import logging
 from typing import Union
 import shutil
 import glob
+from .global_utils import load_json, dump_json
 
-class CliController(ABC):
+class BaseCommand(ABC):
     def __init__(self, project_config: dict) -> None:
         self.project_config = project_config
         self.courses_obj = Courses(self.project_config)
@@ -21,8 +23,8 @@ class CliController(ABC):
         pass
 
     def get_course_info(self, arg: str) -> Union[None, list[dict]]:
-        """ Make sure this works
-        :TODO Make the logic less retarted, change how buetify output works
+        """
+        TODO: Make sure this works
         """
         if arg == 'all':
             info = [course.course_info for course in self.courses_obj.courses.values()]
@@ -33,8 +35,8 @@ class CliController(ABC):
             info = None if info is None else [info.course_info]
         return info
 
-class FlashcardCommand(CliController):
-    """ Command for generating flashcards from latex """
+class FlashcardCommand(BaseCommand):
+    """ Command for generating flashcards from latex files """
     _app = None
     _window = None
     _model = None
@@ -42,14 +44,37 @@ class FlashcardCommand(CliController):
     _controller = None
     _config = None
 
+
+
+    def __init__(self, project_config: dict):
+        super().__init__(project_config)
+        self._ensure_import()
+        self._has_dependecies()
+
+    @staticmethod
+    def _has_dependecies():
+        dependencies = [
+                "pdflatex",
+                "preview"
+                ]
+        failed = set()
+        for dependency in dependencies:
+            try:
+                subprocess.run([dependency, "--version"], check=True)
+            except FileNotFoundError:
+                failed.add(dependency)
+                print(f"Missing dependency: {dependency}")
+        if len(failed) != 0:
+            exit()
+
     @classmethod
     def _ensure_import(cls):
         if cls._app is None or cls._window is None or cls._model is None or cls._compilation_manager is None or cls._controller is None:
             from PyQt6.QtWidgets import QApplication
-            from ..gui.window import MainWindow
-            from ..gui.flashcard_model import FlashcardModel, TexCompilationManager
-            from ..gui.controller import FlashcardController
-            from ..global_utils import get_config
+            from .gui.window import MainWindow
+            from .gui.flashcard_model import FlashcardModel, TexCompilationManager
+            from .gui.controller import FlashcardController
+            from .global_utils import get_config
             cls._app = QApplication([])
             cls._window = MainWindow
             cls._model = FlashcardModel
@@ -57,13 +82,9 @@ class FlashcardCommand(CliController):
             cls._controller = FlashcardController
             cls._config = get_config()
 
-    def __init__(self, project_config: dict):
-        super().__init__(project_config)
-        self._ensure_import()
-
     def cmd(self, namespace):
-        compilation_manager = self._compilation_manager() #type: ignore
-        flashcard_model = self._model(compilation_manager) #type: ignore
+        compilation_manager = self._compilation_manager() #type: ignore - self._ensure_import is always called first
+        flashcard_model = self._model(compilation_manager) #type: ignore - self._ensure_import is always called first
         window = self._window() #type: ignore
         controller = self._controller(window, flashcard_model, self._config) #type: ignore
         window.setCloseCallback(controller.close)
@@ -71,7 +92,7 @@ class FlashcardCommand(CliController):
         if not flashcard_model.compile_thread.stopped(): # Cant remember if I actually need this
             flashcard_model.compile_thread.wait_for_stop()
 
-class ClassCommand(CliController):
+class ClassCommand(BaseCommand):
     """ Class command """
     def __init__(self, project_config):
         super().__init__(project_config)
@@ -79,7 +100,7 @@ class ClassCommand(CliController):
     def handle_course_create(self, namespace):
         name = namespace.name
         if not name:
-            raise UserWarning("Attempted to create class without name")
+            raise ValueError("Attempted to create class without name")
         self._logger.info(f"Creating class with name: {name}")
         self.courses_obj.create_course(name)
         if namespace.user_input:
@@ -89,7 +110,7 @@ class ClassCommand(CliController):
         arg = namespace.name if namespace.name else 'all'
         info = self.get_course_info(arg)
         if info is None:
-            print(f"There is no information given the arguments: {namespace}")
+            print(f"There is no information given arguments: {namespace}")
             return
         for dic in info:
             print(self.buitify_output(dic))
@@ -115,7 +136,7 @@ class ClassCommand(CliController):
             self.handle_course_create(namespace)
 
         else:
-            raise UserWarning(f"Invalid arguments passed: {namespace}")
+            raise ValueError(f"Invalid arguments passed: {namespace}")
 
     def _get_user_input(self, course: Course):
         path = course.path / "course_info.json"
@@ -146,7 +167,7 @@ class ClassCommand(CliController):
             print("Enter a list of comma seperated days for which the course occurs. ie Monday, Tuesday")
         pass
 
-class LecCommand(CliController):
+class LecCommand(BaseCommand):
     """ This entire class can probably be removed """
     """ Relies on bash script using stdout as stdin *** no print statements ***
     This needs a re design. Debug funcitonality can probably be removed"""

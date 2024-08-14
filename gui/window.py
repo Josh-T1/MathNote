@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 ZOOM_FACTOR = 2.5
 WEEKS_IN_SEMESTER = 13
+
 class LatexCompilationError(Exception):
     pass
 

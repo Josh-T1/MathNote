@@ -16,14 +16,14 @@ creating flashcard. Any other functionality, such as converting impure latex cod
 
 
 --- Limitations
-1. TexDataGenerator is limited in how the 'chunks' are generated. Fairly easy fix... however not necessary when reading small files.
-2. Speed, running the FlashcardsPipeline takes forever. Very possible using TrackString results in poor performace
-3. TrackString needs to be re wrote, it does not make sence to track every change and its current design is overkill for tracking only the root source
-4. Mostly untested code
+1. The 'real solution' would probably have a lexer and parser
+1. TrackString needs to be re wrote... (deleted)
+1. Mostly untested code
 
 --- Notes/TODO
-The lsp warning Cannot access memeber '._source_history' from TrackString can be ignored. The TrackString class is not inizialized with that property as it subclasses str which is
+1. The lsp warning Cannot access memeber '._source_history' from TrackString can be ignored. The TrackString class is not inizialized with that property as it subclasses str which is
 immutable. However when __new__ is called the property is set. If there is a way to do this 'properly' that would be great
+1. Get macro names dynamically
 """
 
 MACRO_PATH = config["macros-path"]
@@ -107,7 +107,6 @@ class Flashcard:
     section_name: str
     question: TrackedString
     answer: TrackedString
-#    error_message: str = ""
     pdf_answer_path: None | str = None
     pdf_question_path: None | str = None
     additional_info: dict = field(default_factory=dict)
@@ -117,12 +116,9 @@ class Flashcard:
         self.additional_info[name] = info
 
     def __str__(self):
-        # TODO re write this
-        question = "Yes" if self.question else 'No'
-        answer = "Yes" if self.answer else 'No'
-        pdf_question_path = "Yes" if self.pdf_question_path else 'No'
-        pdf_answer_path = "Yes" if self.pdf_answer_path else 'No'
-        return f"Flashcard(question={question}, answer={answer}, pdf_answer_path={pdf_answer_path}, pdf_question_path={pdf_question_path})" #Blindly using repr() as suggested by chat gpt to escape characters.. that has never created issues for me
+        question = "..." if self.question else 'None'
+        answer = "..." if self.answer else 'None'
+        return f"Flashcard(question={question}, answer={answer}, pdf_answer_path={self.pdf_question_path}, pdf_question_path={self.pdf_answer_path})" #Blindly using repr() as suggested by chat gpt to escape characters.. that has never created issues for me
 
 
 class Stage(ABC):

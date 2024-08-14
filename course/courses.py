@@ -15,22 +15,22 @@ Also needs documentation. Getting tired of deciphering old code
 def number2filename(n: int):
     return 'lec_{0:02d}.tex'.format(n)
 
-def filename2number(s: int):
-    return int(str(s).replace('.tex', '').replace('lec_', ''))
+def filename2number(s: str):
+    return int(s.replace('.tex', '').replace('lec_', '').lstrip("0"))
 
 class Lecture():
-    def __init__(self, file_path) -> None:
-        self.path: Path = file_path
+    def __init__(self, file_path: Path) -> None:
+        self.path = file_path
 
-    @property
     def number(self) -> int:
-        num = str(self.path.stem).split("_")[-1].lstrip("0")
-        return int(num)
+        """" returns: lecture number """
+        num = filename2number(str(self.path.name))
+        return num
 
-    @property
     def name(self) -> str:
+        """ lecture file name. e.g lec_01.tex """
         return self.path.name
-    @property
+
     def last_edit(self) -> float:
         """ Returns most recent edit in seconds """
         return self.path.stat().st_mtime
@@ -40,9 +40,12 @@ class Course():
     Represents university course
     """
     def __init__(self, path: Path):
-        self.path: Path = path
+        """
+        path: root path to course directory
+        """
+        self.path = path
         self.name: str = path.stem
-#        self.dir_names: list[str] = ["lectures", "debug", "backup"]
+
         self.lectures_path = path / "lectures"
         self.debug_path = path / "debug"
         self.main_file = path / "main.tex"
@@ -52,14 +55,17 @@ class Course():
         self._logger = logging.getLogger(__name__ + "Course")
 
 
-    @property
     def last_edit(self):
+        """ Returns time in secods since a lecture file has been edited """
         if not self.lectures:
             return None
-        return max([lecture.last_edit for lecture in self.lectures])
+        return max([lecture.last_edit() for lecture in self.lectures])
 
     @property
-    def course_info(self):
+    def course_info(self) -> dict:
+        """
+        returns: dictionary of course information
+        """
         if self._course_info is None:
             self._course_info = self._load_course_info()
         return self._course_info
@@ -73,7 +79,8 @@ class Course():
         return self._info
 
     def this_semester(self) -> bool:
-        """ returns True if this class is active this semester """
+        """
+        returns: True if class is active this semester """
         # add logging
         end_date = self._info.get("end-date", "")
         if not end_date:
@@ -89,27 +96,28 @@ class Course():
         if self._lectures is not None:
             return self._lectures
         files = self.lectures_path.glob('lec_*.tex')
-        self._lectures = sorted((Lecture(f) for f in files), key=lambda l: l.number)
+        self._lectures = sorted((Lecture(f) for f in files), key=lambda l: l.number())
         return self._lectures
 
 
     def start_time(self) -> Union[datetime, None]:
-        """ Returns time as datetime.datetime object """
+        """
+        returns: course start time as datetime.datetime object if start time is found, otherwise returns None
+        """
         if self.course_info["start-time"]:
-            return self.string_to_time(self.course_info["start-time"])
+            return datetime.strptime((self.course_info["start-time"]), "%H:%M")
         return None
 
-    def string_to_time(self, string: str, format="%H:%M") -> datetime:
-        return datetime.strptime(string, format)
 
     def end_time(self) -> Union[datetime, None]:
-        """ Returns time as datetime.datetime object """
+        """
+        returns: course end time as datetime.datetime object if found, otherwise return None """
         if self.course_info["end-time"]:
-            return self.string_to_time(self.course_info["end-time"])
+            return datetime.strptime((self.course_info["end-time"]), "%H:%M")
         return None
 
     def days(self):
-        """ Weekdays zero indexed starting with Monday """
+        """ Weekdays zero indexed, starting with Monday """
         weeday_int_map = {"Monday": 0, "Tuesday": 1, "Wednesday": 2, "Thursday": 3, "Friday": 4}
         try:
             res = [int(weeday_int_map[day]) for day in self.course_info["weekdays"]]
@@ -119,8 +127,14 @@ class Course():
         return res
 
     @staticmethod
-    def get_header_footer(filepath: Path, end_header_pattern="start_lectures", end_body_pattern="end lectures") -> tuple[str, str, str]:
-        """ Copy header and footer from main.tex, includes line with end_(header/footer)_pattern in header and footer respectively """
+    def get_header_footer(filepath: Path, end_header_pattern: str = "start_lectures", end_body_pattern: str = "end lectures") -> tuple[str, str, str]:
+        """ Copy header and footer from main.tex, includes line with end_(header/footer)_pattern in header and footer respectively
+        -- Params --
+        filepath: path to file
+        end_header_pattern: pattern signaling preamble is terminating in main.tex
+        end_body_pattern: pattern signaling last lecture to be included in main.tex
+        returns: (header, body, footer)
+        """
         part = "header"
         header, footer, body = '', '', ''
 
@@ -144,54 +158,55 @@ class Course():
         return (header, body, footer)
 
     def parse_lecture_range(self, string: str) -> int:
-        """ TODO: Write discription """
+        """ TODO: is this still used? """
         if string.isdigit():
             return int(string)
         elif string == "last":
-            return self.lectures[-1].number
+            return self.lectures[-1].number()
         elif string == 'prev':
-            return self.lectures[-1].number -1
+            return self.lectures[-1].number() -1
         else:
             return 0
 
     def get_week(self, lecture: Lecture) -> int:
-        """ Returns the week as int (1 indexed).
-        *** Returns 0 when week can not be determined from lecture object
+        """
+        returns: the week as int (1 indexed).
+        * returns 0 when week can not be determined from lecture object
         """
         if len(self.days()) == 0:
             return 0
-        return ceil(lecture.number / len(self.days()))
+        return ceil(lecture.number() / len(self.days()))
 
     def update_lectures_in_master(self, lecture_nums: list[int]) -> None:
-        """ Copy contents of main.tex header and footer, find all lecuteres and their correspoding number, join file parts together
-        and write to main.tex
+        """ Update main.tex with new lectures
+        lecture_nums: list of all numbers corresponds to a lecture
         """
-        self._logger.debug("Updating master file")
+        self._logger.debug("Updating main.tex")
         header, body, footer = self.get_header_footer(self.main_file)
-        body = ''.join(r'\input{lectures/' + number2filename(number) + '}\n' for number in lecture_nums)
+        body = ''.join([r'\input{lectures/' + number2filename(number) + '}\n' for number in lecture_nums])
         self.main_file.write_text(header + body + footer)
 
     def new_lecture(self):
-        """ Creates a new lecture. Not sure if that has every been 'tested' """
-        new_lecture_number = 1 if not self.lectures else self.lectures[-1].number +1
-
+        """ Creates a new lecture """
+        new_lecture_number = 1 if not self.lectures else self.lectures[-1].number() + 1
         new_lecture_path = self.lectures_path / number2filename(new_lecture_number)
 
         self._logger.info(f"Creating lecture: {new_lecture_path}")
         new_lecture_path.touch() # Copy file template instead of touch?
 #        new_lecture_path.write_text(f'\\{{lecture{{{new_lecture_number}}}}}\n')
-        self._logger.info("Updating main tex file")
-        self.update_lectures_in_master([new_lecture_number]) # [new_lecture_number-1, new_lecture_number] when num!=1,  why?
+        self._logger.debug("Updating main.tex file")
+        self.update_lectures_in_master([i for i in range(1, new_lecture_number + 1)]) # TODO test
 
         new_lecture = Lecture(new_lecture_path)
         new_lecture.path.write_text(fr'\section*{{Lecture {new_lecture.number}}}')
-        if self._lectures is None:
-            self._lectures = []
         self.lectures.append(new_lecture)
+
         return new_lecture
 
     def compile_main(self):
-        # Do i need to convert Path obj's to str? probably not
+        """ Compile main file
+        returns: error code. e.i {0, 1}
+        """
         self._logger.debug(f"Attempting to compile {self.main_file}")
         result = subprocess.run(
                 ['latexmk', '-f', '-interaction=nonstopmode', str(self.main_file)],
@@ -202,21 +217,21 @@ class Course():
         return result.returncode
 
     def __eq__(self, other):
-        if type(other) != type(self):
+        if not isinstance(other, Course):
             return False
         return self.path == other.path
 
     def __repr__(self) -> str:
-        """ TODO: Make this better """
-        return f"{__class__}({self.path})"
+        return f"{__class__}(path={self.path}, lectures={self.lectures})"
 
     def __contains__(self, other) -> bool: # Make sure isinstance is corrent... backwards args?
         if not isinstance(Lecture, other):
             return False
         return other in self.lectures
-    # add dunder in
+
 
 class Courses():
+    """ Container for all Course objects """
     def __init__(self, config: dict[str, str]):
         self.config = config
         self.root = Path(config["note-path"])
@@ -224,61 +239,61 @@ class Courses():
         self.logger = logging.getLogger("Courses")
 
     def _find_courses(self, _key = lambda c: c.name) -> list[Course]:
-        """ TODO: sort by last edited """
-        course_directories = [x for x in self.root.iterdir() if x.is_dir() and (x / "course_info.json").is_file()] # how does iterdir work
+        """ TODO: sort by last edited
+        _key: key for sorting course objects. Default key is sort by name
+        returns: list of courses sorted by _key
+        """
+        course_directories = [x for x in self.root.iterdir() if x.is_dir() and (x / "course_info.json").is_file()]
         courses = [Course(course) for course in course_directories]
         return list(sorted(courses, key=_key))
 
-    def get_course(self, name: str):
-        return self.courses.get(name)
+    def get_course(self, name: str) -> Course | None:
+        return self.courses.get(name, None)
 
     @property
     def courses(self) -> dict[str,Course]:
-        """ Should this really return a dict? """
+        """
+        returns: dict with the key value pairs, (course name, course object)
+        """
         if self._courses:
             return self._courses
-        course_list = self._find_courses(_key=lambda course: (course.last_edit is not None, course.last_edit))
+        course_list = self._find_courses(_key=lambda course: (course.last_edit() is not None, course.last_edit()))
         return {obj.name: obj for obj in course_list}
 
     def get_active_course(self, tolerance: int = 10) -> Union[None, Course]:
         """
-        TODO: FIX
-        tolerance: maximum number of minutes for which a class with start_time = 'x' will be considered active at time ('x' - tolerance)
-        TODO: test this """
+        tolerance: maximum number of minutes for which a class with start_time = 'x' will be considered active at time ('x' - tolerance). e.g If class A starts at 10:00am we consider it activate at 9:50 by default
+        returns: active course or None
+        """
 
         for course in self.courses.values():
             time_now = datetime.now()
             start, end = course.start_time(), course.end_time()
             if (time_now.weekday() not in course.days()
                 or start is None
-                or end is None):
+                or end is None
+                or time_now > end):
                 continue
 
-            time_difference = start - time_now
+            time_difference = abs(start - time_now)
             time_difference_minutes = time_difference.total_seconds() / 60
 
-            if time_difference_minutes < tolerance or (start <= time_now <= end):
+            if time_difference_minutes < tolerance or start < time_now:
                 return course
         return None
 
     def create_course(self, name: str) -> None:
-        """
-        TODO: copy json file template over, allow flag to indicate wether or not not use user input
-        TODO: Go over the above TODO, ive got no idea what I had in mind when I wrote it... great.
-        Ive also made changes and have not tested them
+        """ Creates directory structure for course, and creates all required files
+        -- Params --
+        name: name of new course
         """
         course = self.courses.get(name, None)
         # prevent overiding course
         if course != None:
             self.logger.info(f"Failed to create, course with name={name} already exists")
-            return
+            raise ValueError(f"Attempting to create course with existing name: {name}")
 
         course_path = self.root / name
-#       Probably unessasary
-#        if course_path.is_dir():
-#            self.logger.info(f"Course: {name} already exists")
-#            return
-
         os.mkdir(course_path)
 
         make_dirs = ["lectures", "figures", "backup", "debug"] # Add this to config file? link this to dirs in course
@@ -286,11 +301,10 @@ class Courses():
             os.mkdir(course_path / dir)
 
         shutil.copy(self.config["main-template"], course_path / "main.tex")
-
         template_path = str(Path(__file__).parent / "course_info_template.json") # str conversion is likley unessasary
         shutil.copy(template_path, str(course_path / "course_info.json"))
 
     def __contains__(self, course_name: str):
-        if not type(course_name) == type(str):
+        if not isinstance(course_name, str):
             return False
         return course_name in self.courses

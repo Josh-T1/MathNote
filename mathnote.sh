@@ -7,9 +7,9 @@ VENV_DIR="$PROJECT_DIR/Venv"
 INTERPRETER_PATH="$VENV_DIR/$PROJECT_NAME/bin/python3"
 
 if [[ "$1" == "-g" ]]; then
-    module_path="$PROJECT_NAME.main_gui"
+    module_path="$PROJECT_NAME.cli course"
 else
-    module_path="$PROJECT_NAME.main_cli"
+    module_path="$PROJECT_NAME.cli gui"
 fi
 shift
 

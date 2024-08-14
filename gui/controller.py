@@ -2,7 +2,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QStandardItemModel
 from PyQt6.QtWidgets import QListView
 from .window import LatexCompilationError
-from .flashcard_model import FlashcardNotFoundException
+from .flashcard_model import FlashcardModel, FlashcardNotFoundException
 import sys
 from ..course.parse_tex import Flashcard
 import logging
@@ -13,7 +13,7 @@ from typing import List
 logger = logging.getLogger(__name__)
 
 class FlashcardController:
-    def __init__(self, view, model, config) -> None:
+    def __init__(self, view, model: FlashcardModel, config: dict) -> None:
         self.model = model
         self.view = view
         self.courses = Courses(config)
@@ -115,7 +115,7 @@ class FlashcardController:
     def create_flashcards(self):
         """ TODO : Using a thread to load flashcards is essentailly pointless as we dealing with cpu bound task not IO
         If we implement multiprocessing we have to avoid lock objects as there is some issues with serializing the object...
-        We an use Queue but then we have no __len__() or clear() methods."""
+        We an use Queue but then we have no __len__() or clear() methods... have fun"""
         course_name, section_names, weeks = self.get_flashcard_pipeline_config()
         course = self.courses.get_course(course_name)
 

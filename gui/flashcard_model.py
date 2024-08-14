@@ -192,7 +192,7 @@ class TexCompilationManager:
     def list_cache_by_oldest(self):
         """ List cached files by oldest edit ignoring cached files for default messages """
         cache_paths = {hash: Path(filepath) for hash, filepath in self.cache.items() if hash + ".pdf" not in self._ignore_hashes}
-        cache_paths_sorted = OrderedDict(sorted(cache_paths.items(), key=lambda item: item[1].stat().st_mtime, reverse=True))
+        cache_paths_sorted = OrderedDict(sorted(cache_paths.items(), key=lambda item_pair: item_pair[1].stat().st_mtime, reverse=True))
         return cache_paths_sorted
 
     @staticmethod
@@ -317,10 +317,6 @@ class FlashcardModel:
             self.current_card.seen = True
             return next_card
 
-    def remove_flashcard(self, card: parse_tex.Flashcard):
-        """"""
-        raise NotImplementedError("I got lazy...")
-
     def _prev_compiled_flashcard(self) -> parse_tex.Flashcard:
         """ Thread safe retreival of previous card  """
         with self.flashcard_lock:
@@ -366,7 +362,6 @@ class FlashcardModel:
         pipeline = parse_tex.FlashcardsPipeline(data_iterable, filter_and_build_flashcards, [clean_data_stage])
 
         for flash_cards in pipeline:
-            print('batch')
             if shuffle:
                 random.shuffle(flash_cards)
             with self.flashcard_lock:

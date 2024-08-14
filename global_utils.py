@@ -14,7 +14,14 @@ def save_config(config: dict):
     with open(CONFIG_PATH, "w") as f:
         json.dump(config, f, indent=6)
 
+def load_json(file: str):
+    with open(file, "r") as f:
+        contents = json.load(f)
+    return contents
 
+def dump_json(file: str, contents: str):
+    with open(file, "w") as f:
+        json.dump(contents, f)
 config = get_config()
 
 
@@ -38,6 +45,7 @@ class ImmutableMeta(type):
         cls = super().__new__(mcs, name, bases, class_dict)
         cls._is_initialized = True
         return cls
+
     def is_name(cls, name:str) -> bool:
         for attr_name in cls.__dict__:
             if name == attr_name:
