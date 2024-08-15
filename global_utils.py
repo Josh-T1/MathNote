@@ -26,12 +26,14 @@ config = get_config()
 
 
 class SectionNamesDescriptor:
-    def __init__(self, name, value):
+    def __init__(self, name: str, value: str):
         self.name = name
         self.value = value
 
     def __get__(self, instance, owner=None):
         return self
+    def __str__(self):
+        return self.value
 
 class ImmutableMeta(type):
     _is_initialized = False

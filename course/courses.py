@@ -1,7 +1,6 @@
 from typing import Union
 from math import ceil
 from pathlib import Path
-import logging
 import os
 from datetime import datetime
 import json
@@ -12,6 +11,8 @@ import subprocess
 This module could probably use some testing and a re write...
 Also needs documentation. Getting tired of deciphering old code
 """
+logger = logging.getLogger("course")
+
 def number2filename(n: int):
     return 'lec_{0:02d}.tex'.format(n)
 
@@ -20,6 +21,8 @@ def filename2number(s: str):
 
 class Lecture():
     def __init__(self, file_path: Path) -> None:
+        if not isinstance(file_path, Path):
+            raise ValueError("file path must be type 'Path'")
         self.path = file_path
 
     def number(self) -> int:
@@ -34,6 +37,11 @@ class Lecture():
     def last_edit(self) -> float:
         """ Returns most recent edit in seconds """
         return self.path.stat().st_mtime
+
+    def __eq__(self, other):
+        if not isinstance(other, Lecture):
+            return False
+        return other.path == self.path
 
 class Course():
     """
@@ -51,8 +59,7 @@ class Course():
         self.main_file = path / "main.tex"
         self.backup_path = path / "backup"
         self._course_info: dict | None = None
-        self._lectures: Union[None, list] = None
-        self._logger = logging.getLogger(__name__ + "Course")
+        self._lectures: None | list[Lecture] = None
 
 
     def last_edit(self):
@@ -60,6 +67,12 @@ class Course():
         if not self.lectures:
             return None
         return max([lecture.last_edit() for lecture in self.lectures])
+
+    def open_main(self):
+        if not (self.path / "main.pdf").is_file():
+        #compile everytime?
+            self.compile_main()
+        subprocess.run(["open", f"{self.path / 'main.pdf'}"], stdout=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
 
     @property
     def course_info(self) -> dict:
@@ -72,17 +85,17 @@ class Course():
 
     def _load_course_info(self) -> dict:
         with open(self.path / "course_info.json", 'r') as f:
-            self._info = json.load(f)
+            info = json.load(f)
 
-        self._info["weekdays"] = [] if not self._info["weekdays"] else self._weekdays_string_to_list(self._info["weekdays"])
-        self._info["name"] = self.name
-        return self._info
+        info["weekdays"] = [] if not info["weekdays"] else self._weekdays_string_to_list(info["weekdays"])
+        info["name"] = self.name
+        return info
 
     def this_semester(self) -> bool:
         """
         returns: True if class is active this semester """
         # add logging
-        end_date = self._info.get("end-date", "")
+        end_date = self.course_info.get("end-date", "")
         if not end_date:
             return False
         return datetime.strptime(end_date, "%Y-%m-%d") > datetime.today()
@@ -122,7 +135,7 @@ class Course():
         try:
             res = [int(weeday_int_map[day]) for day in self.course_info["weekdays"]]
         except KeyError:
-            self._logger.warning("Invalid 'Weeday' in course_info.json file")
+            logger.warning("Invalid 'Weeday' in course_info.json file")
             res = []
         return res
 
@@ -170,6 +183,7 @@ class Course():
 
     def get_week(self, lecture: Lecture) -> int:
         """
+        TODO: week can not be determined without additional info of schedule
         returns: the week as int (1 indexed).
         * returns 0 when week can not be determined from lecture object
         """
@@ -181,7 +195,7 @@ class Course():
         """ Update main.tex with new lectures
         lecture_nums: list of all numbers corresponds to a lecture
         """
-        self._logger.debug("Updating main.tex")
+        logger.debug("Updating main.tex")
         header, body, footer = self.get_header_footer(self.main_file)
         body = ''.join([r'\input{lectures/' + number2filename(number) + '}\n' for number in lecture_nums])
         self.main_file.write_text(header + body + footer)
@@ -191,10 +205,10 @@ class Course():
         new_lecture_number = 1 if not self.lectures else self.lectures[-1].number() + 1
         new_lecture_path = self.lectures_path / number2filename(new_lecture_number)
 
-        self._logger.info(f"Creating lecture: {new_lecture_path}")
+        logger.info(f"Creating lecture: {new_lecture_path}")
         new_lecture_path.touch() # Copy file template instead of touch?
 #        new_lecture_path.write_text(f'\\{{lecture{{{new_lecture_number}}}}}\n')
-        self._logger.debug("Updating main.tex file")
+        logger.debug("Updating main.tex file")
         self.update_lectures_in_master([i for i in range(1, new_lecture_number + 1)]) # TODO test
 
         new_lecture = Lecture(new_lecture_path)
@@ -207,11 +221,11 @@ class Course():
         """ Compile main file
         returns: error code. e.i {0, 1}
         """
-        self._logger.debug(f"Attempting to compile {self.main_file}")
+        logger.debug(f"Attempting to compile {self.main_file}")
         result = subprocess.run(
-                ['latexmk', '-f', '-interaction=nonstopmode', str(self.main_file)],
-                stdout = subprocess.STDOUT,
-                stderr = subprocess.STDOUT,
+                ['latexmk', '-f', '-pdflatex="pdflatex -interaction=nonstopmode"', str(self.main_file)],
+                stdout = subprocess.DEVNULL,
+                stderr = subprocess.DEVNULL,
                 cwd=self.path
                 )
         return result.returncode
@@ -224,10 +238,13 @@ class Course():
     def __repr__(self) -> str:
         return f"{__class__}(path={self.path}, lectures={self.lectures})"
 
-    def __contains__(self, other) -> bool: # Make sure isinstance is corrent... backwards args?
-        if not isinstance(Lecture, other):
+    def __contains__(self, other) -> bool:
+        if not isinstance(other, Lecture):
             return False
-        return other in self.lectures
+        for lecture in self.lectures:
+            if lecture == other:
+                return True
+        return False
 
 
 class Courses():
@@ -236,7 +253,6 @@ class Courses():
         self.config = config
         self.root = Path(config["note-path"])
         self._courses = {}
-        self.logger = logging.getLogger("Courses")
 
     def _find_courses(self, _key = lambda c: c.name) -> list[Course]:
         """ TODO: sort by last edited
@@ -290,7 +306,7 @@ class Courses():
         course = self.courses.get(name, None)
         # prevent overiding course
         if course != None:
-            self.logger.info(f"Failed to create, course with name={name} already exists")
+            logger.info(f"Failed to create, course with name={name} already exists")
             raise ValueError(f"Attempting to create course with existing name: {name}")
 
         course_path = self.root / name

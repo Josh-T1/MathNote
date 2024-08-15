@@ -54,13 +54,17 @@ class FlashcardCommand(BaseCommand):
     @staticmethod
     def _has_dependecies():
         dependencies = [
-                "pdflatex",
-                "preview"
+                (None, "latexmk"),
+                (None, "tlmgr"),
+                ("tlmgr","preview"),
                 ]
         failed = set()
-        for dependency in dependencies:
+        for package_manager, dependency in dependencies:
             try:
-                subprocess.run([dependency, "--version"], check=True)
+                if package_manager is None:
+                    subprocess.run([dependency, "--version"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                else:
+                    subprocess.run([package_manager, dependency, "--version"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             except FileNotFoundError:
                 failed.add(dependency)
                 print(f"Missing dependency: {dependency}")
@@ -71,9 +75,9 @@ class FlashcardCommand(BaseCommand):
     def _ensure_import(cls):
         if cls._app is None or cls._window is None or cls._model is None or cls._compilation_manager is None or cls._controller is None:
             from PyQt6.QtWidgets import QApplication
-            from .gui.window import MainWindow
-            from .gui.flashcard_model import FlashcardModel, TexCompilationManager
-            from .gui.controller import FlashcardController
+            from .flashcard.window import MainWindow
+            from .flashcard.flashcard_model import FlashcardModel, TexCompilationManager
+            from .flashcard.controller import FlashcardController
             from .global_utils import get_config
             cls._app = QApplication([])
             cls._window = MainWindow

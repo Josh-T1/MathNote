@@ -1,3 +1,4 @@
+from enum import Enum
 from pathlib import Path
 import json
 from typing import Iterable, Union, Generator, List, Callable
@@ -7,6 +8,7 @@ import logging
 from abc import abstractmethod, ABC
 from dataclasses import dataclass, field
 from ..global_utils import SectionNamesDescriptor, config, SectionNames
+
 logger = logging.getLogger(__name__)
 
 """
