@@ -1,33 +1,19 @@
 {  
-        "note-path": "/Users/joshuataylor/Documents/Notes/UofC",
+        "note-path": "",
 
-        "lecture-template" : "/Users/joshuataylor/.config/latex/lecture_template.tex",
+        "lecture-template" : "",
         
-        "main-template" : "/Users/joshuataylor/.config/latex/main_template.tex",
+        "main-template" : "",
 
-        "figure-template" : "/Users/joshuataylor/.config/inkscape/figures/plain_template.svg",
+        "figure-template" : "",
 
-        "macros-path": "/Users/joshuataylor/documents/notes/uofc/macros.tex",
+        "macros-path": "",
 
         "macro-names": ["mlim", "norm", "squarebk", "roundbk", "curlybk", "anglebk", "abs", "operator","rline", "uline", "uto"],
 
         "section-names": {"DEFINITION": "defin", "THEOREM": "theo", "DERIVATION": "der", "PROOF": "pf", "COROLLARY": "corollary", "LEMMA": "lemma", "PROPOSITION": "proposition"},
 
-        "inkscape-exec" : "/Applications/inkscape.app/contents/macos/./inkscape",
-
-        "font" : "monospace",
-
-        "font-size" : "10",
-
-        "export-dpi" : "600",
-
-        "user-shortcuts-path": "/Users/joshuataylor/documents/python/MyProjects/MathNote/shortcut_manager/user_shortcuts.py",
-        
-        ".data": "/Users/joshuataylor/documents/python/MyProjects/MathNote/.data",
-
-        "user-shortcuts-config": {
-            "subprocess_-path": "/Users/joshuataylor/documents/python/myprojects/mathnote/shortcut_manager/subprocess_.py"
-        },
+        "inkscape-exec" : "",
 
         "logging-config": {
             "version": 1,
@@ -46,7 +32,7 @@
                     "class": "logging.handlers.RotatingFileHandler",
                     "level": "DEBUG",
                     "formatter": "simple",
-                    "filename": "/Users/joshuataylor/Code/python/MyProjects/MathNote/logs/mathnote.log",
+                    "filename": "",
                     "maxBytes": 1000000,
                     "backupCount": 2
                     },
