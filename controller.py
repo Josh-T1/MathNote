@@ -2,40 +2,17 @@ import os
 import subprocess
 from abc import ABC, abstractmethod
 from .course.courses import Courses, Course
-from pathlib import Path
 import logging
-from typing import Union
-import shutil
-import glob
+from typing import Union, Protocol
 from .global_utils import load_json, dump_json
 
-class BaseCommand(ABC):
-    def __init__(self, project_config: dict) -> None:
-        self.project_config = project_config
-        self.courses_obj = Courses(self.project_config)
-        self._logger = logging.getLogger(__name__)
+logger = logging.getLogger("course")
 
-    def get_active(self):
-        return self.courses_obj.get_active_course()
+class Command(Protocol):
+    def cmd(self, namespace) -> None:
+        ...
 
-    @abstractmethod
-    def cmd(self, namespace):
-        pass
-
-    def get_course_info(self, arg: str) -> Union[None, list[dict]]:
-        """
-        TODO: Make sure this works
-        """
-        if arg == 'all':
-            info = [course.course_info for course in self.courses_obj.courses.values()]
-        elif arg == 'recent':
-            info = [list(self.courses_obj.courses.values())[-1].course_info]
-        else:
-            info = self.courses_obj.courses.get(arg, None)
-            info = None if info is None else [info.course_info]
-        return info
-
-class FlashcardCommand(BaseCommand):
+class FlashcardCommand(Command):
     """ Command for generating flashcards from latex files """
     _app = None
     _window = None
@@ -44,12 +21,11 @@ class FlashcardCommand(BaseCommand):
     _controller = None
     _config = None
 
-
-
     def __init__(self, project_config: dict):
-        super().__init__(project_config)
+        self.config = project_config
         self._ensure_import()
         self._has_dependecies()
+
 
     @staticmethod
     def _has_dependecies():
@@ -78,34 +54,33 @@ class FlashcardCommand(BaseCommand):
             from .flashcard.window import MainWindow
             from .flashcard.flashcard_model import FlashcardModel, TexCompilationManager
             from .flashcard.controller import FlashcardController
-            from .global_utils import get_config
             cls._app = QApplication([])
             cls._window = MainWindow
             cls._model = FlashcardModel
             cls._compilation_manager = TexCompilationManager
             cls._controller = FlashcardController
-            cls._config = get_config()
 
     def cmd(self, namespace):
         compilation_manager = self._compilation_manager() #type: ignore - self._ensure_import is always called first
         flashcard_model = self._model(compilation_manager) #type: ignore - self._ensure_import is always called first
         window = self._window() #type: ignore
-        controller = self._controller(window, flashcard_model, self._config) #type: ignore
+        controller = self._controller(window, flashcard_model, self.config) #type: ignore
         window.setCloseCallback(controller.close)
         controller.run(self._app)
         if not flashcard_model.compile_thread.stopped(): # Cant remember if I actually need this
             flashcard_model.compile_thread.wait_for_stop()
 
-class ClassCommand(BaseCommand):
+class ClassCommand(Command):
     """ Class command """
     def __init__(self, project_config):
-        super().__init__(project_config)
+        self.project_config = project_config
+        self.courses_obj = Courses(self.project_config)
 
     def handle_course_create(self, namespace):
         name = namespace.name
         if not name:
             raise ValueError("Attempted to create class without name")
-        self._logger.info(f"Creating class with name: {name}")
+        logger.info(f"Creating class with name: {name}")
         self.courses_obj.create_course(name)
         if namespace.user_input:
             self._get_user_input(self.courses_obj.courses[name])
@@ -121,7 +96,7 @@ class ClassCommand(BaseCommand):
             print("="*20)
 
     def handle_active(self) -> str | None:
-        self._logger.debug("Finding active class")
+        logger.debug("Finding active class")
         active = self.get_active()
         if isinstance(active, Course):
             active = active.name
@@ -171,119 +146,18 @@ class ClassCommand(BaseCommand):
             print("Enter a list of comma seperated days for which the course occurs. ie Monday, Tuesday")
         pass
 
-class LecCommand(BaseCommand):
-    """ This entire class can probably be removed """
-    """ Relies on bash script using stdout as stdin *** no print statements ***
-    This needs a re design. Debug funcitonality can probably be removed"""
-    def __init__(self, project_config):
-        super().__init__(project_config)
-
-    def handle_cmd(self, namespace):
-        """ This needs to be re-organized + does it make sence for debug to overide default behaviour
-        TODO: clean up cli logic
+    def get_course_info(self, arg: str) -> Union[None, list[dict]]:
         """
-        # Order matters!  if debug and clean are specified, only debug is ran. Questionalble I know
-        if namespace.debug:
-            self.handle_debug(namespace)
-#        elif namespace.clean:
-#            # Makes the assumtion you are in the target course directory
-#            self.handle_debug_clean(namespace)
-        else:
-            self.handle_open_lecture(namespace)
-        # Make this so by default it opens new lecture if last lecture was created in last 12 hours with over rider opetion in cli
-#        self.move_to_lecture(lecture_path)
-
-    def handle_debug_clean(self, namespace):
-        name = namespace.name if namespace.name != 'active' else 'all'
-        target_dir = self._find_target_dir()
-        if target_dir is None:
-            self._logger.info(f"Could not find course start path: {namespace.name}")
-            return
-        debug_files = list(target_dir.debug_path.glob("*.tex"))
-        if name != "all":
-            debug_files = [file for file in debug_files if file.name == name] # does this work
-        self._make_backup(debug_files, target_dir.backup_path)
-        self._update_lectures(debug_files, target_dir.lectures_path)
-        self.detete_files_by_stem(debug_files)
-
-    def detete_files_by_stem(self, files: list[Path]):
-        for file in files:
-            del_files = glob.glob(f"{file.stem}.*")
-            for f in del_files:
-                self._logger.info(f"Deleting file: {file}")
-                os.remove(f)
-
-    def _make_backup(self, files: list, backup_dir: Path):
-        for file in files:
-            self._logger.info(f"Copying {file} to backup dir")
-            shutil.copy(file, backup_dir / self.debug_to_lecture_name(file))
-
-    @staticmethod
-    def debug_to_lecture_name(filename: Path):
-        return str(filename.name).split('-')[1]
-
-    def _update_lectures(self, lectures: list[Path], lecture_dir: Path):
-        for lecture in lectures:
-            header, body, footer = Course.get_header_footer(lecture, end_body_pattern=r'\end{document}', end_header_pattern=r'\begin{document}')
-            path = lecture_dir / self.debug_to_lecture_name(lecture)
-            path.write_text(body)
-
-    def _find_target_dir(self) -> Union[Course, None]:
-        path = Path(os.getcwd())
-        for course in self.courses_obj.courses.values():
-            if course.path == path or course.path == path.parent:
-                return course
-        return None
-
-    def handle_debug(self, namespace):
-        """ These methods are used by debug which is a faily useless feature... """
-        # check if name is path or are u in said directory, this assumes you are in the correct directory
-        target_course = self._find_target_dir()
-
-        if target_course is None:
-            self._logger.info(f"Could not find course given start path: {namespace.name} ")
-            return
-
-        target_lecture = None
-
-        for lecture in target_course.lectures:
-            if namespace.name == lecture.name:
-                target_lecture = lecture
-                break
-
-        if target_lecture is None:
-            self._logger.info(f"Could not find {namespace.name} for course {target_course.name}")
-            return
-
-        body = target_lecture.file_path.read_text()
-        target_path = target_course.debug_dir / f"debug-{target_lecture.name}"
-        self._logger.info(f"Copying lecture-template to location: {target_path}")
-        shutil.copy(self.project_config["lecture-template"] ,target_path)
-        header, body, footer = Course.get_header_footer(target_path, end_body_pattern="\\end{document}", end_header_pattern="\\start{document}")
-        self._logger.info("Writting text to debug file")
-        target_path.write_text(header + body + footer)
-
-
-    def handle_open_lecture(self, namespace) -> Union[Path, None]:
+        TODO: Make sure this works
         """
-        TODO: IFIXLASJFLDJLKSJFlj
-        This needs to be changed. I need to simply class structes.
-        Also get_active my return None and this is not taken into account """
-        if namespace.name == 'active':
-            class_obj = self.get_active()
-
-        elif namespace.name == 'recent':
-            class_obj = None # Make this work
-
+        if arg == 'all':
+            info = [course.course_info for course in self.courses_obj.courses.values()]
+        elif arg == 'recent':
+            info = [list(self.courses_obj.courses.values())[-1].course_info]
         else:
-            class_obj = self.courses_obj.courses.get(namespace.name, None)
+            info = self.courses_obj.courses.get(arg, None)
+            info = None if info is None else [info.course_info]
+        return info
 
-        if not class_obj:
-            self._logger.info(f"No course available with {namespace.name}")
-            return
-        if namespace.debug:
-            pass
-        lecture_path = class_obj.new_lecture().path
-        print(lecture_path.parent) # This is important, gives path to bash script
-
-
+    def get_active(self):
+        return self.courses_obj.get_active_course()

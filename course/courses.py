@@ -7,10 +7,8 @@ import json
 import logging
 import shutil
 import subprocess
-"""
-This module could probably use some testing and a re write...
-Also needs documentation. Getting tired of deciphering old code
-"""
+
+
 logger = logging.getLogger("course")
 
 def number2filename(n: int):
@@ -43,7 +41,7 @@ class Lecture():
             return False
         return other.path == self.path
 
-class Course():
+class Course:
     """
     Represents university course
     """

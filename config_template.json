@@ -1,0 +1,78 @@
+{  
+        "note-path": "/Users/joshuataylor/Documents/Notes/UofC",
+
+        "lecture-template" : "/Users/joshuataylor/.config/latex/lecture_template.tex",
+        
+        "main-template" : "/Users/joshuataylor/.config/latex/main_template.tex",
+
+        "figure-template" : "/Users/joshuataylor/.config/inkscape/figures/plain_template.svg",
+
+        "macros-path": "/Users/joshuataylor/documents/notes/uofc/macros.tex",
+
+        "macro-names": ["mlim", "norm", "squarebk", "roundbk", "curlybk", "anglebk", "abs", "operator","rline", "uline", "uto"],
+
+        "section-names": {"DEFINITION": "defin", "THEOREM": "theo", "DERIVATION": "der", "PROOF": "pf", "COROLLARY": "corollary", "LEMMA": "lemma", "PROPOSITION": "proposition"},
+
+        "inkscape-exec" : "/Applications/inkscape.app/contents/macos/./inkscape",
+
+        "font" : "monospace",
+
+        "font-size" : "10",
+
+        "export-dpi" : "600",
+
+        "user-shortcuts-path": "/Users/joshuataylor/documents/python/MyProjects/MathNote/shortcut_manager/user_shortcuts.py",
+        
+        ".data": "/Users/joshuataylor/documents/python/MyProjects/MathNote/.data",
+
+        "user-shortcuts-config": {
+            "subprocess_-path": "/Users/joshuataylor/documents/python/myprojects/mathnote/shortcut_manager/subprocess_.py"
+        },
+
+        "logging-config": {
+            "version": 1,
+            "disable_existing_loggers": false,
+            "filters": {},
+
+            "formatters": {
+                "simple": {
+                    "format": "[%(asctime)s][%(levelname)s][%(name)s] %(message)s",
+                    "datefmt": "%Y-%m-%d %H:%M:%S"
+                    }
+                },
+            
+            "handlers": {
+                "file": {
+                    "class": "logging.handlers.RotatingFileHandler",
+                    "level": "DEBUG",
+                    "formatter": "simple",
+                    "filename": "/Users/joshuataylor/Code/python/MyProjects/MathNote/logs/mathnote.log",
+                    "maxBytes": 1000000,
+                    "backupCount": 2
+                    },
+                "stdout": {
+                    "class": "logging.StreamHandler",
+                    "level": "INFO",
+                    "formatter": "simple",
+                    "stream": "ext://sys.stdout"
+                    }
+                },
+
+            "loggers": {
+                "course": {
+                    "level": "DEBUG",
+                    "handlers": ["file", "stdout"]
+                },
+                "flashcard": {
+                    "level": "DEBUG",
+                    "handlers": ["file", "stdout"]
+                },
+                "cli": {
+                    "level": "DEBUG",
+                    "handlers": ["file", "stdout"]
+                }
+            }
+        }
+
+}    
+

@@ -9,7 +9,7 @@ from abc import abstractmethod, ABC
 from dataclasses import dataclass, field
 from ..global_utils import SectionNamesDescriptor, config, SectionNames
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("course")
 
 """
 parse_tex.py aims to provide a customizable pipeline that takes in file paths (.tex files) and returns 'cleaned' tex. This cleaned latex code can then
@@ -117,10 +117,13 @@ class Flashcard:
     def add_info(self, name: str, info: str):
         self.additional_info[name] = info
 
-    def __str__(self):
+    def __repr__(self):
         question = "..." if self.question else 'None'
         answer = "..." if self.answer else 'None'
-        return f"Flashcard(question={question}, answer={answer}, pdf_answer_path={self.pdf_question_path}, pdf_question_path={self.pdf_answer_path})" #Blindly using repr() as suggested by chat gpt to escape characters.. that has never created issues for me
+        return f"Flashcard(question={question}, answer={answer}, pdf_answer_path={self.pdf_question_path}, pdf_question_path={self.pdf_answer_path})"
+
+    def __str__(self):
+        return f"Flashcard(question={self.question}, answer={self.answer}, pdf_answer_path={self.pdf_question_path}, pdf_question_path={self.pdf_answer_path})"
 
 
 class Stage(ABC):
@@ -201,6 +204,14 @@ class TexDataGenerator:
             return_value = TrackedString(file_contents, source_history=source_history)
             yield return_value
 
+class RemoveFramedText(Stage):
+    # Hack solution, will not substitute all sections correctly
+    def __init__(self):
+        ...
+    def process(self, data: TrackedString) -> TrackedString:
+        pattern = r"\\framedtext\{[^}]*\}"
+        return data.sub(pattern, "")
+
 
 class CleanStage(Stage):
     def __init__(self, macros: dict) -> None:
@@ -208,7 +219,7 @@ class CleanStage(Stage):
         self.macros = macros
 
     def process(self, data: TrackedString) -> TrackedString:
-        logger.info(f"Starting {self.process}")
+        logger.debug(f"Starting {self.process}")
         tracked_string = self.remove_comments(data)
         tracked_string = self.remove_macros(tracked_string)
         logger.debug(f"Finished {self.process}")
@@ -454,10 +465,10 @@ class FlashcardBuilder(BuildFlashcardStage):
         return flashcards
 
     def build(self, data: TrackedString) -> list[Flashcard]:
-        logger.info(f"Calling {__class__.__name__}.process")
+        logger.debug(f"Calling {__class__.__name__}.process")
         chunk_flashcards = self.process_chunk(data)
 #        chunk_flashcards = self.re_format_flashcards(chunk_flashcards)
-        logger.debug(f"Returning {chunk_flashcards}")
+        logger.debug(f"Returning {repr(chunk_flashcards)}")
         return chunk_flashcards
 
     def add_subsection_finder(self, subsection_finder: SubSectionFinder):
@@ -541,7 +552,7 @@ def load_macros(macros_path: Path, macro_names: list[str]) -> dict[str,dict]:
             }
     returns: dict of the form {cmd_name: {args: #, tex_cmd: ""}}
     """
-    logger.info(f"Calling load_macros with macros_path={macros_path}, macros_names:{macro_names}")
+    logger.debug(f"Calling load_macros with macros_path={macros_path}, macros_names:{macro_names}")
     macros = dict()
     document = Path(macros_path).read_text().splitlines()
     pattern = r'\\newcommand\{(.*?)\}\[(.*?)\]'
