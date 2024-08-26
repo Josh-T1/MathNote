@@ -121,11 +121,14 @@ class FlashcardController:
             message = f"Source: {source}. Latex: {str(tracked_string)}"
         self.view.flashcard_info_button().set_message(message)
 
+    def create_flashcards_from_file(self, path, sections):
+        pass
+
     def create_flashcards(self):
         """ TODO : Using a thread to load flashcards is essentailly pointless as we dealing with cpu bound task not IO
         If we implement multiprocessing we have to avoid lock objects as there is some issues with serializing the object...
         We an use Queue but then we have no __len__() or clear() methods... have fun"""
-        course_name, section_names, weeks = self.get_flashcard_pipeline_config()
+        course_name, section_names, weeks, random = self.get_flashcard_pipeline_config()
         course = self.courses.get_course(course_name)
 
         # catch user errors
@@ -136,29 +139,30 @@ class FlashcardController:
 
         paths = [lecture.path for lecture in course.lectures if course.get_week(lecture) in weeks]
         logger.info(f"Creating flashcards from {len(paths)} paths")
-        load_thread = threading.Thread(target=self.model.load_flashcards, args=(section_names, paths))
+        load_thread = threading.Thread(target=self.model.load_flashcards, args=(section_names, paths, random))
         load_thread.start()
 
-    def get_flashcard_pipeline_config(self) -> tuple[str, list[SectionNamesDescriptor], set[int]]:
+    def get_flashcard_pipeline_config(self) -> tuple[str, list[SectionNamesDescriptor], set[int], bool]:
         """ Retreives user config from widgets. We need to do error checking... what if no boxes are checked """
+        random = self.view.random_checkbox().isChecked()
         course_name = self.view.course_combo().currentText()
         checked_sections = self._get_checked_items_from_listView(self.view.section_list())
         weeks_items = self._get_checked_items_from_listView(self.view.filter_by_week_list())
         weeks_text = [week.text() for week in weeks_items]
         # Clean filter by weeks params
-        if "All" in weeks_text or not weeks_text:
+        if "ALL" in [week.upper() for week in weeks_text] or not weeks_text:
             weeks = {i for i in range(1, 13+1)} # TODO: verify weeks
         else:
             weeks = {int(week.split(" ")[-1]) for week in weeks_text}
 
         # Clean checked section params
         section_names_pretty = [item.text().upper() for item in checked_sections]
-        if "All" in section_names_pretty:
+        if "ALL" in [section.upper() for section in section_names_pretty]:
             section_names = [member for member in SectionNames]
         else:
             section_names = [member for member in SectionNames if member.name in section_names_pretty]
 #            section_names = [getattr(SectionNames, section_pretty).value for section_pretty in section_names_pretty if hasattr(SectionNames, section_pretty)]
-        return course_name, section_names, weeks
+        return course_name, section_names, weeks, random
 
     def _get_checked_items_from_listView(self, listview: QListView):
         """ Given a QListView object, all items that are in the 'checked' state are returned """
@@ -179,12 +183,10 @@ class FlashcardController:
         return source
 
     def open_main(self):
-        source = self._get_pdf_source()
-        if source is None: return
-        lecture = Lecture(Path(source))
-        for course in self.courses.courses.values():
-            if lecture in course:
-                course.open_main()
+        course_name, *_ = self.get_flashcard_pipeline_config()
+        course = self.courses.courses.get(course_name, None)
+        if course is not None:
+            course.open_main()
 
     def launch_iterm(self):
         source = self._get_pdf_source()

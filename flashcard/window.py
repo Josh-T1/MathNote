@@ -2,7 +2,7 @@ from collections.abc import Callable
 from logging import log
 from pathlib import Path
 from types import FunctionType
-from PyQt6.QtWidgets import (QComboBox, QHBoxLayout, QLabel, QLineEdit, QListView, QListWidget, QListWidgetItem, QMessageBox, QSizePolicy, QSpacerItem, QVBoxLayout, QWidget, QPushButton,
+from PyQt6.QtWidgets import (QCheckBox, QComboBox, QHBoxLayout, QLabel, QLineEdit, QListView, QListWidget, QListWidgetItem, QMessageBox, QSizePolicy, QSpacerItem, QVBoxLayout, QWidget, QPushButton,
                              QMainWindow, QSpacerItem, QSizePolicy, QScrollArea)
 from PyQt6.QtPdfWidgets import QPdfView
 from PyQt6.QtPdf import QPdfDocument
@@ -82,8 +82,11 @@ class VConfigBar(QWidget):
         self.create_flashcards_button = QPushButton("Create Flashcards")
         self.open_main = QPushButton("Open main")
         self.launch_iterm_button = QPushButton("Launch iterm")
+        self.random_checkbox_label = QLabel("Randomize")
+        self.random_checkbox = QCheckBox()
 
     def _configure_widgets(self):
+        self.random_checkbox.setChecked(True)
 #        self.dropdown.setMaximumWidth(100)
         self.course_combo_label.setText("Select Course")
         self.section_list_label.setText("Select Section")
@@ -124,6 +127,8 @@ class VConfigBar(QWidget):
         self.config_layout.addWidget(self.section_list)
         self.config_layout.addWidget(self.filter_by_week_list_label)
         self.config_layout.addWidget(self.filter_by_week_list)
+        self.config_layout.addWidget(self.random_checkbox_label)
+        self.config_layout.addWidget(self.random_checkbox)
         self.config_layout.addWidget(self.create_flashcards_button)
         self.config_layout.addWidget(self.open_main)
         self.config_layout.addWidget(self.launch_iterm_button)
@@ -378,6 +383,9 @@ class MainWindow(QMainWindow):
 
     def filter_by_week_list(self):
         return self.config_bar.filter_by_week_list
+
+    def random_checkbox(self):
+        return self.config_bar.random_checkbox
 
     def show_proof_button(self):
         return self.flashcard_button_bar.show_proof_button

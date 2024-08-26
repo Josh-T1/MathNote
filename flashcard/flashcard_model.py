@@ -5,9 +5,10 @@ from pathlib import Path
 import time
 import subprocess
 import hashlib
-from typing import OrderedDict
+from typing import OrderedDict, Deque
 from ..course import parse_tex
 import logging
+from collections import deque
 from ..global_utils import SectionNames, SectionNamesDescriptor, config
 
 
@@ -306,7 +307,7 @@ class FlashcardModel:
         """
         self.cache_dir = Path(__file__).parent.resolve() / "cache_dir"
         self.compiler = compiler
-        self.flashcards: list[parse_tex.Flashcard] = []
+        self.flashcards: Deque[parse_tex.Flashcard] = deque()
         self.flashcard_cache = parse_tex.FlashcardCache(self.cache_dir / "flashcards")
         self.compiled_flashcards: FlashcardDoubleLinkedList = FlashcardDoubleLinkedList()
         self.flashcard_lock = threading.RLock()
@@ -381,7 +382,7 @@ class FlashcardModel:
             random.shuffle(paths)
 
         data_iterable = parse_tex.TexDataGenerator(paths)
-        print(self.macros | parse_tex.get_hack_macros())
+        # TODO fix get_hack_macros
         clean_data_stage = parse_tex.CleanStage(self.macros | parse_tex.get_hack_macros())
         filter_and_build_flashcards = parse_tex.FlashcardBuilder(parse_tex.MainSectionFinder(section_names))
 
@@ -394,13 +395,14 @@ class FlashcardModel:
             if shuffle:
                 random.shuffle(flash_cards)
             with self.flashcard_lock:
-                self.flashcards.extend(flash_cards)
+                for flashcard in flash_cards:
+                    self.flashcards.append(flashcard)
             logger.debug(f"Loaded flashcards: {flash_cards}")
 
     def next_flashcard(self) -> parse_tex.Flashcard:
         """ Retreive next flashcard, implements blocking behaviour when there are no compiled cards however one is currently being compiled """
         # If there is a flash card with compiled latex return that card
-        while self.flashcards and (not self.compiled_flashcards.current or not self.compiled_flashcards.current.next):
+        while len(self.flashcards) != 0 and (not self.compiled_flashcards.current or not self.compiled_flashcards.current.next):
             logger.debug(f"{repr(self.next_flashcard)} waiting on conditions self.flashcards and (not self.compiled_flashcards or not self.compiled_flashcards.current.next)")
             time.sleep(1)
         return self._next_compiled_flashcard()
@@ -444,10 +446,10 @@ class FlashcardModel:
             time.sleep(1)
 
         with self.flashcard_lock:
-            if not self.flashcards:
+            if len(self.flashcards) == 0:
                 return
 
-            card = self.flashcards.pop()
+            card = self.flashcards.popleft()
             logger.debug(repr(card))
             try:
                 self.compiler.compile_card(card)
