@@ -1,6 +1,11 @@
 # Project Description
 
 ## TODO
+1. Open from lecture file
+1. Button for random
+1. Write parser (real one)
+
+
 - Finish writing documentation
 - Re organize cli interface. We currently have `main_gui.py` and `main_cli.py`.
   Would probably make much more sense to merge `main_gui.py` into `main_cli.py`.

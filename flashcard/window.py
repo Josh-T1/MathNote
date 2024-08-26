@@ -381,8 +381,3 @@ class MainWindow(QMainWindow):
 
     def show_proof_button(self):
         return self.flashcard_button_bar.show_proof_button
-#    def contextMenuEvent(self, event):
-#        context = QMenu(self)
-#        context.addAction(QAction("Test1", self))
-#        context.addAction(QAction("Test1", self))
-#        context.exec(event.globalPos())

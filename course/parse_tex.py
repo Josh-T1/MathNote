@@ -33,7 +33,7 @@ MACRO_PATH = config["macros-path"]
 
 # TODO:  load these in a more dynmaic way
 MACRO_NAMES = ["mlim", "norm", "squarebk", "roundbk", "curlybk", "anglebk", "abs", "operator", "rline",
-               "uline", "mylist"]
+               "uline", "mylist", "uto"]
 
 # this is unfinished as I realized I do not need to convert tex to mathjax. Could be usefull eventually
 TEX_PATTERN_TO_MATHJAX = {r"\\begin\{equation\*\}": r"\[",
@@ -204,15 +204,6 @@ class TexDataGenerator:
             return_value = TrackedString(file_contents, source_history=source_history)
             yield return_value
 
-class RemoveFramedText(Stage):
-    # Hack solution, will not substitute all sections correctly
-    def __init__(self):
-        ...
-    def process(self, data: TrackedString) -> TrackedString:
-        pattern = r"\\framedtext\{[^}]*\}"
-        return data.sub(pattern, "")
-
-
 class CleanStage(Stage):
     def __init__(self, macros: dict) -> None:
         super().__init__()
@@ -300,6 +291,8 @@ class CleanStage(Stage):
         return new_tex
 
     def add_arg_spaces(self, command: str, arg: TrackedString):
+        if "#1" not in command:
+            return TrackedString("")
         command_split = command.split("#1")
         if command_split[1][0].isalpha():
             arg += " "
@@ -543,6 +536,10 @@ def mathjax_to_html(tex: str):
         counter = counter + len(match.group(0)) + 1 # This sets counter equal to last character in command, +1 to move to character after command
 
     return html
+
+def get_hack_macros():
+    """tmp fix for removing macros"""
+    return {"framedtext": {"num_args": '1', "command": ""}}
 
 def load_macros(macros_path: Path, macro_names: list[str]) -> dict[str,dict]:
     r""" Gets all user commands from self.macros_path

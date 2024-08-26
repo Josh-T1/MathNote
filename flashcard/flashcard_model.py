@@ -381,14 +381,14 @@ class FlashcardModel:
             random.shuffle(paths)
 
         data_iterable = parse_tex.TexDataGenerator(paths)
-        remove_framed_tex = parse_tex.RemoveFramedText()
-        clean_data_stage = parse_tex.CleanStage(self.macros)
+        print(self.macros | parse_tex.get_hack_macros())
+        clean_data_stage = parse_tex.CleanStage(self.macros | parse_tex.get_hack_macros())
         filter_and_build_flashcards = parse_tex.FlashcardBuilder(parse_tex.MainSectionFinder(section_names))
 
         filter_and_build_flashcards.add_subsection_finder(parse_tex.ProofSectionFinder(
             SectionNames.PROOF, [SectionNames.THEOREM, SectionNames.PROPOSITION, SectionNames.LEMMA, SectionNames.COROLLARY]) #type: ignore __getattr__ returns SectionNamesDescriptor not str
                                                               )
-        pipeline = parse_tex.FlashcardsPipeline(data_iterable, filter_and_build_flashcards, [remove_framed_tex, clean_data_stage])
+        pipeline = parse_tex.FlashcardsPipeline(data_iterable, filter_and_build_flashcards, [clean_data_stage])
 
         for flash_cards in pipeline:
             if shuffle:
