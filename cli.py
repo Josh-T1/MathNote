@@ -27,9 +27,16 @@ class_parser_arguments = [
         ("-u", "--user-input", {"action": "store_true",
                                 "help": "Inizializes course_info.json through user input. Must be used with --create -c flag"}),
         ]
+
+
 # add m option for compilling and opening mainfile
+flashcard_parser_arguments = [
+        ("-f", "--file", {"nargs": 1, "help": "Load flashcards from file path. Must be full path, or flag must be set with '-d'/'--dir'"}),
+        ("-d", "--dir", {"nargs": 1, "help": "set current working directory"})
+        ]
 
-
+for arg in flashcard_parser_arguments:
+    flashcard_parser.add_argument(*arg[:-1], **arg[-1])
 
 for arg in class_parser_arguments:
     class_parser.add_argument(*arg[:-1], **arg[-1])

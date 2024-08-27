@@ -4,6 +4,9 @@ import json
 """ Config """
 CONFIG_PATH = Path(__file__).parent / "config.json"
 
+class LatexCompilationError(Exception):
+    pass
+
 def get_config():
     with open(CONFIG_PATH, 'r') as f:
         config = json.load(f)

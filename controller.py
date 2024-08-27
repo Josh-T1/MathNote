@@ -1,6 +1,5 @@
-import os
+from pathlib import Path
 import subprocess
-from abc import ABC, abstractmethod
 from .course.courses import Courses, Course
 import logging
 from typing import Union, Protocol
@@ -9,8 +8,7 @@ from .global_utils import load_json, dump_json
 logger = logging.getLogger("course")
 
 class Command(Protocol):
-    def cmd(self, namespace) -> None:
-        ...
+    def cmd(self, namespace) -> None: ...
 
 class FlashcardCommand(Command):
     """ Command for generating flashcards from latex files """
@@ -51,9 +49,9 @@ class FlashcardCommand(Command):
     def _ensure_import(cls):
         if cls._app is None or cls._window is None or cls._model is None or cls._compilation_manager is None or cls._controller is None:
             from PyQt6.QtWidgets import QApplication
-            from .flashcard.window import MainWindow
+            from .gui.window import MainWindow
             from .flashcard.flashcard_model import FlashcardModel, TexCompilationManager
-            from .flashcard.controller import FlashcardController
+            from .flashcard.flashcard_controller import FlashcardController
             cls._app = QApplication([])
             cls._window = MainWindow
             cls._model = FlashcardModel
@@ -65,10 +63,27 @@ class FlashcardCommand(Command):
         flashcard_model = self._model(compilation_manager) #type: ignore - self._ensure_import is always called first
         window = self._window() #type: ignore
         controller = self._controller(window, flashcard_model, self.config) #type: ignore
+        if (file := self.build_file(namespace)) is not None:
+            controller.create_flashcards_from_file(file)
+#            controller.create_flashcards_from_file(file, 'All')
         window.setCloseCallback(controller.close)
         controller.run(self._app)
         if not flashcard_model.compile_thread.stopped(): # Cant remember if I actually need this
             flashcard_model.compile_thread.wait_for_stop()
+
+    def build_file(self, namespace) -> None | Path:
+        if namespace.file is None:
+            return None
+        file = Path(namespace.file[0])
+        if file.is_file():
+            return file
+
+        if namespace.dir is not None:
+            full_path = Path(namespace.dir[0]) / file
+            if full_path.is_file():
+                return full_path
+
+        return None
 
 class ClassCommand(Command):
     """ Class command """

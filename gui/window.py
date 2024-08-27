@@ -1,7 +1,4 @@
 from collections.abc import Callable
-from logging import log
-from pathlib import Path
-from types import FunctionType
 from PyQt6.QtWidgets import (QCheckBox, QComboBox, QHBoxLayout, QLabel, QLineEdit, QListView, QListWidget, QListWidgetItem, QMessageBox, QSizePolicy, QSpacerItem, QVBoxLayout, QWidget, QPushButton,
                              QMainWindow, QSpacerItem, QSizePolicy, QScrollArea)
 from PyQt6.QtPdfWidgets import QPdfView
@@ -10,14 +7,13 @@ from PyQt6.QtCore import QRect, pyqtSignal, QPoint
 from PyQt6.QtGui import QColor, QFont, QPainter, QPalette, QStandardItem, QStandardItemModel
 from ..course.parse_tex import Flashcard
 import logging
-
+from ..global_utils import LatexCompilationError
 logger = logging.getLogger("flashcard")
 
 ZOOM_FACTOR = 2.5
 WEEKS_IN_SEMESTER = 13
 
-class LatexCompilationError(Exception):
-    pass
+
 
 class InfoButton(QWidget):
     clicked = pyqtSignal()

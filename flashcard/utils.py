@@ -1,6 +1,15 @@
 import iterm2
 from functools import partial
 
+def latex_template(tex: str) -> str:
+    """ Flashcard contents are compiled with the following template """
+    return fr"""
+\documentclass[preview]{{standalone}}
+\usepackage{{amsmath,amsfonts,amsthm,amssymb,mathtools}}
+\begin{{document}}
+{tex}
+\end{{document}}"""
+
 async def _main(connection, filename):
     app = await iterm2.async_get_app(connection)
     window = app.current_window

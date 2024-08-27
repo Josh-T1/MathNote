@@ -10,7 +10,7 @@ from ..course import parse_tex
 import logging
 from collections import deque
 from ..global_utils import SectionNames, SectionNamesDescriptor, config
-
+from .utils import latex_template
 
 logger = logging.getLogger("flashcard")
 
@@ -210,16 +210,6 @@ class TexCompilationManager:
         trucated_hash = hash[:hash_length]
         return trucated_hash
 
-    @staticmethod
-    def latex_template(tex: str) -> str:
-        """ Flashcard contents are compiled with the following template """
-        return fr"""
-\documentclass[preview]{{standalone}}
-\usepackage{{amsmath,amsfonts,amsthm,amssymb,mathtools}}
-\begin{{document}}
-{tex}
-\end{{document}}"""
-
     def compile_card(self, card: parse_tex.Flashcard) -> None:
         """ Attemps to compile flashcard question/answer latex. If compilation fails """
         card.pdf_question_path = self.compile_latex(card.question) # str needed to convert TrackedString -> str for hash value
@@ -275,7 +265,7 @@ class TexCompilationManager:
         with tempfile.TemporaryDirectory() as tmpdir:
             tex_file_path = Path(tmpdir) / "temp.tex"
             pdf_file_path = Path(tmpdir) / "temp.pdf"
-            tex_file_path.write_text(self.latex_template(tex_str), encoding='utf-8')
+            tex_file_path.write_text(latex_template(tex_str), encoding='utf-8')
 
 
 
