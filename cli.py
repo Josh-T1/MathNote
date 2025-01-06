@@ -18,14 +18,20 @@ flashcard_parser = subparsers.add_parser("flashcard", help="Generate flashcards 
 class_parser_arguments = [
         ("name",{"nargs": "?",
                  "help": "Name of new class"}),
-        ("-c", "--create", {"action": "store_true",
-                            "help" :"Inizializes json file with user input otherwise a template json file is created"}),
+        ("-n", "--new-course", {"action": "store_true",
+                            "help" :"Create new class and initialize directory. To automate initialization of course information see '-u' flag"}),
         ("-i", "--information", {"action": "store_true",
                                  "help": "Displays class information"}), # seperate between private and public class info
-        ("-a", "--active", {"action": "store_true",
+        ("-c", "--current-course", {"action": "store_true",
                             "help": "Opens a new latex lecture in the 'active' class if applicable"}),
         ("-u", "--user-input", {"action": "store_true",
                                 "help": "Inizializes course_info.json through user input. Must be used with --create -c flag"}),
+        ("-o", "--open-main", {"action": "store_true",
+                                "help": "Opens main.pdf in the course directory if it exists"}),
+        ("-a", "--new-assignment", {"action": "store_true",
+                                "help": "Create new assignment"}),
+        ("-l", "--new-lecture", {"action": "store_true",
+                                "help": "Creates new lecture file and prints path to stdout"}),
         ]
 
 

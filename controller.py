@@ -2,6 +2,7 @@ from pathlib import Path
 import subprocess
 from .course.courses import Courses, Course
 import logging
+import os
 from typing import Union, Protocol
 from .global_utils import load_json, dump_json
 
@@ -91,20 +92,23 @@ class ClassCommand(Command):
         self.project_config = project_config
         self.courses_obj = Courses(self.project_config)
 
-    def handle_course_create(self, namespace):
-        name = namespace.name
-        if not name:
-            raise ValueError("Attempted to create class without name")
-        logger.info(f"Creating class with name: {name}")
-        self.courses_obj.create_course(name)
-        if namespace.user_input:
-            self._get_user_input(self.courses_obj.courses[name])
+    def create_course(self, namespace):
+        logger.info(f"Creating class with name: {namespace.name}")
+        self.courses_obj.create_course(namespace.name)
+        if namespace.user_input is not None:
+            self._get_user_input(self.courses_obj.courses[namespace.name])
 
-    def handle_course_information(self, namespace):
-        arg = namespace.name if namespace.name else 'all'
-        info = self.get_course_info(arg)
+    def get_course_information(self, arg: str):
+        if arg == 'all':
+            info = [course.course_info for course in self.courses_obj.courses.values()]
+        elif arg == 'recent':
+            info = [list(self.courses_obj.courses.values())[-1].course_info]
+        else:
+            info = self.courses_obj.courses.get(arg, None)
+            info = None if info is None else [info.course_info]
+
         if info is None:
-            print(f"There is no information given arguments: {namespace}")
+            print(f"There is no information given arguments: {arg}")
             return
         for dic in info:
             print(self.buitify_output(dic))
@@ -120,17 +124,41 @@ class ClassCommand(Command):
             print("No active courses")
 
     def cmd(self, namespace):
-        if namespace.active:
+        if (course:= namespace.name) is None:
+            if namespace.information:
+                print("Warning no class name was provided. Ignoring all flags besides '-i'")
+                self.get_course_information(namespace)
+            print("Must specify a class name")
+            return
+
+        if namespace.new_course:
+            self.create_course(namespace)
+            return
+
+        if namespace.current_course:
             self.handle_active()
 
-        elif namespace.information:
-            self.handle_course_information(namespace)
+        if namespace.information:
+            self.get_course_information(namespace)
 
-        elif namespace.create:
-            self.handle_course_create(namespace)
+        if namespace.open_main:
+            self.open_main(course)
 
+        if namespace.new_lecture:
+            course_obj = self.courses_obj.get_course(course)
+            if course_obj is None:
+                print(f"Failed to create new lecture, no course with name: {course}")
+            else:
+                course_obj.new_lecture()
+
+        if namespace.new_assignment:
+            course_obj = self.courses_obj.get_course(course)
+            if course_obj is None:
+                print(f"Failed to create new assignment, no course with name: {course}")
+            else:
+                course_obj.new_assignment()
         else:
-            raise ValueError(f"Invalid arguments passed: {namespace}")
+            print(f"Invalid arguments passed {namespace}")
 
     def _get_user_input(self, course: Course):
         path = course.path / "course_info.json"
@@ -151,28 +179,25 @@ class ClassCommand(Command):
         """ convert dictionary into a more readable string """
         return '\n'.join([f"{k}: {v}" for k, v in info.items()])
 
-
     @staticmethod
     def _additional_message(key):
         if "time" in key:
             print("Input time in format HH:MM (24 hour clock format) with leading zeros")
 
-        if "weekday" in key:
+        elif "weekday" in key:
             print("Enter a list of comma seperated days for which the course occurs. ie Monday, Tuesday")
-        pass
+        elif "date" in key:
+            print("Enter date in the format yyyy/mm/dd ")
 
-    def get_course_info(self, arg: str) -> Union[None, list[dict]]:
-        """
-        TODO: Make sure this works
-        """
-        if arg == 'all':
-            info = [course.course_info for course in self.courses_obj.courses.values()]
-        elif arg == 'recent':
-            info = [list(self.courses_obj.courses.values())[-1].course_info]
+    def open_main(self, name: str):
+        course = self.courses_obj.get_course(name)
+        if course is None:
+            print(f"Could not find course: {name}")
         else:
-            info = self.courses_obj.courses.get(arg, None)
-            info = None if info is None else [info.course_info]
-        return info
+            course.open_main()
+
+    def new_lecture(self):
+        pass
 
     def get_active(self):
         return self.courses_obj.get_active_course()

@@ -6,6 +6,7 @@ def latex_template(tex: str) -> str:
     return fr"""
 \documentclass[preview]{{standalone}}
 \usepackage{{amsmath,amsfonts,amsthm,amssymb,mathtools}}
+\usepackage{{mathrsfs}}
 \begin{{document}}
 {tex}
 \end{{document}}"""

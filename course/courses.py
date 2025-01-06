@@ -2,6 +2,7 @@ from typing import Union
 from math import ceil
 from pathlib import Path
 import os
+import re
 from datetime import datetime
 import json
 import logging
@@ -51,11 +52,9 @@ class Course:
         """
         self.path = path
         self.name: str = path.stem
-
+        self.assignment_path = path / "assignments"
         self.lectures_path = path / "lectures"
-        self.debug_path = path / "debug"
         self.main_file = path / "main.tex"
-        self.backup_path = path / "backup"
         self._course_info: dict | None = None
         self._lectures: None | list[Lecture] = None
 
@@ -110,21 +109,20 @@ class Course:
         self._lectures = sorted((Lecture(f) for f in files), key=lambda l: l.number())
         return self._lectures
 
-
     def start_time(self) -> Union[datetime, None]:
         """
         returns: course start time as datetime.datetime object if start time is found, otherwise returns None
         """
-        if self.course_info["start-time"]:
-            return datetime.strptime((self.course_info["start-time"]), "%H:%M")
+        if (start_time := self.course_info["start-time"]):
+            return datetime.strptime(start_time, "%H:%M")
         return None
 
 
     def end_time(self) -> Union[datetime, None]:
         """
         returns: course end time as datetime.datetime object if found, otherwise return None """
-        if self.course_info["end-time"]:
-            return datetime.strptime((self.course_info["end-time"]), "%H:%M")
+        if (end_time := self.course_info["end-time"]):
+            return datetime.strptime(end_time, "%H:%M")
         return None
 
     def days(self):
@@ -212,13 +210,27 @@ class Course:
         new_lecture = Lecture(new_lecture_path)
         new_lecture.path.write_text(fr'\section*{{Lecture {new_lecture.number}}}')
         self.lectures.append(new_lecture)
-
         return new_lecture
 
-    def compile_main(self):
+    def new_assignment(self):
+        files = [str(file) for file in self.assignment_path.glob('*.tex')]
+        nums = []
+        for file in files:
+            nums.extend([e for e in re.split("[^0-9]", file)])
+#        max = max([int(i) for i in nums])
+        # list assignments
+        # Get largest number
+        # increment by one
+        # copy tempalte to name
+        pass
+
+    def compile_main(self, lectures_only: bool=False):
         """ Compile main file
+        lectures_only: If True pdf will only contain lecture notes, otherwise endnotes and prelimanary sections
+        will be included
         returns: error code. e.i {0, 1}
         """
+        # Write all relevant endnotes paths, ect to input
         logger.debug(f"Attempting to compile {self.main_file}")
         result = subprocess.run(
                 ['latexmk', '-f', '-pdflatex="pdflatex -interaction=nonstopmode"', str(self.main_file)],
@@ -310,7 +322,7 @@ class Courses():
         course_path = self.root / name
         os.mkdir(course_path)
 
-        make_dirs = ["lectures", "figures", "backup", "debug"] # Add this to config file? link this to dirs in course
+        make_dirs = ["lectures", "figures", "assignments", "preliminary", "endnotes"] # Add this to config file? link this to dirs in course
         for dir in make_dirs:
             os.mkdir(course_path / dir)
 

@@ -4,19 +4,19 @@ __pycache__/
 
 # notes
 *.md
+!README.md
+
 # cached tex
 cached_tex
 
-!README.md
-
-# ignore shortcut_manager.log
+# log files
 *.log
-# Not sure what this is
+
 .data
+.git
 
 # ignore config.json
 *.json
 
 # test ideas
 playground/
-shortcuts
