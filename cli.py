@@ -1,5 +1,5 @@
 import argparse
-from .controller import ClassCommand, FlashcardCommand
+from .controller import ClassCommand, FlashcardCommand, NoteCommand
 from .global_utils import get_config
 import logging
 import logging.config
@@ -14,6 +14,7 @@ global_parser = argparse.ArgumentParser(prog="lecture", description="Cli with co
 subparsers = global_parser.add_subparsers(title="Subcommands", help="Note taking commands", dest="command")
 class_parser = subparsers.add_parser("class", help="Create class file structure and inizialize class json file")
 flashcard_parser = subparsers.add_parser("flashcard", help="Generate flashcards from .tex files")
+note_parser = subparsers.add_parser("note", help="Create latex notes")
 
 class_parser_arguments = [
         ("name",{"nargs": "?",
@@ -32,8 +33,11 @@ class_parser_arguments = [
                                 "help": "Create new assignment"}),
         ("-l", "--new-lecture", {"action": "store_true",
                                 "help": "Creates new lecture file and prints path to stdout"}),
-        ]
 
+        ]
+note_parser_arguments = [
+        ("-n", "--new-note", {"nargs": 1, "help": "create new note"})
+        ]
 
 # add m option for compilling and opening mainfile
 flashcard_parser_arguments = [
@@ -47,12 +51,16 @@ for arg in flashcard_parser_arguments:
 for arg in class_parser_arguments:
     class_parser.add_argument(*arg[:-1], **arg[-1])
 
+for arg in note_parser_arguments:
+    note_parser.add_argument(*arg[:-1], **arg[-1])
+
 args = global_parser.parse_args()
 
 
 command_mapping = {
         "class": ClassCommand,
         "flashcard": FlashcardCommand,
+        "note": NoteCommand
         }
 
 def main():

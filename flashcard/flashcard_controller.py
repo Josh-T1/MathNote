@@ -85,7 +85,7 @@ class FlashcardController:
         try:
             self.model.next_flashcard()
             self.handle_dynamic_data()
-            self.view.flashcard_type_label().setText(f"Section name: {self.model.current_card.section_name.lower()}")
+            self.view.flashcard_type_label().setText(f"Section: {self.model.current_card.section_name.lower()}")
             # create some general method for handling additional info
         except FlashcardNotFoundException as e: # Implment logging and gui message properties
             logger.error(f"Failed to show next flashcard question, {e}")

@@ -5,11 +5,21 @@ import logging
 import os
 from typing import Union, Protocol
 from .global_utils import load_json, dump_json
+from .flashcard.utils import open_file_with_vim
 
 logger = logging.getLogger("course")
 
 class Command(Protocol):
     def cmd(self, namespace) -> None: ...
+
+class NoteCommand(Command):
+    def __init__(self, project_config: dict):
+        self.config = project_config
+
+    def cmd(self, namespace):
+        if namespace.new_note:
+            name = namespace.new_note[0]
+            print(namespace.new_note)
 
 class FlashcardCommand(Command):
     """ Command for generating flashcards from latex files """

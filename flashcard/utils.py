@@ -4,12 +4,13 @@ from functools import partial
 def latex_template(tex: str) -> str:
     """ Flashcard contents are compiled with the following template """
     return fr"""
-\documentclass[preview]{{standalone}}
+\documentclass[preview, border=0.1in]{{standalone}}
 \usepackage{{amsmath,amsfonts,amsthm,amssymb,mathtools}}
 \usepackage{{mathrsfs}}
 \begin{{document}}
 {tex}
 \end{{document}}"""
+
 
 async def _main(connection, filename):
     app = await iterm2.async_get_app(connection)

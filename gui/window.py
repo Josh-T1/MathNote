@@ -5,14 +5,12 @@ from PyQt6.QtPdfWidgets import QPdfView
 from PyQt6.QtPdf import QPdfDocument
 from PyQt6.QtCore import QRect, pyqtSignal, QPoint
 from PyQt6.QtGui import QColor, QFont, QPainter, QPalette, QStandardItem, QStandardItemModel
-from ..course.parse_tex import Flashcard
 import logging
 from ..global_utils import LatexCompilationError
 logger = logging.getLogger("flashcard")
 
-ZOOM_FACTOR = 2.5
+ZOOM_FACTOR = 2
 WEEKS_IN_SEMESTER = 13
-
 
 
 class InfoButton(QWidget):
@@ -103,7 +101,8 @@ class VConfigBar(QWidget):
         self.filter_by_week_list.setMaximumHeight(150)
 
         section_list_model = QStandardItemModel()
-        self.section_list_items = ["definition", "theorem",  "lemma", "proposition", "corollary", "derivation", "All"] # Make sure to map this
+        self.section_list_items = ["definition", "theorem",  "lemma", "proposition",
+                                   "corollary", "derivation", "All"]
         for item in self.section_list_items:
             list_item = QStandardItem(item)
             list_item.setCheckable(True)
@@ -116,7 +115,6 @@ class VConfigBar(QWidget):
         self.course_combo.setMaximumWidth(150)
 
     def _add_widgets(self):
-        #Add Widgets to layout
         self.config_layout.addWidget(self.course_combo_label)
         self.config_layout.addWidget(self.course_combo)
         self.config_layout.addWidget(self.section_list_label)

@@ -1,50 +1,27 @@
-# Project Description
+# MathNote
+![flashcard](assets/flashcard.png)
 
-## TODO
-1. Open from lecture file
-1. Button for random
-1. Write parser (real one)
+This package aims to streamline the latex note taking process. This command line interface has three main commands:
 
 
-- Finish writing documentation
-- Re organize cli interface. We currently have `main_gui.py` and `main_cli.py`.
-  Would probably make much more sense to merge `main_gui.py` into `main_cli.py`.
-  In addition much of the functionality of `main_cli.py` was poorly thought out
-  and as a result needs some serious re working.
-- Write tests... This entire package is untested for the most part.
-- Delete `shortcuts` package... This was a poor attempt at implementing
-  shortcuts for Inkscape. Realized it is much easier to create a minimalistic
-  vector graphics editor and use that for in class drawing.
+1. `course`: command used for setting up the directory structure and other housekeeping tasks
+2. `flashcard`: used to generate pdf flashcards, parsed from tex files
+3. `note`: used for creating and managing short notes.
 
-## Course Package
-The course package provides an interface for quickly creating, compiling, adding images,
-and doing basic parsing of latex files. This functionality is accessed through the CLI;
-running the `MathNote/course_cli.py` file --change this . 
 
-## Gui Package
-Responsible for creating and displaying flashcards containing material from course
-lecture .Tex files. In order to use this to package you must implement specific formatting of
-lecture files. Flashcards can be created with the following 'sections':
-definitions, theorems, and derivations. All sections must have the form
+## Flashcard
+The `flashcard` command requires lecture notes to follow fairly strict formatting. In order to generate flashcards
+from a tex file, all relevant definitions, theorems, and other sections, must be contained in their own
+"namespace", having the syntax
 ```
-\{sectionName}{theoremName (thoerem) / word (defintion) / equality(derivation)}{
+\{sectionName}{ ... }{
 latex code
 }
 ```
-Theorem sections additionally allow for proofs to be displayed as flashcard
-answers along side the statement. The latex parser will check and
-see if a proof section follows the theorem; displaying the first following
-proof section if it exists. Proof boxes must be of the form:
-```
-\{sectionName}{theoremName (thoerem) / word (defintion) / equality(derivation)}{
-latex code
-}
-\{proofSectionName}{any (not displayed on flashcard but must be included)}{
-latex code
-}
-```
-For example suppose `"TODO: {"theorem": "theo", "proof": "pf"}"` is set in the
-config file, then all theorems in .tex files must follow the format
+where sectionName would be one of: "definitions, "theorem", "proof", ect.
+Additionally theorem/lemma/proposition flashcards by default include the proof as an additional "answer". Note that theorem/lemma/proposition
+sections flashcards will only have a corresponding proof when directly followed by a proof section in the tex file.
+For example:
 ```
 \theo{Pythagorean theorem}{
 pythagonrean theorem statement
@@ -53,54 +30,48 @@ pythagonrean theorem statement
 pythagorean theorem proof
 }
 ```
-where the proof box is optional
-TODO: Make sections configurable and what happens if None is places inside?
+Any Tex file following the above syntactic rules will allow for the generation of flashcards-- my personal
+approach has been to define a `newtcbtheorem` environment for each section. All sections must be specified in the
+configuration file, for more details look [configuration](#configuration)
+
+## Course
 
 
 
-# Configuration
+## Note
+
+
+
+
+## Configuration
 Any directory under under the `note-path` (see config.json setup section) with a 
 `course_info.json` file will be detected as course.
 
-## Config.json file setup
+
 Projection configurations must be set `MathNote/config.json` before the project
 us usable. 
 - `note-path`: full path to directory containing math notes. It is assumed that
    all `courses` reside in the directory `{note-path}/{course (e.g math-445)}`. 
-   Further more lectures if created manually must reside in the directory
-   `{note-path}/course_dir/lectures`. When using the CLI this is default
+   Furthermore lectures-- if created manually must reside in the directory
+   `{note-path}/{course}/lectures/`. When using the CLI this is default
    behaviour.
-- `lecture-template`: path to latex template used for lectures (is this even
-  used?)
 
 - `main-template`: Full path to main file template. Main file refers to the file
   responsible for combining all lectures into one latex file. There is a default
-  template in `MathNote/templates`, however other templates can be specified
-- `macros-path`: Full path to macros.tex file if relevant. This file specifies
+  template in `MathNote/templates` (this is used by default), however other templates can be specified
+- `macros-path`: Full path to macros.tex file, if relevant. This file specifies
   all user defined commands. 
 - `macro-name`: List of names all commands defined in macros.tex where each name
   excluded backslash. Unfortunate there is no way to do this more dynamically at
-  the moment.** Check code for specific requirement regarding valid user
-  commands. There is currently no system to parse more complex commands and as a
-  result all commands following a different format must be removed prior to
-  using this package. 
+  the moment. An example of this would be the command: 
 
-
-
-- `font`: ** not sure
-- "`font-size`: ** not sure
-- `export-dpi`: **
-- `user-shortcuts-path`: **
-- `.data` : **
-
-#### Optional config
-1. `shorcutmanager-logging-config`: standard python logging config
-** defaults
-- `svg-gui-exec`: ** implement. Command to open vector graphics editor or path to executable responsible for opening editor.
-Inkscape a great open source vector graphics editor, alternatively you could use
-my other project [[]] if you want a faster minimalistic option. Note this
-project has not been finished and has several undesirable side effect and lacks
-basic options
-
-#### Drawing config
-- 
+- `section-names`: mapping between the section names and the shorthand versions used in tex files, 
+    i.e [sectionName](#flashcard). For example one possible configuration would be
+    ```json
+    "section-names": {"DEFINITION": "defin", "THEOREM": "theo", "DERIVATION": "der",
+    "PROOF": "pf", "COROLLARY": "corollary", "LEMMA": "lemma",
+    "PROPOSITION": "proposition"},
+    ```
+    where `defin` is the section name used in the Tex file. Note that the sections in bold are the only supported 
+    sections, however by modifying the combo box options in the module gui/window, you may include the sections
+    of your choosing.
