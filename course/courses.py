@@ -8,6 +8,7 @@ import json
 import logging
 import shutil
 import subprocess
+from ..global_utils import open_cmd
 
 
 logger = logging.getLogger("course")
@@ -52,9 +53,9 @@ class Course:
         """
         self.path = path
         self.name: str = path.stem
+        self.main_path = path / "main"
         self.assignment_path = path / "assignments"
-        self.lectures_path = path / "lectures"
-        self.main_file = path / "main.tex"
+        self.lectures_path = self.main_path / "lectures"
         self._course_info: dict | None = None
         self._lectures: None | list[Lecture] = None
 
@@ -66,10 +67,11 @@ class Course:
         return max([lecture.last_edit() for lecture in self.lectures])
 
     def open_main(self):
-        if not (self.path / "main.pdf").is_file():
+        if not (self.main_path / "main.pdf").is_file():
         #compile everytime?
             self.compile_main()
-        subprocess.run(["open", f"{self.path / 'main.pdf'}"], stdout=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
+        open = open_cmd()
+        subprocess.run([open, f"{self.main_path / 'main.pdf'}"], stdout=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
 
     @property
     def course_info(self) -> dict:
@@ -191,10 +193,11 @@ class Course:
         """ Update main.tex with new lectures
         lecture_nums: list of all numbers corresponds to a lecture
         """
+        mainTex = self.main_path / "main.tex"
         logger.debug("Updating main.tex")
-        header, body, footer = self.get_header_footer(self.main_file)
+        header, body, footer = self.get_header_footer(mainTex)
         body = ''.join([r'\input{lectures/' + number2filename(number) + '}\n' for number in lecture_nums])
-        self.main_file.write_text(header + body + footer)
+        mainTex.write_text(header + body + footer)
 
     def new_lecture(self):
         """ Creates a new lecture """
@@ -230,10 +233,10 @@ class Course:
         will be included
         returns: error code. e.i {0, 1}
         """
-        # Write all relevant endnotes paths, ect to input
-        logger.debug(f"Attempting to compile {self.main_file}")
+        mainTex = self.main_path / "main.tex"
+        logger.debug(f"Attempting to compile {mainTex}")
         result = subprocess.run(
-                ['latexmk', '-f', '-pdflatex="pdflatex -interaction=nonstopmode"', str(self.main_file)],
+                ['latexmk', '-f', '-pdflatex="pdflatex -interaction=nonstopmode"', str(mainTex)],
                 stdout = subprocess.DEVNULL,
                 stderr = subprocess.DEVNULL,
                 cwd=self.path

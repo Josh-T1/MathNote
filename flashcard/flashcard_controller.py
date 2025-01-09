@@ -10,7 +10,7 @@ import logging
 from ..course.courses import Courses
 import threading
 from ..global_utils import SectionNames, SectionNamesDescriptor, LatexCompilationError
-from .utils import open_file_with_vim
+from .utils import open_file_with_editor
 
 logger = logging.getLogger("flashcard")
 
@@ -192,7 +192,7 @@ class FlashcardController:
 
     def launch_iterm(self):
         source = self._get_pdf_source()
-        open_file_with_vim(source)
+        open_file_with_editor(source)
 
 
 

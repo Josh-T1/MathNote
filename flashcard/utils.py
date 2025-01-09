@@ -23,6 +23,6 @@ async def _main(connection, filename):
     await new_window.async_set_frame(iterm2.Frame(iterm2.Point(500, 500), iterm2.Size(1000, 1000)))
     await session.async_send_text(f"nvim {filename}\n")
 
-def open_file_with_vim(filename):
+def open_file_with_editor(filename):
     main = partial(_main, filename=filename)
     iterm2.run_until_complete(main)

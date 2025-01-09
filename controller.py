@@ -2,10 +2,10 @@ from pathlib import Path
 import subprocess
 from .course.courses import Courses, Course
 import logging
-import os
+import shutil
 from typing import Union, Protocol
 from .global_utils import load_json, dump_json
-from .flashcard.utils import open_file_with_vim
+from .flashcard.utils import open_file_with_editor
 
 logger = logging.getLogger("course")
 
@@ -13,13 +13,64 @@ class Command(Protocol):
     def cmd(self, namespace) -> None: ...
 
 class NoteCommand(Command):
+    """ Command for the creation, management, and visualization of notes """
     def __init__(self, project_config: dict):
         self.config = project_config
+        self.note_dir = Path(project_config['note-path']) / "note"
+        if not self.note_dir.is_dir():
+            self._initialize_note_dir()
+
+    def _initialize_note_dir(self) -> None:
+        macros, preamble = Path(self.config["note-macros"]), Path(self.config["note-preamble"])
+        self.note_dir.mkdir()
+        resourses_dir = self.note_dir / "resources"
+        resourses_dir.mkdir()
+        refs = resourses_dir / "refs.tex"
+        refs.touch()
+        shutil.copy(macros, resourses_dir / "macros.tex")
+        shutil.copy(preamble, resourses_dir / "preamble.tex")
+
+
+
+    def _format_stem(self, stem: str) -> str:
+        """ convert strings of the form 'hello_world_' to 'HelloWorld' """
+        peices = [word[0].upper() + word[1:] for word in stem.split("_")]
+        return "".join(peices)
+
+    def _initialize_note(self, stem: str):
+        template_path = Path(self.config["note-template"])
+        refs = self.note_dir / "resources/refs.tex"
+
+        basename = stem + ".tex"
+        dir = self.note_dir / stem
+        dir.mkdir()
+        dest = dir / basename
+        shutil.copy(template_path, dest)
+
+        with refs.open(mode="a") as f:
+            f.write(f"\\externaldocument[]{{../note/{stem}}}")
+
+    def is_note(self, stem: str) -> bool:
+        """ Takes in formated stem of filepath, e.g NewNote when creating new_note.tex """
+        return (self.note_dir / stem).is_dir()
 
     def cmd(self, namespace):
         if namespace.new_note:
-            name = namespace.new_note[0]
-            print(namespace.new_note)
+            basename = namespace.new_note[0]
+            stem = self._format_stem(basename.split(".")[0])
+
+            if self.is_note(stem):
+                print(f"Note {basename} already exists")
+                return
+
+            self._initialize_note(stem)
+
+        elif namespace.delete_note: pass
+        elif namespace.open_note: pass
+        elif namespace.list_notes: pass
+        elif namespace.compile_note: pass
+
+
 
 class FlashcardCommand(Command):
     """ Command for generating flashcards from latex files """
@@ -96,14 +147,14 @@ class FlashcardCommand(Command):
 
         return None
 
-class ClassCommand(Command):
+class CourseCommand(Command):
     """ Class command """
     def __init__(self, project_config):
         self.project_config = project_config
         self.courses_obj = Courses(self.project_config)
 
     def create_course(self, namespace):
-        logger.info(f"Creating class with name: {namespace.name}")
+        logger.info(f"Creating course with name: {namespace.name}")
         self.courses_obj.create_course(namespace.name)
         if namespace.user_input is not None:
             self._get_user_input(self.courses_obj.courses[namespace.name])
@@ -125,7 +176,7 @@ class ClassCommand(Command):
             print("="*20)
 
     def handle_active(self) -> str | None:
-        logger.debug("Finding active class")
+        logger.debug("Finding active course")
         active = self.get_active()
         if isinstance(active, Course):
             active = active.name
@@ -136,9 +187,9 @@ class ClassCommand(Command):
     def cmd(self, namespace):
         if (course:= namespace.name) is None:
             if namespace.information:
-                print("Warning no class name was provided. Ignoring all flags besides '-i'")
+                print("Warning no course name was provided. Ignoring all flags besides '-i'")
                 self.get_course_information(namespace)
-            print("Must specify a class name")
+            print("Must specify a course name")
             return
 
         if namespace.new_course:

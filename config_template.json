@@ -1,19 +1,13 @@
 {  
         "note-path": "",
 
-        "lecture-template" : "",
-        
         "main-template" : "",
-
-        "figure-template" : "",
 
         "macros-path": "",
 
-        "macro-names": ["mlim", "norm", "squarebk", "roundbk", "curlybk", "anglebk", "abs", "operator","rline", "uline", "uto"],
+        "macro-names": [],
 
         "section-names": {"DEFINITION": "defin", "THEOREM": "theo", "DERIVATION": "der", "PROOF": "pf", "COROLLARY": "corollary", "LEMMA": "lemma", "PROPOSITION": "proposition"},
-
-        "inkscape-exec" : "",
 
         "logging-config": {
             "version": 1,
