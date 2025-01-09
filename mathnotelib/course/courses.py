@@ -8,7 +8,7 @@ import json
 import logging
 import shutil
 import subprocess
-from ..global_utils import open_cmd
+from ..utils import open_cmd
 
 
 logger = logging.getLogger("course")
@@ -330,8 +330,8 @@ class Courses():
             os.mkdir(course_path / dir)
 
         shutil.copy(self.config["main-template"], course_path / "main.tex")
-        template_path = str(Path(__file__).parent / "course_info_template.json") # str conversion is likley unessasary
-        shutil.copy(template_path, str(course_path / "course_info.json"))
+        template_path = Path(__file__).parent.parent / "templates/course_info_template.json" # str conversion is likley unessasary
+        shutil.copy(template_path, course_path / "course_info.json")
 
     def __contains__(self, course_name: str):
         if not isinstance(course_name, str):

@@ -1,9 +1,8 @@
 import argparse
 from .controller import CourseCommand, FlashcardCommand, NoteCommand
-from .global_utils import get_config
+from .utils
 import logging
 import logging.config
-from .global_utils import get_config
 from pathlib import Path
 
 config = get_config()

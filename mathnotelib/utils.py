@@ -1,9 +1,18 @@
 from pathlib import Path
 import json
 import platform
+import os
 
-""" Config """
-CONFIG_PATH = Path(__file__).parent / "config.json"
+#CONFIG_PATH = Path(__file__).parent.parent / "config.json"
+
+def config_dir():
+    if os.name == "nt":
+        config_dir = Path(os.getenv("APPDATA")) / "mathnote"
+    elif os.name == "posix":
+        config_dir = Path.home() / ".config" / "mathnote"
+    else:
+        raise OSError("Unsupported operating system")
+    return config_dir
 
 class LatexCompilationError(Exception):
     pass
@@ -21,15 +30,14 @@ def open_cmd() -> str:
         cmd = "start"
     return cmd
 
-def get_config():
-    with open(CONFIG_PATH, 'r') as f:
-        config = json.load(f)
-    return config
-config = get_config()
+
+#config = get_config()
 
 def save_config(config: dict):
-    with open(CONFIG_PATH, "w") as f:
-        json.dump(config, f, indent=6)
+    cf_path = config_dir()
+    if cf_path.is_dir():
+        with open(cf_path, "w") as f:
+            json.dump(config, f, indent=6)
 
 def load_json(file: str):
     with open(file, "r") as f:
@@ -39,7 +47,7 @@ def load_json(file: str):
 def dump_json(file: str, contents: str):
     with open(file, "w") as f:
         json.dump(contents, f)
-config = get_config()
+
 
 
 class SectionNamesDescriptor:
@@ -103,3 +111,15 @@ class SectionNames(metaclass=ImmutableMeta):
     PROPOSITION = "proposition"
 
 
+def get_config():
+    """ Checks for user defined config, otherwise sets some default settings """
+    pass
+#    cf_path = config_dir()
+#    if cf_path.is_dir():
+#        with open(CONFIG_PATH, 'r') as f:
+#            config = json.load(f)
+#    return config
+
+
+
+config = get_config()

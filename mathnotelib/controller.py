@@ -4,8 +4,7 @@ from .course.courses import Courses, Course
 import logging
 import shutil
 from typing import Union, Protocol
-from .global_utils import load_json, dump_json
-from .flashcard.utils import open_file_with_editor
+from .utils import load_json, dump_json
 
 logger = logging.getLogger("course")
 
@@ -111,7 +110,7 @@ class FlashcardCommand(Command):
     def _ensure_import(cls):
         if cls._app is None or cls._window is None or cls._model is None or cls._compilation_manager is None or cls._controller is None:
             from PyQt6.QtWidgets import QApplication
-            from .gui.window import MainWindow
+            from .flashcard.window import MainWindow
             from .flashcard.flashcard_model import FlashcardModel, TexCompilationManager
             from .flashcard.flashcard_controller import FlashcardController
             cls._app = QApplication([])

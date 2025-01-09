@@ -7,7 +7,7 @@ from collections import namedtuple
 import logging
 from abc import abstractmethod, ABC
 from dataclasses import dataclass, field
-from ..global_utils import SectionNamesDescriptor, config, SectionNames
+from ..utils import SectionNamesDescriptor, config, SectionNames
 
 logger = logging.getLogger("course")
 

@@ -9,8 +9,8 @@ from typing import OrderedDict, Deque
 from ..course import parse_tex
 import logging
 from collections import deque
-from ..global_utils import SectionNames, SectionNamesDescriptor, config
-from .utils import latex_template
+from ..utils import SectionNames, SectionNamesDescriptor, config
+from .edit_tex import latex_template
 
 logger = logging.getLogger("flashcard")
 

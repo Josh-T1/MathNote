@@ -1,16 +1,14 @@
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QStandardItemModel
 from PyQt6.QtWidgets import QListView
-
-from ..course.courses import Lecture
 from pathlib import Path
 from .flashcard_model import FlashcardModel, FlashcardNotFoundException
 import sys
 import logging
 from ..course.courses import Courses
 import threading
-from ..global_utils import SectionNames, SectionNamesDescriptor, LatexCompilationError
-from .utils import open_file_with_editor
+from ..utils import SectionNames, SectionNamesDescriptor, LatexCompilationError
+from .edit_tex import open_file_with_editor
 
 logger = logging.getLogger("flashcard")
 
