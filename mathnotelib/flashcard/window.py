@@ -8,7 +8,7 @@ from PyQt6.QtGui import QColor, QPalette, QStandardItem, QStandardItemModel
 import logging
 from ..utils import LatexCompilationError
 
-logger = logging.getLogger("flashcard")
+logger = logging.getLogger("mathnote")
 
 ZOOM_FACTOR = 2
 WEEKS_IN_SEMESTER = 13

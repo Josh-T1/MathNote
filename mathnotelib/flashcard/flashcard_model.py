@@ -12,7 +12,7 @@ from collections import deque
 from ..utils import SectionNames, SectionNamesDescriptor
 from .edit_tex import latex_template
 
-logger = logging.getLogger("flashcard")
+logger = logging.getLogger("mathnote")
 
 
 class FlashcardNotFoundException(Exception):

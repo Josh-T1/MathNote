@@ -108,19 +108,37 @@ class SectionNames(metaclass=ImmutableMeta):
 
 
 def get_config() -> dict:
-    # TODO
     """ Checks for user defined config, otherwise sets some default settings """
-    config = {"note-path": str(Path.home()),
-              "main-template": str(TEMPLATES_PATH / "main_template.tex"),
-              "macros-path": str(TEMPLATES_PATH / "macros.tex"),
-#              "preamble-path": str(TEMPLATES_PATH / "macros.tex"),
+    config = {"root": str(Path.home() / "Notes"),
+              "main-template": "" ,
+              "macros-path": "",
+              "preamble-path": "" ,
+              "note-macros-path": "",
+              "note-preamble-path": "",
+              "assignment-template": "",
+              "course_info_template": str(TEMPLATES_PATH/ "course_info_template.json"),
               "macro-names": [],
               "section-names": {}
               }
+    files = [
+            ("main-template", "main_template.tex"),
+            ("macros-path","macros.tex"),
+            ("preamble-path","preamble.tex"),
+            ("note-macros-path","note_macros.tex"),
+            ("note-preamble-path","note_preamble.tex"),
+            ("assignment-template","assignment-template.tex")
+            ]
     cf_path = config_dir()
     if cf_path.is_dir():
         with open(cf_path / "config.json", 'r') as f:
             config.update(json.load(f))
+
+        for key, file_name in files:
+            if (cf_path / file_name).is_file():
+                config[key] = str(cf_path / file_name)
+            else:
+                config[key] = str(TEMPLATES_PATH / file_name)
+
     return config
 
 config = get_config()

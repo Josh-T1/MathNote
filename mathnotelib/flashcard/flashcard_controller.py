@@ -10,7 +10,7 @@ import threading
 from ..utils import SectionNames, SectionNamesDescriptor, LatexCompilationError
 from .edit_tex import open_file_with_editor
 
-logger = logging.getLogger("flashcard")
+logger = logging.getLogger("mathnote")
 
 
 class FlashcardController:

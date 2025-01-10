@@ -10,7 +10,7 @@ import shutil
 import subprocess
 from ..utils import open_cmd
 
-logger = logging.getLogger("course")
+logger = logging.getLogger("mathnote")
 
 def number2filename(n: int):
     return 'lec_{0:02d}.tex'.format(n)
@@ -263,7 +263,7 @@ class Courses():
     """ Container for all Course objects """
     def __init__(self, config: dict[str, str]):
         self.config = config
-        self.root = Path(config["note-path"])
+        self.root = Path(config["root"])
         self._courses = {}
 
     def _find_courses(self, _key = lambda c: c.name) -> list[Course]:
@@ -329,7 +329,7 @@ class Courses():
             os.mkdir(course_path / dir)
 
         shutil.copy(self.config["main-template"], course_path / "main.tex")
-        template_path = Path(__file__).parent.parent / "templates/course_info_template.json" # str conversion is likley unessasary
+        template_path = self.config["course-info-template"]
         shutil.copy(template_path, course_path / "course_info.json")
 
     def __contains__(self, course_name: str):

@@ -1,4 +1,3 @@
-from os import name
 from pathlib import Path
 import subprocess
 from .course import Courses, Course
@@ -7,7 +6,8 @@ import shutil
 from typing import Protocol
 from .utils import load_json, dump_json
 from .note import NotesManager
-logger = logging.getLogger("course")
+
+logger = logging.getLogger("mathnote")
 
 class Command(Protocol):
     def cmd(self, namespace) -> None: ...
@@ -209,7 +209,7 @@ class NoteCommand(Command):
     """ Command for the creation, management, and visualization of notes """
     def __init__(self, project_config: dict):
         self.config = project_config
-        self.note_dir = Path(project_config['note-path']) / "note"
+        self.note_dir = Path(project_config['root']) / "notes"
         if not self.note_dir.is_dir():
             self._initialize_note_dir()
 

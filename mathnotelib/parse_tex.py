@@ -1,4 +1,3 @@
-from enum import Enum
 from pathlib import Path
 import json
 from typing import Iterable, Union, Generator, List, Callable
@@ -7,9 +6,9 @@ from collections import namedtuple
 import logging
 from abc import abstractmethod, ABC
 from dataclasses import dataclass, field
-from ..utils import SectionNamesDescriptor, config, SectionNames
+from utils import SectionNamesDescriptor, config
 
-logger = logging.getLogger("course")
+logger = logging.getLogger("mathnote")
 
 """
 parse_tex.py aims to provide a customizable pipeline that takes in file paths (.tex files) and returns 'cleaned' tex. This cleaned latex code can then
@@ -24,8 +23,8 @@ immutable. However when __new__ is called the property is set. If there is a way
 """
 
 MACRO_PATH = config["macros-path"]
-MACRO_NAMES = ["mlim", "norm", "squarebk", "roundbk", "curlybk", "anglebk", "abs", "operator", "rline",
-               "uline", "mylist", "uto"]
+#MACRO_NAMES = ["mlim", "norm", "squarebk", "roundbk", "curlybk", "anglebk", "abs", "operator", "rline",
+#               "uline", "mylist", "uto"]
 TEX_PATTERN_TO_MATHJAX = {r"\\begin\{equation\*\}": r"\[",
                         r"\\end\{equation\*\}": r"\]",
                         ">": "&gt;",
