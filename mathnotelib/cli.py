@@ -1,11 +1,10 @@
 import argparse
 from .controller import CourseCommand, FlashcardCommand, NoteCommand
-from .utils
+from .utils import config
 import logging
 import logging.config
 from pathlib import Path
 
-config = get_config()
 logging_config = config["logging-config"]
 logging.config.dictConfig(config=logging_config)
 logger = logging.getLogger("cli")
@@ -39,7 +38,16 @@ course_parser_arguments = [
         ]
 note_parser_arguments = [
         ("-n", "--new-note", {"nargs": 1, "help": "create new note"}),
-        ("-s", "--search", {"nargs": "store_true", "help": "search through notes"})
+        ("-rm", "--remove-note", {"nargs": 1, "help": "remove note"}),
+        ("-ls", "--list-notes", {"action": "store_true", "help": "list notes"}),
+        ("-o", "--open-note", {"nargs": 1, "help": "open note"}),
+        ("-c", "--compile-note", {"nargs": 1, "help": "compile note"}),
+        ("--rename", {"nargs": 2, "help": "rename note"}),
+        ("-t", "--tag" , {"nargs": 2, "help": "add tag to note"}),
+        ("--remove-tag", {"nargs": 1, "help": "remove tag from note"}),
+        ("--exits", {"nargs": 1, "help": "returns true if note exists"}),
+
+
         ]
 
 flashcard_parser_arguments = [
@@ -85,7 +93,6 @@ def main():
         global_parser.print_help()
         return
 
-    config = get_config()
     instance = command_mapping[args.command](config)
     logger.info(f"Calling command {type(instance)}")
     instance.cmd(args)

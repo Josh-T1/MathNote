@@ -13,14 +13,9 @@ logger = logging.getLogger("course")
 
 """
 parse_tex.py aims to provide a customizable pipeline that takes in file paths (.tex files) and returns 'cleaned' tex. This cleaned latex code can then
-be utilized to build Flashcards objects, or converted to other formats such as mathjax. Currenlty this module only provides a pipeline builder and pipeline stages relavent for
-creating flashcard. Any other functionality, such as converting impure latex code (latex code with user defined shortcuts) to mathjax would require the creation of new pipleline stages and builder.
+be utilized to build Flashcards objects, or converted to other formats such as mathjax.
+Currenlty this module only provides a pipeline builder and pipeline stages relavent for creating flashcard... work in progress
 
-
---- Limitations
-1. The 'real solution' would probably have a lexer and parser
-1. TrackString needs to be re wrote... (deleted)
-1. Mostly untested code
 
 --- Notes/TODO
 1. The lsp warning Cannot access memeber '._source_history' from TrackString can be ignored. The TrackString class is not inizialized with that property as it subclasses str which is
@@ -29,13 +24,8 @@ immutable. However when __new__ is called the property is set. If there is a way
 """
 
 MACRO_PATH = config["macros-path"]
-
-
-# TODO:  load these in a more dynmaic way
 MACRO_NAMES = ["mlim", "norm", "squarebk", "roundbk", "curlybk", "anglebk", "abs", "operator", "rline",
                "uline", "mylist", "uto"]
-
-# this is unfinished as I realized I do not need to convert tex to mathjax. Could be usefull eventually
 TEX_PATTERN_TO_MATHJAX = {r"\\begin\{equation\*\}": r"\[",
                         r"\\end\{equation\*\}": r"\]",
                         ">": "&gt;",
@@ -52,11 +42,7 @@ class PathSourceRecord:
 
 class TrackedString(str):
     """
-    TrackedString tries to use 'duck typing' by implementing all behaviour associated with strings, with additional features such
-    as storing souce data. This data could look like a file_path or the name of a callable that 'created' the string. Note that we do a poor job
-    with duck typing as operations like '+' must be implemented in a round about way to maintain proper source record, however passing a TrackedString to
-    a function expecting str will not cause the program to crash
-
+    string object that keeps a record of its source, e.g file.
 
     --- Limitations:
         1. We give priority to left TrackedString. If string = TrackedString1(...) + TrackedString2(...) string.source_history will only contain

@@ -10,7 +10,6 @@ import shutil
 import subprocess
 from ..utils import open_cmd
 
-
 logger = logging.getLogger("course")
 
 def number2filename(n: int):

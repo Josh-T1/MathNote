@@ -1,74 +1,16 @@
+from os import name
 from pathlib import Path
 import subprocess
-from .course.courses import Courses, Course
+from .course import Courses, Course
 import logging
 import shutil
-from typing import Union, Protocol
+from typing import Protocol
 from .utils import load_json, dump_json
-
+from .note import NotesManager
 logger = logging.getLogger("course")
 
 class Command(Protocol):
     def cmd(self, namespace) -> None: ...
-
-class NoteCommand(Command):
-    """ Command for the creation, management, and visualization of notes """
-    def __init__(self, project_config: dict):
-        self.config = project_config
-        self.note_dir = Path(project_config['note-path']) / "note"
-        if not self.note_dir.is_dir():
-            self._initialize_note_dir()
-
-    def _initialize_note_dir(self) -> None:
-        macros, preamble = Path(self.config["note-macros"]), Path(self.config["note-preamble"])
-        self.note_dir.mkdir()
-        resourses_dir = self.note_dir / "resources"
-        resourses_dir.mkdir()
-        refs = resourses_dir / "refs.tex"
-        refs.touch()
-        shutil.copy(macros, resourses_dir / "macros.tex")
-        shutil.copy(preamble, resourses_dir / "preamble.tex")
-
-
-
-    def _format_stem(self, stem: str) -> str:
-        """ convert strings of the form 'hello_world_' to 'HelloWorld' """
-        peices = [word[0].upper() + word[1:] for word in stem.split("_")]
-        return "".join(peices)
-
-    def _initialize_note(self, stem: str):
-        template_path = Path(self.config["note-template"])
-        refs = self.note_dir / "resources/refs.tex"
-
-        basename = stem + ".tex"
-        dir = self.note_dir / stem
-        dir.mkdir()
-        dest = dir / basename
-        shutil.copy(template_path, dest)
-
-        with refs.open(mode="a") as f:
-            f.write(f"\\externaldocument[]{{../note/{stem}}}")
-
-    def is_note(self, stem: str) -> bool:
-        """ Takes in formated stem of filepath, e.g NewNote when creating new_note.tex """
-        return (self.note_dir / stem).is_dir()
-
-    def cmd(self, namespace):
-        if namespace.new_note:
-            basename = namespace.new_note[0]
-            stem = self._format_stem(basename.split(".")[0])
-
-            if self.is_note(stem):
-                print(f"Note {basename} already exists")
-                return
-
-            self._initialize_note(stem)
-
-        elif namespace.delete_note: pass
-        elif namespace.open_note: pass
-        elif namespace.list_notes: pass
-        elif namespace.compile_note: pass
-
 
 
 class FlashcardCommand(Command):
@@ -261,3 +203,67 @@ class CourseCommand(Command):
 
     def get_active(self):
         return self.courses_obj.get_active_course()
+
+
+class NoteCommand(Command):
+    """ Command for the creation, management, and visualization of notes """
+    def __init__(self, project_config: dict):
+        self.config = project_config
+        self.note_dir = Path(project_config['note-path']) / "note"
+        if not self.note_dir.is_dir():
+            self._initialize_note_dir()
+
+    def _initialize_note_dir(self) -> None:
+        macros, preamble = Path(self.config["note-macros"]), Path(self.config["note-preamble"])
+        self.note_dir.mkdir()
+        resourses_dir = self.note_dir / "resources"
+        resourses_dir.mkdir()
+        refs = resourses_dir / "refs.tex"
+        refs.touch()
+        shutil.copy(macros, resourses_dir / "macros.tex")
+        shutil.copy(preamble, resourses_dir / "preamble.tex")
+
+
+
+    def cmd(self, namespace):
+        notes = NotesManager(self.note_dir)
+
+        if namespace.new_note:
+            notes.new_note(namespace.new_note[0])
+
+        elif namespace.remove_note:
+            notes.del_note(namespace.del_note[0])
+
+        elif namespace.list_notes:
+            notes.list_notes()
+
+        elif namespace.open_note:
+            note = notes.get_note(namespace.open_note[0])
+            if note is None:
+                print(f"Note {namespace.open_note[0]} does not exist")
+            else:
+                note.open()
+
+        elif namespace.compile_note:
+            note = notes.get_note(namespace.compile_note[0])
+            if note is None:
+                print(f"Note {namespace.open_note[0]} does not exist")
+            else:
+                note.compile()
+
+        elif namespace.rename:
+            notes.rename(namespace.rename[0], namespace.rename[1])
+
+        elif namespace.tag:
+            note = notes.get_note(namespace.tag[0])
+            if note is None:
+                print(f"Note {namespace.open_note[0]} does not exist")
+            else:
+                note.add_tag(namespace.tag[1])
+
+        elif namespace.exists:
+            note = notes.get_note(namespace.tag[0])
+            if note is None:
+                print(f"False")
+            else:
+                print(f"True")

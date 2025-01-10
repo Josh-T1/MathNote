@@ -3,7 +3,7 @@ import json
 import platform
 import os
 
-#CONFIG_PATH = Path(__file__).parent.parent / "config.json"
+TEMPLATES_PATH = Path(__file__).parent / "templates"
 
 def config_dir():
     if os.name == "nt":
@@ -30,9 +30,6 @@ def open_cmd() -> str:
         cmd = "start"
     return cmd
 
-
-#config = get_config()
-
 def save_config(config: dict):
     cf_path = config_dir()
     if cf_path.is_dir():
@@ -47,8 +44,6 @@ def load_json(file: str):
 def dump_json(file: str, contents: str):
     with open(file, "w") as f:
         json.dump(contents, f)
-
-
 
 class SectionNamesDescriptor:
     def __init__(self, name: str, value: str):
@@ -78,6 +73,7 @@ class ImmutableMeta(type):
             if name == attr_name:
                 return True
         return False
+
     def __iter__(cls):
         for attr_name in cls.__dict__:
             attr_value = getattr(cls, attr_name)
@@ -111,15 +107,20 @@ class SectionNames(metaclass=ImmutableMeta):
     PROPOSITION = "proposition"
 
 
-def get_config():
+def get_config() -> dict:
+    # TODO
     """ Checks for user defined config, otherwise sets some default settings """
-    pass
-#    cf_path = config_dir()
-#    if cf_path.is_dir():
-#        with open(CONFIG_PATH, 'r') as f:
-#            config = json.load(f)
-#    return config
-
-
+    config = {"note-path": str(Path.home()),
+              "main-template": str(TEMPLATES_PATH / "main_template.tex"),
+              "macros-path": str(TEMPLATES_PATH / "macros.tex"),
+#              "preamble-path": str(TEMPLATES_PATH / "macros.tex"),
+              "macro-names": [],
+              "section-names": {}
+              }
+    cf_path = config_dir()
+    if cf_path.is_dir():
+        with open(cf_path / "config.json", 'r') as f:
+            config.update(json.load(f))
+    return config
 
 config = get_config()

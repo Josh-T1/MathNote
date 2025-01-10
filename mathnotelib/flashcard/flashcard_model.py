@@ -6,10 +6,10 @@ import time
 import subprocess
 import hashlib
 from typing import OrderedDict, Deque
-from ..course import parse_tex
+import parse_tex
 import logging
 from collections import deque
-from ..utils import SectionNames, SectionNamesDescriptor, config
+from ..utils import SectionNames, SectionNamesDescriptor
 from .edit_tex import latex_template
 
 logger = logging.getLogger("flashcard")
