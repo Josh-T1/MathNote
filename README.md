@@ -1,7 +1,9 @@
 # MathNote
 ![flashcard](assets/flashcard.png)
 
-This package aims to streamline the LaTex note taking process.
+This package enhances the LaTex note taking experience by simplifying the organizational process associated
+with taking latex lecture notes, enabling the generation of flashcards from lectures notes, and providing a management
+system for notes-- from which you can generate interactive networks for better visualization.
 The command line interface has three main commands:
 
 1. `course`: command used for setting up the directory structure, getting course information, and other housekeeping tasks
@@ -64,13 +66,32 @@ Flags:
 * `-a`, `--new-assignment`: Create new assignment under `{course}/assignments/`
 * `-l`, `--new-lecture`: Creates new lecture file and prints file path to stdout
 
+When a new course is created, the following directories are created under `NewCourse`
+```
+root/
+├── preamble.tex
+├── macros.tex
+│
+└── NewCourse/              # New course directory
+     ├── main/    
+     │   ├── main.tex
+     │   └── lectures/
+     │
+     ├── resources/         # external resources included in main.tex (e.g figure.svg)
+     ├── assignments/       # default location for assingments when created using 'course' cmd
+     ├── problems/
+     └──course_info.json    # course configuration and information
+
+```
+
+
+
 ### Compilation
 You can use the `-c` flag to compile your note from the command line, however if you use 
 `VimTex`, then you must add the following to your `nvim` configuration
 ```lua
 
 ```
-
 
 
 ## Note
@@ -84,8 +105,11 @@ Flags:
 This command is a work in progressive. Typically 
 
 
-## Dependencies
-This package has been tested on MacOS (still experimental), however it remains untested on other operating systems.
+# Dependencies
+-tlmgr
+-latekmk
+
+This package has been tested on MacOS (still experimental), however it remains untested on other operating systems (should work on Windows and Linux).
 
 There are several non critical dependencies (in addition to those in requirements.txt) that are required
 for the app to fully function. 
@@ -96,6 +120,10 @@ TODO...
 
 
 ## Configuration
+1. iterm2-enabled
+
+
+
 Projection configurations must be set `MathNote/config.json` before the project
 us usable. 
 - `note-path`: full path to directory containing math notes. It is assumed that
@@ -132,7 +160,7 @@ us usable.
     where `defin` is the section name used in the Tex file. Note that the sections in bold are the only available options, however
     it would not be very difficult to modify this behaviour yourself.
 
-## Extra
+## Aknowledgment
 This project was largely inspired by [https://castel.dev.post/lecture-notes-1](https://castel.dev/post/lecture-notes-1/), which I would 
 highly recommend reading. If you are interested in typesetting your lecture notes in real time, you may find the following blog interesting 
 [https://ejmastnak.com/tutorials/vim-latex/intro/](https://ejmastnak.com/tutorials/vim-latex/intro/)

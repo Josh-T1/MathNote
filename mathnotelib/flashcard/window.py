@@ -6,7 +6,7 @@ from PyQt6.QtPdf import QPdfDocument
 from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtGui import QColor, QPalette, QStandardItem, QStandardItemModel
 import logging
-from ..utils import LatexCompilationError
+from ..utils import LatexCompilationError, config
 
 logger = logging.getLogger("mathnote")
 
@@ -65,6 +65,13 @@ class VConfigBar(QWidget):
         self._create_widgets()
         self._configure_widgets()
         self._add_widgets()
+        self._init_optional_widgets()
+
+    def _init_optional_widgets(self):
+        """ Dynamically add widgets if enabled """
+        if config["iterm2-enabled"]:
+            self.launch_iterm_button = QPushButton("Launch iterm")
+            self.config_layout.addWidget(self.launch_iterm_button)
 
     def _create_widgets(self):
         # Creating Widgets
@@ -76,7 +83,7 @@ class VConfigBar(QWidget):
         self.section_list_label = QLabel()
         self.create_flashcards_button = QPushButton("Create Flashcards")
         self.open_main = QPushButton("Open main")
-        self.launch_iterm_button = QPushButton("Launch iterm")
+
         self.random_checkbox_label = QLabel("Randomize")
         self.random_checkbox = QCheckBox()
 
@@ -126,7 +133,7 @@ class VConfigBar(QWidget):
         self.config_layout.addWidget(self.random_checkbox)
         self.config_layout.addWidget(self.create_flashcards_button)
         self.config_layout.addWidget(self.open_main)
-        self.config_layout.addWidget(self.launch_iterm_button)
+
         self.config_layout.addStretch()
 
 class HButtonBar(QWidget):
@@ -356,7 +363,8 @@ class MainWindow(QMainWindow):
         self.show_proof_button().clicked.connect(callback)
 
     def bind_launch_iterm_button(self, callback):
-        self.config_bar.launch_iterm_button.clicked.connect(callback)
+        if config["iterm2-enabled"]:
+            self.config_bar.launch_iterm_button.clicked.connect(callback)
 
     def bind_open_main_button(self, callback):
         self.config_bar.open_main.clicked.connect(callback)

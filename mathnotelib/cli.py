@@ -1,25 +1,36 @@
 import argparse
 import shutil
 from .controller import CourseCommand, FlashcardCommand, NoteCommand
-from .utils import config
+from .utils import config, config_dir
 import logging
 import logging.config
 from pathlib import Path
 import json
-from utils import config_dir
 
+user_config_dir = config_dir()
+
+def initialize():
+    """ Create .config/mathnote directory with required subdirectories and files """
+    user_config_dir.mkdir()
+    (user_config_dir / "logs").mkdir()
+    template_path = Path(__file__) / "templates/config_template.json"
+    dest = user_config_dir / "config.json"
+    shutil.copy(template_path, dest)
+
+if not user_config_dir.is_dir():
+    initialize()
 
 config_path =Path(__file__).parent  / "logging_config.json"
 with open(config_path) as f:
     logging_config = json.load(f)
 
-user_config_dir = config_dir()
+
 logging_config["handlers"]["file"]["filename"] = str(user_config_dir / "logs/mathnote.log")
 logging_config["loggers"]["mathnote"]["level"] = config["log-level"]
 
 logging.config.dictConfig(config=logging_config)
 logger = logging.getLogger("mathnote")
-global_parser = argparse.ArgumentParser(prog="mathnote", description="Cli with commands for automating the note taking process")
+global_parser = argparse.ArgumentParser(prog="mathnote", description="Cli for streamlining the note taking process")
 
 subparsers = global_parser.add_subparsers(title="Subcommands", help="Note taking commands", dest="command")
 course_parser = subparsers.add_parser("course", help="Create course file structure and inizialize course json file")
@@ -30,11 +41,11 @@ course_parser_arguments = [
         ("name",{"nargs": "?",
                  "help": "Name of new course"}),
         ("-n", "--new-course", {"action": "store_true",
-                            "help" :"Create new course and initialize directory. To automate initialization of course information see '-u' flag"}),
+                            "help" :"Create new course and initialize directory. To automate initialization of course information, set '-u' flag"}),
         ("-i", "--information", {"action": "store_true",
                                  "help": "Displays course information"}), # seperate between private and public course info
         ("-u", "--user-input", {"action": "store_true",
-                                "help": "Inizializes course_info.json through user input. Must be used with --create -c flag"}),
+                                "help": "Inizializes course_info.json through user input. Must be used with '--create' or '-c' flag"}),
         ("-o", "--open-main", {"action": "store_true",
                                 "help": "Opens main.pdf in the course directory if it exists"}),
         ("-a", "--new-assignment", {"action": "store_true",
@@ -83,18 +94,8 @@ command_mapping = {
         "note": NoteCommand
         }
 
-def initialize():
-    """ Create .config/mathnote directory with required subdirectories and files """
-    user_config_dir.mkdir()
-    (user_config_dir / "logs").mkdir()
-    template_path = Path(__file__) / "templates/config_template.json"
-    dest = user_config_dir / "config.json"
-    shutil.copy(template_path, dest)
 
 def main():
-    if not user_config_dir.is_dir():
-        initialize()
-
     if args.command is None:
         global_parser.print_help()
         return

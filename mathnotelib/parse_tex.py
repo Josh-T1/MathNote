@@ -6,7 +6,7 @@ from collections import namedtuple
 import logging
 from abc import abstractmethod, ABC
 from dataclasses import dataclass, field
-from utils import SectionNamesDescriptor, config
+from .utils import SectionNamesDescriptor, config
 
 logger = logging.getLogger("mathnote")
 

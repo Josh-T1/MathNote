@@ -167,3 +167,6 @@ class NotesManager:
 
     def get_note(self, name: str) -> Note | None:
         return self.notes.get(name, None)
+
+    def build_adjacency_matrix(self):
+        pass

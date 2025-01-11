@@ -1,3 +1,4 @@
+from types import coroutine
 from typing import Union
 from math import ceil
 from pathlib import Path
@@ -322,13 +323,23 @@ class Courses():
             raise ValueError(f"Attempting to create course with existing name: {name}")
 
         course_path = self.root / name
-        os.mkdir(course_path)
+        course_path.mkdir()
 
-        make_dirs = ["lectures", "figures", "assignments", "preliminary", "endnotes"] # Add this to config file? link this to dirs in course
-        for dir in make_dirs:
-            os.mkdir(course_path / dir)
+        main_dir = course_path / "main"
+        assignments_dir = course_path / "assignments"
+        resources_dir = course_path / "resources"
+        problems_dir = course_path / "problems"
 
-        shutil.copy(self.config["main-template"], course_path / "main.tex")
+        main_dir.mkdir()
+        assignments_dir.mkdir()
+        resources_dir.mkdir()
+        problems_dir.mkdir()
+
+        lectures_dir = main_dir / "lectures"
+        lectures_dir.mkdir()
+
+
+        shutil.copy(self.config["main-template"], main_dir / "main.tex")
         template_path = self.config["course-info-template"]
         shutil.copy(template_path, course_path / "course_info.json")
 

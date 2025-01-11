@@ -24,7 +24,7 @@
     "loggers": {
         "mathnote": {
             "level": "DEBUG",
-            "handlers": ["file", "stdout"]
+            "handlers": ["file"]
         }
     }
 }

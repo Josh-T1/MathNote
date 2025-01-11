@@ -6,7 +6,7 @@ import time
 import subprocess
 import hashlib
 from typing import OrderedDict, Deque
-import parse_tex
+from .. import parse_tex
 import logging
 from collections import deque
 from ..utils import SectionNames, SectionNamesDescriptor
