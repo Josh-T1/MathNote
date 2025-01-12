@@ -1,2 +1,2 @@
-include templates/*.tex
-include templates/*.json
+recursive-include mathnotelib/templates *.tex
+recursive-include mathnotelib/templates *.json
