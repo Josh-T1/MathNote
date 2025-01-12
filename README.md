@@ -121,7 +121,7 @@ TODO...
 
 ## Configuration
 1. iterm2-enabled
-
+1. "turn on default note title"
 
 
 Projection configurations must be set `MathNote/config.json` before the project

@@ -16,24 +16,24 @@ def config_dir():
 
 def get_config() -> dict:
     """ Checks for user defined config, otherwise sets some default settings """
-    config = {"root": str(Path.home() / "Notes"),
-              "main-template": "" ,
-              "macros-path": "",
-              "preamble-path": "" ,
-              "note-macros-path": "",
-              "note-preamble-path": "",
-              "assignment-template": "",
-              "course_info_template": str(TEMPLATES_PATH/ "course_info_template.json"),
-              "macro-names": [],
-              "section-names": {}
-              }
+    config = {
+            "root": str(Path.home() / "Notes"),
+            "preamble-path": "" ,
+            "course-info-template": str(TEMPLATES_PATH/ "course_info_template.json"),
+            "macro-names": [],
+            "section-names": {},
+            "iterm2-enabled": False,
+            "set-note-title": True
+            }
     files = [
             ("main-template", "main_template.tex"),
-            ("macros-path","macros.tex"),
-            ("preamble-path","preamble.tex"),
-            ("note-macros-path","note_macros.tex"),
-            ("note-preamble-path","note_preamble.tex"),
-            ("assignment-template","assignment-template.tex")
+            ("assignment-template","assignment_template.tex"),
+            ("problems-template","problems_template.tex"),
+            ("note-template", "note_template.tex"),
+            ("macros","macros.tex"),
+            ("preamble","preamble.tex"),
+            ("note-macros","note_macros.tex"),
+            ("note-preamble","note_preamble.tex")
             ]
     cf_path = config_dir()
     if cf_path.is_dir():

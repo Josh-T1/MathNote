@@ -11,7 +11,7 @@ from ..utils import LatexCompilationError, config
 logger = logging.getLogger("mathnote")
 
 ZOOM_FACTOR = 2
-WEEKS_IN_SEMESTER = 13
+WEEKS_IN_SEMESTER = 11  # This needs to be changed at some point. Dynamically generate flashcards
 
 
 class InfoButton(QWidget):

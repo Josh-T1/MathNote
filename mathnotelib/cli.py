@@ -1,5 +1,6 @@
 import argparse
 import shutil
+import sys
 from .controller import CourseCommand, FlashcardCommand, NoteCommand
 from .utils import config, config_dir
 import logging
@@ -18,7 +19,13 @@ def initialize():
     shutil.copy(template_path, dest)
 
 if not user_config_dir.is_dir():
-    initialize()
+    build = input(f"Configuration directory {user_config_dir} does not exist\nWould you like to create? (yn): ")
+    if build == "y":
+        print("Creating directory...")
+        initialize()
+    else:
+        print("Command aborted. Directory must be created before proceeding")
+        sys.exit()
 
 config_path =Path(__file__).parent  / "logging_config.json"
 with open(config_path) as f:
@@ -38,8 +45,7 @@ flashcard_parser = subparsers.add_parser("flashcard", help="Generate flashcards 
 note_parser = subparsers.add_parser("note", help="Create latex notes")
 
 course_parser_arguments = [
-        ("name",{"nargs": "?",
-                 "help": "Name of new course"}),
+        ("name",{"nargs": 1, "help": "Course name"}),
         ("-n", "--new-course", {"action": "store_true",
                             "help" :"Create new course and initialize directory. To automate initialization of course information, set '-u' flag"}),
         ("-i", "--information", {"action": "store_true",
@@ -61,12 +67,10 @@ note_parser_arguments = [
         ("-ls", "--list-notes", {"action": "store_true", "help": "list notes"}),
         ("-o", "--open-note", {"nargs": 1, "help": "open note"}),
         ("-c", "--compile-note", {"nargs": 1, "help": "compile note"}),
-        ("--rename", {"nargs": 2, "help": "rename note"}),
-        ("-t", "--tag" , {"nargs": 2, "help": "add tag to note"}),
+        ("--rename", {"nargs": 2, "help": "rename note (old name, new name)"}),
+        ("-t", "--tag" , {"nargs": 2, "help": "add tag to note (note name, tag)"}),
         ("--remove-tag", {"nargs": 1, "help": "remove tag from note"}),
-        ("--exits", {"nargs": 1, "help": "returns true if note exists"}),
-
-
+        ("--exists", {"nargs": 1, "help": "returns true if note exists"}),
         ]
 
 flashcard_parser_arguments = [

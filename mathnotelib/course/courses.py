@@ -1,15 +1,12 @@
-from types import coroutine
 from typing import Union
 from math import ceil
 from pathlib import Path
-import os
-import re
 from datetime import datetime
 import json
 import logging
 import shutil
 import subprocess
-from ..utils import open_cmd
+from ..utils import config, open_cmd
 
 logger = logging.getLogger("mathnote")
 
@@ -211,21 +208,29 @@ class Course:
         self.update_lectures_in_master([i for i in range(1, new_lecture_number + 1)]) # TODO test
 
         new_lecture = Lecture(new_lecture_path)
-        new_lecture.path.write_text(fr'\section*{{Lecture {new_lecture.number}}}')
+        new_lecture.path.write_text(fr'\section*{{Lecture {new_lecture.number()}}}')
         self.lectures.append(new_lecture)
         return new_lecture
 
     def new_assignment(self):
-        files = [str(file) for file in self.assignment_path.glob('*.tex')]
-        nums = []
-        for file in files:
-            nums.extend([e for e in re.split("[^0-9]", file)])
-#        max = max([int(i) for i in nums])
-        # list assignments
-        # Get largest number
-        # increment by one
-        # copy tempalte to name
-        pass
+        """
+        Create new assignment using the naming convention course_course_number_A{assignment number}
+        """
+        new_num = 1
+        stems: list[list] = [file.stem.split("_") for file in self.assignment_path.iterdir() if file.is_file() and file.suffix == ".tex"]
+        for e in stems:
+            if len(e) == 3:
+                match = e[2].replace("A", "")
+                if match.isdigit():
+                    new_num = max(new_num, match)
+
+        new_num += 1
+        filename = f"{self.name.replace("-", "_")}_A{new_num}.tex"
+        assignment_path = self.assignment_path / filename
+        if assignment_path.is_file():
+            raise ValueError
+        shutil.copy(config["assignment-template"], assignment_path)
+
 
     def compile_main(self, lectures_only: bool=False):
         """ Compile main file
@@ -236,7 +241,7 @@ class Course:
         mainTex = self.main_path / "main.tex"
         logger.debug(f"Attempting to compile {mainTex}")
         result = subprocess.run(
-                ['latexmk', '-f', '-pdflatex="pdflatex -interaction=nonstopmode"', str(mainTex)],
+                ['latexmk', "-pdf", str(mainTex)],
                 stdout = subprocess.DEVNULL,
                 stderr = subprocess.DEVNULL,
                 cwd=self.path
@@ -316,7 +321,7 @@ class Courses():
         -- Params --
         name: name of new course
         """
-        course = self.courses.get(name, None)
+        course = self.get_course(name)
         # prevent overiding course
         if course != None:
             logger.info(f"Failed to create, course with name={name} already exists")

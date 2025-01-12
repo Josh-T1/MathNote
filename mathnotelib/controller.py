@@ -1,3 +1,4 @@
+from os import name
 from pathlib import Path
 import subprocess
 from .course import Courses, Course
@@ -93,26 +94,17 @@ class CourseCommand(Command):
         self.courses_obj = Courses(self.project_config)
 
     def create_course(self, namespace):
-        logger.info(f"Creating course with name: {namespace.name}")
-        self.courses_obj.create_course(namespace.name)
+        logger.info(f"Creating course with name: {namespace.name[0]}")
+        self.courses_obj.create_course(namespace.name[0])
         if namespace.user_input is not None:
-            self._get_user_input(self.courses_obj.courses[namespace.name])
+            self._get_user_input(self.courses_obj.courses[namespace.name[0]])
 
-    def get_course_information(self, arg: str):
-        if arg == 'all':
-            info = [course.course_info for course in self.courses_obj.courses.values()]
-        elif arg == 'recent':
-            info = [list(self.courses_obj.courses.values())[-1].course_info]
-        else:
-            info = self.courses_obj.courses.get(arg, None)
-            info = None if info is None else [info.course_info]
-
-        if info is None:
-            print(f"There is no information given arguments: {arg}")
+    def get_course_information(self, name: str):
+        course = self.courses_obj.courses.get(name, None)
+        if course is None:
+            print(f"Course {name} does not exist")
             return
-        for dic in info:
-            print(self.buitify_output(dic))
-            print("="*20)
+        print(self.beautify_output(course.course_info))
 
     def handle_active(self) -> str | None:
         logger.debug("Finding active course")
@@ -124,22 +116,18 @@ class CourseCommand(Command):
             print("No active courses")
 
     def cmd(self, namespace):
-        if (course:= namespace.name) is None:
-            if namespace.information:
-                print("Warning no course name was provided. Ignoring all flags besides '-i'")
-                self.get_course_information(namespace)
-            print("Must specify a course name")
+        if (course:= namespace.name[0]) is None:
             return
 
         if namespace.new_course:
             self.create_course(namespace)
             return
 
-        if namespace.current_course:
-            self.handle_active()
+#        if namespace.current_course:
+#            self.handle_active()
 
         if namespace.information:
-            self.get_course_information(namespace)
+            self.get_course_information(course)
 
         if namespace.open_main:
             self.open_main(course)
@@ -157,8 +145,6 @@ class CourseCommand(Command):
                 print(f"Failed to create new assignment, no course with name: {course}")
             else:
                 course_obj.new_assignment()
-        else:
-            print(f"Invalid arguments passed {namespace}")
 
     def _get_user_input(self, course: Course):
         path = course.path / "course_info.json"
@@ -175,7 +161,7 @@ class CourseCommand(Command):
         dump_json(str(path), dic)
 
     @staticmethod
-    def buitify_output(info: dict):
+    def beautify_output(info: dict):
         """ convert dictionary into a more readable string """
         return '\n'.join([f"{k}: {v}" for k, v in info.items()])
 
@@ -196,9 +182,6 @@ class CourseCommand(Command):
         else:
             course.open_main()
 
-    def new_lecture(self):
-        pass
-
     def get_active(self):
         return self.courses_obj.get_active_course()
 
@@ -207,9 +190,8 @@ class NoteCommand(Command):
     """ Command for the creation, management, and visualization of notes """
     def __init__(self, project_config: dict):
         self.config = project_config
-        self.note_dir = Path(project_config['root']) / "notes"
-        if not self.note_dir.is_dir():
-            self._initialize_note_dir()
+        self.note_dir = Path(project_config['root']) / "Notes"
+
 
     def _initialize_note_dir(self) -> None:
         macros, preamble = Path(self.config["note-macros"]), Path(self.config["note-preamble"])
@@ -223,14 +205,23 @@ class NoteCommand(Command):
 
 
 
-    def cmd(self, namespace):
-        notes = NotesManager(self.note_dir)
 
+    def cmd(self, namespace):
+        if not self.note_dir.is_dir():
+            build = input(f"Directory {self.note_dir} does not exists. Would you like to create it? (yn): ")
+            if build == "y":
+                print("Creating Directory...")
+                self._initialize_note_dir()
+            else:
+                print("Stoping command")
+                return
+
+        notes = NotesManager(self.note_dir)
         if namespace.new_note:
             notes.new_note(namespace.new_note[0])
 
         elif namespace.remove_note:
-            notes.del_note(namespace.del_note[0])
+            notes.del_note(namespace.remove_note[0])
 
         elif namespace.list_notes:
             notes.list_notes()
@@ -245,7 +236,7 @@ class NoteCommand(Command):
         elif namespace.compile_note:
             note = notes.get_note(namespace.compile_note[0])
             if note is None:
-                print(f"Note {namespace.open_note[0]} does not exist")
+                print(f"Note {namespace.compile_note[0]} does not exist")
             else:
                 note.compile()
 
@@ -255,12 +246,19 @@ class NoteCommand(Command):
         elif namespace.tag:
             note = notes.get_note(namespace.tag[0])
             if note is None:
-                print(f"Note {namespace.open_note[0]} does not exist")
+                print(f"Note {namespace.tag[0]} does not exist")
             else:
                 note.add_tag(namespace.tag[1])
 
+        elif namespace.remove_tag:
+            note = notes.get_note(namespace.remove_tag[0])
+            if note is None:
+                print(f"Note {namespace.remove_tag[0]} does not exist")
+            else:
+                note.remove_tag(namespace.remove_tag[1])
+
         elif namespace.exists:
-            note = notes.get_note(namespace.tag[0])
+            note = notes.get_note(namespace.exists[0])
             if note is None:
                 print(f"False")
             else:
