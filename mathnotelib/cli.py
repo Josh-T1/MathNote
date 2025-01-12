@@ -7,6 +7,8 @@ import logging
 import logging.config
 from pathlib import Path
 import json
+import logging
+
 
 user_config_dir = config_dir()
 
@@ -27,13 +29,38 @@ if not user_config_dir.is_dir():
         print("Command aborted. Directory must be created before proceeding")
         sys.exit()
 
-config_path =Path(__file__).parent  / "logging_config.json"
-with open(config_path) as f:
-    logging_config = json.load(f)
 
+logging_config = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "filters": {},
 
-logging_config["handlers"]["file"]["filename"] = str(user_config_dir / "logs/mathnote.log")
-logging_config["loggers"]["mathnote"]["level"] = config["log-level"]
+    "formatters": {
+        "simple": {
+            "format": "[%(asctime)s][%(levelname)s][%(name)s] %(message)s",
+            "datefmt": "%Y-%m-%d %H:%M:%S"
+            }
+        },
+
+    "handlers": {
+        "file": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "level": config["log-level"],
+            "formatter": "simple",
+            "filename": str(user_config_dir / "logs/mathnote.log"),
+            "maxBytes": 1000000,
+            "backupCount": 2
+            }
+        },
+
+    "loggers": {
+        "mathnote": {
+            "level": "DEBUG",
+            "handlers": ["file"]
+        }
+    }
+}
+
 
 logging.config.dictConfig(config=logging_config)
 logger = logging.getLogger("mathnote")

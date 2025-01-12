@@ -14,9 +14,8 @@ cached_tex
 
 .data
 .git
+
 .mpy_root
+
 # ignore config.json
 *.json
-
-# test ideas
-playground/
