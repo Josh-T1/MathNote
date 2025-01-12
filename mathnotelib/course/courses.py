@@ -273,13 +273,19 @@ class Courses():
         self._courses = {}
 
     def _find_courses(self, _key = lambda c: c.name) -> list[Course]:
-        """ TODO: sort by last edited
+        """
         _key: key for sorting course objects. Default key is sort by name
         returns: list of courses sorted by _key
         """
         course_directories = [x for x in self.root.iterdir() if x.is_dir() and (x / "course_info.json").is_file()]
         courses = [Course(course) for course in course_directories]
         return list(sorted(courses, key=_key))
+
+    def macros_path(self):
+        return self.root / "macros.tex"
+
+    def preamble_path(self):
+        return self.root / "preamble.tex"
 
     def get_course(self, name: str) -> Course | None:
         return self.courses.get(name, None)

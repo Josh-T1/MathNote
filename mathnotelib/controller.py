@@ -192,30 +192,7 @@ class NoteCommand(Command):
         self.config = project_config
         self.note_dir = Path(project_config['root']) / "Notes"
 
-
-    def _initialize_note_dir(self) -> None:
-        macros, preamble = Path(self.config["note-macros"]), Path(self.config["note-preamble"])
-        self.note_dir.mkdir()
-        resourses_dir = self.note_dir / "resources"
-        resourses_dir.mkdir()
-        refs = resourses_dir / "refs.tex"
-        refs.touch()
-        shutil.copy(macros, resourses_dir / "macros.tex")
-        shutil.copy(preamble, resourses_dir / "preamble.tex")
-
-
-
-
     def cmd(self, namespace):
-        if not self.note_dir.is_dir():
-            build = input(f"Directory {self.note_dir} does not exists. Would you like to create it? (yn): ")
-            if build == "y":
-                print("Creating Directory...")
-                self._initialize_note_dir()
-            else:
-                print("Stoping command")
-                return
-
         notes = NotesManager(self.note_dir)
         if namespace.new_note:
             notes.new_note(namespace.new_note[0])

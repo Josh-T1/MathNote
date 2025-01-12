@@ -11,7 +11,7 @@ import logging
 from collections import deque
 from ..utils import SectionNames, SectionNamesDescriptor, config
 from .edit_tex import latex_template
-
+from ..course import Courses
 logger = logging.getLogger("mathnote")
 
 
@@ -304,6 +304,7 @@ class FlashcardModel:
         self.current_card = None # threadsafe, never accessed by thread
         self.compile_thread = StoppableThread(callback=self._compile)
         self._macros = None
+        self.courses = Courses(config)
 
     @property
     def macros(self) -> dict:
@@ -317,7 +318,7 @@ class FlashcardModel:
 
     def _load_macros(self) -> dict:
         """ Load macros from MACRO_PATH. Note there are limitations on macros that parse_tex can load and MACRO_NAMES are not created dynamically...See parse_tex.py """
-        return parse_tex.load_macros(parse_tex.MACRO_PATH, config["macro-names"])
+        return parse_tex.load_macros(self.courses.macros_path(), config["macro-names"])
 
 
     def _next_compiled_flashcard(self) -> parse_tex.Flashcard:

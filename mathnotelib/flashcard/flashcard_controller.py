@@ -112,7 +112,7 @@ class FlashcardController:
             message = "No flashcard selected. This button display info regarding source of flashcard"
         else:
             tracked_string = self.model.current_card.question if self.view.document == self.model.current_card.pdf_question_path else self.model.current_card.answer
-            source = tracked_string.source_history.root
+            source = tracked_string.source
             if len(tracked_string) >= 300:
                 tracked_string = tracked_string[:301]
             message = f"Source: {source}. Latex: {str(tracked_string)}"
@@ -179,7 +179,7 @@ class FlashcardController:
         card = self.model.current_card
         if card is None: return
         tracked_string = card.question if self.view.document == card.pdf_question_path else card.answer
-        source = tracked_string.source_history.root
+        source = tracked_string.source
         return source
 
     def open_main(self):

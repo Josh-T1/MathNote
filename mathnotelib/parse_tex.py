@@ -191,7 +191,6 @@ class CleanStage(Stage):
     def __init__(self, macros: dict) -> None:
         super().__init__()
         self.macros = macros
-
     def process(self, data: TrackedString) -> TrackedString:
         logger.debug(f"Starting {self.process}")
         tracked_string = self.remove_comments(data)
@@ -470,13 +469,11 @@ class FlashcardsPipeline:
 
     def __iter__(self) -> Generator[List[Flashcard], None, None]:
         for chunk in self.data_iterable:
-            print(chunk)
             if chunk is None:
                 yield []
                 continue
             for stage in self.stages:
                 chunk = stage.process(chunk)
-            print("building card")
             flashcards = self.builder.build(chunk)
             yield flashcards
 

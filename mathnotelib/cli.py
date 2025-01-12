@@ -6,13 +6,14 @@ from .utils import config, config_dir
 import logging
 import logging.config
 from pathlib import Path
-import json
 import logging
 
 
 user_config_dir = config_dir()
+root_dir = Path(config["root"])
+note_dir = root_dir / "Notes"
 
-def initialize():
+def _initialize_config_tree():
     """ Create .config/mathnote directory with required subdirectories and files """
     user_config_dir.mkdir()
     (user_config_dir / "logs").mkdir()
@@ -20,15 +21,41 @@ def initialize():
     dest = user_config_dir / "config.json"
     shutil.copy(template_path, dest)
 
+def _initialize_note_tree():
+    note_macros, note_preamble = Path(config["note-macros"]), Path(config["note-preamble"])
+    note_dir.mkdir()
+    resourses_dir = note_dir / "resources"
+    resourses_dir.mkdir()
+    refs = resourses_dir / "refs.tex"
+    refs.touch()
+    shutil.copy(note_macros, resourses_dir / "macros.tex")
+    shutil.copy(note_preamble, resourses_dir / "preamble.tex")
+
+def _initialize_root_tree():
+    macros, preamble = Path(config["macros"]), Path(config["preamble"])
+    root_dir.mkdir()
+    shutil.copy(macros, root_dir / "macros.tex")
+    shutil.copy(preamble, root_dir / "preamble")
+    _initialize_note_tree()
+
+
 if not user_config_dir.is_dir():
     build = input(f"Configuration directory {user_config_dir} does not exist\nWould you like to create? (yn): ")
     if build == "y":
         print("Creating directory...")
-        initialize()
+        _initialize_config_tree()
     else:
         print("Command aborted. Directory must be created before proceeding")
         sys.exit()
 
+if not (root := Path(config["root"])).is_dir():
+    build = input(f"Mathnote directory {root} does not exist\nWould you like to create? (yn): ")
+    if build == "y":
+        print("Creating directory...")
+        _initialize_root_tree()
+    else:
+        print("Command aborted. Directory must be created before proceeding")
+        sys.exit()
 
 logging_config = {
     "version": 1,
