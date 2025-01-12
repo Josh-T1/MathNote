@@ -7,8 +7,7 @@ from ..utils import config
 
 class Note:
     """
-    Represents a latex note and its corresponding metadata, e.g tags, aux files
-
+    Container for .tex file and all auxilary files and metadata, e.g tags.json
     """
 
     def __init__(self, source: Path):
@@ -43,6 +42,9 @@ class Note:
         self.update_metadata()
 
     def compile(self) -> int:
+        """
+        Compiles .tex file into a pdf and returns the returncode
+        """
         tex_file = self.path / f"{self.name()}.tex"
         result = subprocess.run(
             ['latexmk', "-pdf", str(tex_file)],
@@ -66,6 +68,9 @@ class Note:
             json.dump(self._metadata, f, indent=4)
 
     def open(self):
+        """
+        Opens note as pdf
+        """
         name = self.name()
         pdf = f"{name}.pdf"
         if not (self.path / pdf).is_file():
@@ -89,10 +94,10 @@ class Note:
 
 class NotesManager:
     """
-    Container for Note objects. Its assumed the note directory has been properly inizialized, e.i the following
+    Container for Note objects. Its assumed the note directory has been properly inizialized, i.e the following
     directory structure exists:
 
-    note/resources/
+    root/resources/
                   |-refs.tex
                   |-macros.tex
                   |-preamble.tex
@@ -112,6 +117,7 @@ class NotesManager:
 
     @property
     def notes(self) -> dict[str, Note]:
+        """ Returns dictionary where key, value paris correspond to (note name, Note()) """
         if self._notes is None:
             self._notes = {
                     note.name: Note(note)
@@ -121,11 +127,17 @@ class NotesManager:
         return self._notes
 
 
-    def is_note(self, stem: str) -> bool:
-        """ Takes in formated stem of filepath, e.g NewNote when creating new_note.tex """
-        return (self.note_dir / stem).is_dir()
+    def is_note(self, name: str) -> bool:
+        """
+        name: note name, stem of .tex file. e.g if note.tex is the file then the name is 'note'
+        returns: true if note exists, otherwise false
+        """
+        return (self.note_dir / name).is_dir()
 
     def new_note(self, name: str) -> None:
+        """
+        name: note name, stem of .tex file path (no suffix)
+        """
         if name.upper() in set(name.upper() for name in self.notes.keys()):
             print(f"Failed to create '{name}'. Its equal (up to capatilization) to existing note")
             return
@@ -190,7 +202,11 @@ class NotesManager:
             return False
         return True
 
-    def rename(self, name: str, new_name: str):
+    def rename(self, name: str, new_name: str) -> None:
+        """
+        name: file stem corresponding to existing note
+        new_name: stem for new file name (e.g Note )
+        """
         note_path = self.note_dir / name
 
         if not self.validate_name(new_name):
@@ -209,7 +225,11 @@ class NotesManager:
             if file.is_file() and file.stem == name:
                 file.rename(new_note_path / f"{new_name}{file.suffix}")
 
-    def del_note(self, name: str):
+    def del_note(self, name: str) -> None:
+        """
+        Deteles directory tree associated with note
+        name: name of note (filepath stem)
+        """
         note = self.notes.get(name, None)
         if note is None:
             print(f"Note {name} does not exist")

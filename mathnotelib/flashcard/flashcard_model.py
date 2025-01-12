@@ -9,9 +9,9 @@ from typing import OrderedDict, Deque
 from .. import parse_tex
 import logging
 from collections import deque
-from ..utils import SectionNames, SectionNamesDescriptor
+from ..utils import SectionNames, SectionNamesDescriptor, config
 from .edit_tex import latex_template
-
+from ..course import Courses
 logger = logging.getLogger("mathnote")
 
 
@@ -255,7 +255,7 @@ class TexCompilationManager:
         tex: string containig latex code
         returns: path to compiled pdf or None if compilation fails
         """
-        source = tex.source_history.root
+        source = tex.source #type: ignore
         tex_str = str(tex)
         tex_hash = "empty" if not tex_str else self.get_hash(tex_str)
         if tex_hash in self.cache.keys():
@@ -269,8 +269,7 @@ class TexCompilationManager:
 
 
 
-            cmd = ['latexmk',
-                   '-pdflatex=pdflatex -interaction=nonstopmode', f'-output-directory={str(tmpdir)}',"-pdf", str(tex_file_path)]
+            cmd = ['latexmk', '-pdflatex=pdflatex -interaction=nonstopmode', f'-output-directory={str(tmpdir)}',"-pdf", str(tex_file_path)]
             #cmd = ['pdflatex', '-interaction=nonstopmode', '-output-directory', str(tmpdir), str(tex_file_path)]
             logger.debug(f"Attempting to compile card")
             result = subprocess.run(
@@ -305,6 +304,7 @@ class FlashcardModel:
         self.current_card = None # threadsafe, never accessed by thread
         self.compile_thread = StoppableThread(callback=self._compile)
         self._macros = None
+        self.courses = Courses(config)
 
     @property
     def macros(self) -> dict:
@@ -318,7 +318,7 @@ class FlashcardModel:
 
     def _load_macros(self) -> dict:
         """ Load macros from MACRO_PATH. Note there are limitations on macros that parse_tex can load and MACRO_NAMES are not created dynamically...See parse_tex.py """
-        return parse_tex.load_macros(parse_tex.MACRO_PATH, parse_tex.MACRO_NAMES)
+        return parse_tex.load_macros(self.courses.macros_path(), config["macro-names"])
 
 
     def _next_compiled_flashcard(self) -> parse_tex.Flashcard:

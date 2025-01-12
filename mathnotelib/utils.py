@@ -9,7 +9,7 @@ def config_dir():
     if os.name == "nt":
         config_dir = Path(os.getenv("APPDATA")) / "mathnote"
     elif os.name == "posix":
-        config_dir = Path.home() / ".config" / "mathnote"
+        config_dir = Path.home() / ".config" / "MathNote"
     else:
         raise OSError("Unsupported operating system")
     return config_dir
@@ -17,7 +17,7 @@ def config_dir():
 def get_config() -> dict:
     """ Checks for user defined config, otherwise sets some default settings """
     config = {
-            "root": str(Path.home() / "Notes"),
+            "root": str(Path.home() / "MathNote"),
             "preamble-path": "" ,
             "course-info-template": str(TEMPLATES_PATH/ "course_info_template.json"),
             "macro-names": [],
