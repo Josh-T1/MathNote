@@ -23,8 +23,7 @@ immutable. However when __new__ is called the property is set. If there is a way
 """
 
 MACRO_PATH = config["macros"]
-#MACRO_NAMES = ["mlim", "norm", "squarebk", "roundbk", "curlybk", "anglebk", "abs", "operator", "rline",
-#               "uline", "mylist", "uto"]
+MACRO_NAMES = ["mlim", "norm", "squarebk", "roundbk", "curlybk", "anglebk", "abs", "operator", "rline", "uline", "mylist", "uto"]
 TEX_PATTERN_TO_MATHJAX = {r"\\begin\{equation\*\}": r"\[",
                         r"\\end\{equation\*\}": r"\]",
                         ">": "&gt;",
@@ -193,6 +192,7 @@ class CleanStage(Stage):
     def __init__(self, macros: dict) -> None:
         super().__init__()
         self.macros = macros
+        print(self.macros)
 
     def process(self, data: TrackedString) -> TrackedString:
         logger.debug(f"Starting {self.process}")
