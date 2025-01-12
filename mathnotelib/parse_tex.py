@@ -22,7 +22,7 @@ immutable. However when __new__ is called the property is set. If there is a way
 1. Get macro names dynamically
 """
 
-MACRO_PATH = config["macros-path"]
+MACRO_PATH = config["macros"]
 #MACRO_NAMES = ["mlim", "norm", "squarebk", "roundbk", "curlybk", "anglebk", "abs", "operator", "rline",
 #               "uline", "mylist", "uto"]
 TEX_PATTERN_TO_MATHJAX = {r"\\begin\{equation\*\}": r"\[",
