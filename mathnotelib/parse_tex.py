@@ -12,19 +12,16 @@ logger = logging.getLogger("mathnote")
 
 """
 parse_tex.py aims to provide a customizable pipeline that takes in file paths (.tex files) and returns 'cleaned' tex. This cleaned latex code can then
-be utilized to build Flashcards objects, or converted to other formats such as mathjax.
-Currenlty this module only provides a pipeline builder and pipeline stages relavent for creating flashcard... work in progress
+be utilized to build Flashcards objects, or converted to other formats such as mathjax (work in progess, only flashcards supported at the moment)
 
 
 --- Notes/TODO
-1. The lsp warning Cannot access memeber '._source_history' from TrackString can be ignored. The TrackString class is not inizialized with that property as it subclasses str which is
+1. The lsp warning Cannot access memeber '.source' from TrackString can be ignored. The TrackString class is not inizialized with that property as it subclasses str which is
 immutable. However when __new__ is called the property is set. If there is a way to do this 'properly' that would be great
 1. Get macro names dynamically
 """
 
 MACRO_PATH = config["macros"]
-#MACRO_NAMES = ["mlim", "norm", "squarebk", "roundbk", "curlybk", "anglebk", "abs", "operator", "rline",
-#               "uline", "mylist", "uto"]
 TEX_PATTERN_TO_MATHJAX = {r"\\begin\{equation\*\}": r"\[",
                         r"\\end\{equation\*\}": r"\]",
                         ">": "&gt;",
@@ -32,26 +29,24 @@ TEX_PATTERN_TO_MATHJAX = {r"\\begin\{equation\*\}": r"\[",
                         "&": "&amp;",
                           }
 
-@dataclass(frozen=True)
-class PathSourceRecord:
-    """ Root soure is filepath origin of text """
-    root: str
-    line_number: int | None = None
-
 
 class TrackedString(str):
     """
     string object that keeps a record of its source, e.g file.
 
     --- Limitations:
-        1. We give priority to left TrackedString. If string = TrackedString1(...) + TrackedString2(...) string.source_history will only contain
+        1. We give priority to left TrackedString. If string = TrackedString1(...) + TrackedString2(...) string.source will only contain
         the history of TrackedString1(...). This asserts there will always be exactly one 'root' source at the expense of tracking 'all' sources
-        2. Speed
+
+        2. There has to be a better solution...
     """
 
-    def __new__(cls, string,  source_history: PathSourceRecord | None = None):
+    def __new__(cls, string,  source: str | None = None):
+        """
+        source: path to source file
+        """
         instance = super().__new__(cls, string)
-        instance.source_history = source_history #type: ignore
+        instance.source = source #type: ignore
         return instance
 
     def join(self, iterable):
@@ -59,34 +54,37 @@ class TrackedString(str):
             return TrackedString("")
 
         joined_tex = self.__str__().join([str(tracked_string) for tracked_string in iterable])
-        source_history = iterable[0].source_history
-        return TrackedString(joined_tex, source_history=source_history)
+        source = iterable[0].source
+        return TrackedString(joined_tex, source =source)
 
 
     def __getitem__(self, __key) -> 'TrackedString':
-        return TrackedString(super().__getitem__(__key), source_history=self.source_history)
+        return TrackedString(super().__getitem__(__key), source=self.source)
 
     def modify_text(self, func: Callable[[str], str]):
         """ Method for using Trackedstring as argument for function: str -> str and using output to create new Trackedstring
         -- Params --
         func: function with str type param and str return type. functools.partial is helpfull here"""
         new_text = func(self.__str__())
-        return TrackedString(new_text, source_history=self.source_history)
+        return TrackedString(new_text, source=self.source)
 
     def sub(self, pattern: str, repl: str) -> "TrackedString":
         new_text = re.sub(pattern, repl, self.__str__())
-        return TrackedString(new_text, self.source_history)
+        return TrackedString(new_text, self.source)
 
     def __add__(self, other):
-        """ Left add has priority. If result = TrackedString1(...) + TrackedString2(...), result.source_history.parent = TrackedString1(...) """
+        """ Left add has priority. If result = TrackedString1(...) + TrackedString2(...), result.source.parent = TrackedString1(...) """
         if not isinstance(other, str):
             raise TypeError(f"Other must be type str not type {type(other)}")
         other_text = other if not isinstance(other, TrackedString) else other.__str__()
         return TrackedString(super().__str__() + other_text,
-                             source_history=self.source_history)
+                             source=self.source)
+
+    def __str__(self):
+        return super().__str__()
 
     def __repr__(self):
-        return (f"TrackedString({super().__repr__()}, self._source_history=SourceHistory(...))")
+        return (f"TrackedString({super().__repr__()}, self.source={self.source})")
 
 
 @dataclass
@@ -185,8 +183,8 @@ class TexDataGenerator:
                 yield None
                 continue
 
-            source_history = PathSourceRecord(str(file_path))
-            return_value = TrackedString(file_contents, source_history=source_history)
+            source = str(file_path)
+            return_value = TrackedString(file_contents, source=source)
             yield return_value
 
 class CleanStage(Stage):
@@ -219,7 +217,7 @@ class CleanStage(Stage):
         paren_stack = []
 
         if tex[0] != "{": # } <- this comment is to keep vim lsp happy
-            raise ValueError(f"String passed does not begin with curly opening brace: {tex[:50]}, {tex.source_history.root}")
+            raise ValueError(f"String passed does not begin with curly opening brace: {tex[:50]}, {tex.source}")
 
         for index, char in enumerate(tex):
             if char == "{":
@@ -270,7 +268,7 @@ class CleanStage(Stage):
             if tex[counter-1].isalpha(): # Add space character to prevent joining text, however ensure previous charcater is
                 new_cmd = " " + new_cmd
             new_cmd += " "
-            tex_pcs.append(TrackedString(new_cmd, source_history=cleaned_arg.source_history))
+            tex_pcs.append(TrackedString(new_cmd, source=cleaned_arg.source))
             counter = len(arg) + end_cmd_index + num_brackets_ignored +1 #This sets counter equal to last character in command, +1 to move to character after command
         new_tex = TrackedString("").join(tex_pcs)
         return new_tex
@@ -298,7 +296,7 @@ class SectionFinder(ABC):
         paren_stack = []
 
         if tex[0] != paren[0]:
-            raise ValueError(f"String passed does not begin with '{{': {tex[:50]}, {tex.source_history.root}") # }}} <= keep lsp happy
+            raise ValueError(f"String passed does not begin with '{{': {tex[:50]}, {tex.source}") # }}} <= keep lsp happy
 
         for index, char in enumerate(tex):
             if char == paren[0]:
@@ -462,8 +460,7 @@ class FlashcardBuilder(BuildFlashcardStage):
 
 class FlashcardsPipeline:
     """ Generator Object
-    TODO: Type hinting is kinda fucked. I have a abstract Stage class that must implement process method. Different stages can have
-    different return types, so I leave it up to the user to use these stages in correct order (last stage must return list[Flashcard])
+    TODO: Different stages can have different return types, so I leave it up to the user to use these stages in correct order (last stage must return list[Flashcard])
     Implementing some sort of type hinting (or class re design) to make this ordering less ambigous would be nice
     """
     def __init__(self, data_iterable: Iterable, flashcard_builder: BuildFlashcardStage, stages: list[Stage] | None = None):
@@ -473,11 +470,13 @@ class FlashcardsPipeline:
 
     def __iter__(self) -> Generator[List[Flashcard], None, None]:
         for chunk in self.data_iterable:
+            print(chunk)
             if chunk is None:
                 yield []
                 continue
             for stage in self.stages:
                 chunk = stage.process(chunk)
+            print("building card")
             flashcards = self.builder.build(chunk)
             yield flashcards
 
