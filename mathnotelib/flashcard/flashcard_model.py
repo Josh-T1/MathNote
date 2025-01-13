@@ -173,6 +173,7 @@ class TexCompilationManager:
         if not self.cache_dir.is_dir():
             logger.debug(f"{self.cache_dir} does not exists, creating {self.cache_dir}")
             self.cache_dir.mkdir()
+            print(self.cache_dir.is_dir())
 
     @property
     def cache(self):
