@@ -1,4 +1,5 @@
 from collections.abc import Callable
+import math
 from PyQt6.QtWidgets import (QCheckBox, QComboBox, QHBoxLayout, QLabel, QListView, QMessageBox, QSizePolicy, QSpacerItem, QVBoxLayout,
                              QWidget, QPushButton, QMainWindow, QSpacerItem, QSizePolicy, QScrollArea)
 from PyQt6.QtPdfWidgets import QPdfView
@@ -7,6 +8,7 @@ from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtGui import QColor, QPalette, QStandardItem, QStandardItemModel
 import logging
 from ..utils import LatexCompilationError, config
+from ..course import Courses, Course
 
 logger = logging.getLogger("mathnote")
 
@@ -60,6 +62,7 @@ class VConfigBar(QWidget):
         self.initUi()
         self.setFixedWidth(160)
         self.setLayout(self.config_layout)
+        self.courses = Courses(config)
 
     def initUi(self):
         self._create_widgets()
@@ -91,20 +94,12 @@ class VConfigBar(QWidget):
         self.random_checkbox.setChecked(True)
 #        self.dropdown.setMaximumWidth(100)
         self.course_combo_label.setText("Select Course")
+        self.course_combo.currentIndexChanged.connect(self.update_week_filters)
         self.section_list_label.setText("Select Section")
         self.filter_by_week_list_label.setText("Filter by week")
 
-        filter_by_week_list_model = QStandardItemModel()
-        num_weeks = WEEKS_IN_SEMESTER
-        all_box = QStandardItem('All')
-        all_box.setCheckable(True)
-        filter_by_week_list_model.appendRow(all_box)
-        for i in range(1, num_weeks+1):
-            list_item = QStandardItem(f"Week {i}")
-            list_item.setCheckable(True)
-            filter_by_week_list_model.appendRow(list_item)
-
-        self.filter_by_week_list.setModel(filter_by_week_list_model)
+        self.filter_by_week_list_model = QStandardItemModel()
+        self.filter_by_week_list.setModel(self.filter_by_week_list_model)
         self.filter_by_week_list.setMaximumWidth(125)
         self.filter_by_week_list.setMaximumHeight(150)
 
@@ -121,6 +116,23 @@ class VConfigBar(QWidget):
         self.section_list.setMaximumHeight(150)
         self.create_flashcards_button.setMaximumWidth(150)
         self.course_combo.setMaximumWidth(150)
+
+    def update_week_filters(self):
+        course: Course | None = self.courses.get_course(self.course_combo.currentText())
+        if course is None:
+            raise ValueError("Course directory not found")
+        day_per_week = max(len(course.days()), 2) # defualt to 2 if not set in course_info.json
+        num_weeks = math.ceil(len(course.lectures) / day_per_week)
+
+        self.filter_by_week_list_model.clear()
+        all_box = QStandardItem('All')
+        all_box.setCheckable(True)
+        self.filter_by_week_list_model.appendRow(all_box)
+        for i in range(1, num_weeks+1):
+            list_item = QStandardItem(f"Week {i}")
+            list_item.setCheckable(True)
+            self.filter_by_week_list_model.appendRow(list_item)
+
 
     def _add_widgets(self):
         self.config_layout.addWidget(self.course_combo_label)

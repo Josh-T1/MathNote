@@ -2,7 +2,7 @@ import argparse
 import shutil
 import sys
 from .controller import CourseCommand, FlashcardCommand, NoteCommand
-from .utils import config, config_dir
+from .utils import config, config_dir, update_config
 import logging
 import logging.config
 from pathlib import Path
@@ -22,6 +22,7 @@ def _initialize_config_tree():
     shutil.copy(template_path, dest)
 
 def _initialize_note_tree():
+    """ Create MathNote/Notes directory with required subdirectories and files """
     note_macros, note_preamble = Path(config["note-macros"]), Path(config["note-preamble"])
     note_dir.mkdir()
     resourses_dir = note_dir / "resources"
@@ -32,6 +33,7 @@ def _initialize_note_tree():
     shutil.copy(note_preamble, resourses_dir / "preamble.tex")
 
 def _initialize_root_tree():
+    """ Create MathNote directory with required subdirectories and files """
     macros, preamble = Path(config["macros"]), Path(config["preamble"])
     root_dir.mkdir()
     shutil.copy(macros, root_dir / "macros.tex")
@@ -133,7 +135,7 @@ flashcard_parser_arguments = [
         ]
 
 
-global_parser.add_argument("--update-config", action="store_true", help="Update configuration files. If any template or config files have been modified --this command must be run before changes take effect")
+global_parser.add_argument("--update-config", action="store_true", help="Update macro and preamble files. If any macro or preamble files have been modified --this command must be run before changes take effect")
 for arg in flashcard_parser_arguments:
     flashcard_parser.add_argument(*arg[:-1], **arg[-1])
 
@@ -152,15 +154,17 @@ command_mapping = {
         "note": NoteCommand
         }
 
-
 def main():
-    if args.command is None:
+    if args.update_config:
+        update_config()
+
+    elif args.command is None:
         global_parser.print_help()
         return
-
-    instance = command_mapping[args.command](config)
-    logger.info(f"Calling command {type(instance)}")
-    instance.cmd(args)
+    else:
+        instance = command_mapping[args.command](config)
+        logger.info(f"Calling command {type(instance)}")
+        instance.cmd(args)
 
 if __name__ == '__main__':
     main()

@@ -1,9 +1,7 @@
-from os import name
 from pathlib import Path
 import subprocess
 from .course import Courses, Course
 import logging
-import shutil
 from typing import Protocol
 from .utils import load_json, dump_json
 from .note import NotesManager

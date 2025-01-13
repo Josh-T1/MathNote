@@ -523,10 +523,10 @@ def get_hack_macros():
     return {"framedtext": {"num_args": '1', "command": ""}}
 
 def load_macros(macros_path: Path, macro_names: list[str]) -> dict[str,dict]:
-    r""" Gets all user commands from self.macros_path
+    r""" Gets all user commands from macro_path
     Macros beign parsed have the form:
-        \macro_name{name(optional)}{
-            something(optional)
+        \newcommand{macro name}[nargs(int)]{
+            command
             }
     returns: dict of the form {cmd_name: {args: #, tex_cmd: ""}}
     """

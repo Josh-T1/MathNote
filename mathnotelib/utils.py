@@ -2,8 +2,9 @@ from pathlib import Path
 import json
 import platform
 import os
+import shutil
 
-TEMPLATES_PATH = Path(__file__).parent / "templates"
+templates_path= Path(__file__).parent / "templates"
 
 def config_dir():
     if os.name == "nt":
@@ -19,7 +20,7 @@ def get_config() -> dict:
     config = {
             "root": str(Path.home() / "MathNote"),
             "preamble-path": "" ,
-            "course-info-template": str(TEMPLATES_PATH/ "course_info_template.json"),
+            "course-info-template": str(templates_path/ "course_info_template.json"),
             "macro-names": [],
             "section-names": {},
             "iterm2-enabled": False,
@@ -44,7 +45,7 @@ def get_config() -> dict:
             if (cf_path / file_name).is_file():
                 config[key] = str(cf_path / file_name)
             else:
-                config[key] = str(TEMPLATES_PATH / file_name)
+                config[key] = str(templates_path / file_name)
 
     return config
 
@@ -67,21 +68,6 @@ def open_cmd() -> str:
     else:
         cmd = "start"
     return cmd
-
-def save_config(config: dict):
-    cf_path = config_dir()
-    if cf_path.is_dir():
-        with open(cf_path, "w") as f:
-            json.dump(config, f, indent=6)
-
-def load_json(file: str):
-    with open(file, "r") as f:
-        contents = json.load(f)
-    return contents
-
-def dump_json(file: str, contents: str):
-    with open(file, "w") as f:
-        json.dump(contents, f)
 
 class SectionNamesDescriptor:
     def __init__(self, name: str, value: str):
@@ -134,7 +120,6 @@ class ImmutableMeta(type):
         else:
             return False
 
-
 class SectionNames(metaclass=ImmutableMeta):
     DEFINITION = "defin"
     THEOREM = "theo"
@@ -144,3 +129,24 @@ class SectionNames(metaclass=ImmutableMeta):
     LEMMA = "lemma"
     PROPOSITION = "proposition"
 
+def update_config():
+    """
+    Users may specify latex templates in config directory. These templates are copied into the required directories when
+    cli.py is ran for the first time. If a user changes a template, this function must be called, otherwise nothing changes.
+    """
+    root = Path(config["root"])
+    macros, preamble = Path(config["macros"]), Path(config["preamble"])
+    note_macros, note_preamble = Path(config["note-macros"]), Path(config["note-preamble"])
+    shutil.copy(macros, root / "macros.tex")
+    shutil.copy(preamble, root / "preambles.tex")
+    shutil.copy(note_macros, root / "Notes/resources/macros.tex")
+    shutil.copy(note_preamble, root / "Notes/resources/preamble.tex")
+
+def load_json(file: str):
+    with open(file, "r") as f:
+        contents = json.load(f)
+    return contents
+
+def dump_json(file: str, contents: str):
+    with open(file, "w") as f:
+        json.dump(contents, f)
