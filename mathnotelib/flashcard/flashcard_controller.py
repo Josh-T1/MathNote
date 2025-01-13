@@ -2,6 +2,8 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QStandardItemModel
 from PyQt6.QtWidgets import QListView
 from pathlib import Path
+
+from mathnotelib.parse_tex import TrackedString
 from .flashcard_model import FlashcardModel, FlashcardNotFoundException
 import sys
 import logging
@@ -112,7 +114,13 @@ class FlashcardController:
             message = "No flashcard selected. This button display info regarding source of flashcard"
         else:
             tracked_string = self.model.current_card.question if self.view.document == self.model.current_card.pdf_question_path else self.model.current_card.answer
-            source = tracked_string.source
+            if isinstance(tracked_string, TrackedString):
+                source = tracked_string.source
+            else:
+                source = "Error"
+                print(isinstance(self.model.current_card.question, TrackedString), "question")
+                print(isinstance(self.model.current_card.answer, TrackedString), "answer")
+
             if len(tracked_string) >= 300:
                 tracked_string = tracked_string[:301]
             message = f"Source: {source}. Latex: {str(tracked_string)}"
@@ -177,7 +185,8 @@ class FlashcardController:
 
     def _get_pdf_source(self) -> str | None:
         card = self.model.current_card
-        if card is None: return
+        if card is None:
+            return
         tracked_string = card.question if self.view.document == card.pdf_question_path else card.answer
         source = tracked_string.source
         return source

@@ -381,6 +381,7 @@ class FlashcardBuilder(BuildFlashcardStage):
     def __init__(self, main_section_finder: MainSectionFinder, sub_section_finders: list[SubSectionFinder] | None = None) -> None:
         self.main_section_finder = main_section_finder
         self.sub_section_finders = [] if sub_section_finders is None else sub_section_finders
+
     @staticmethod
     def index_of_line_end(tex: TrackedString) -> int | None:
         """
@@ -433,6 +434,8 @@ class FlashcardBuilder(BuildFlashcardStage):
                 continue
 
             parent_section = section.name # the command title. e.g \defin{...}{...}
+            print(isinstance(section.title, TrackedString))
+            print(isinstance(section.content, TrackedString))
             flashcards.append(
                     Flashcard(section.name, section.title, section.content)
                     )

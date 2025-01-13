@@ -22,7 +22,7 @@ class StoppableThread(threading.Thread):
     """
     Accepts kwarg 'callback' of type Callable that is called by StoppableThread._run() on every loop for which the _stop_event
     is not set. The callback must accept one parameter: threading.Event(). If the callback implements its own blocking behaviour it must
-    break out of that state when even it set (see FlashcardModel._compile)
+    break out of that state when even it set (see FlashcardModel.compile)
     """
     def __init__(self, *args, **kwargs):
         self._stop_event = threading.Event()
@@ -158,22 +158,24 @@ class FlashcardDoubleLinkedList:
 class TexCompilationManager:
     """ Handles compilation of latex, flashcard cache, and formating of flashcard."""
 
-    def __init__(self, cache_dir: str ="cache_tex", cache_size: int = 200) -> None:
+    def __init__(self, cache_root: str ="cache_tex", cache_size: int = 200) -> None:
         """
         -- Params --
-        cache_dir: location of cache directory. ie where should pdf_files be saved
+        cache_root: location of cache directory
         cache_size: limit on number of files allowed in cache_dir. Oldest files are deleted from cache first
         """
         self._ignore_hashes = ["empty"]
-        self.cache_dir: Path = Path(__file__).resolve().parent / cache_dir / "pdf"
+        self.cache_root = Path(__file__).resolve().parent / cache_root
+        self.cache_dir = self.cache_root / "pdf"
         self.cache_size = cache_size + len(self._ignore_hashes) # Ignore cached files for default messages
         self._cache: dict = {}
 
 
-        if not self.cache_dir.is_dir():
-            logger.debug(f"{self.cache_dir} does not exists, creating {self.cache_dir}")
+        if not self.cache_root.is_dir():
+            logger.debug(f"{self.cache_root} does not exists. Creating directory...")
             self.cache_dir.mkdir()
-            print(self.cache_dir.is_dir())
+        if not self.cache_dir.is_dir():
+            logger.debug(f"{self.cache_dir} does not exists. Creating directory...")
 
     @property
     def cache(self):
@@ -230,10 +232,13 @@ class TexCompilationManager:
         replace answer with proof """
         if hasattr(card, SectionNames.PROOF.name) and hasattr(card, SectionNames.PROOF.name):
             if len(card.question) == 0 or not any(char.isalpha() for char in card.question):
-                prefix = f"({card.question})" if card.question else ""
+                prefix = card.question if card.question else None
                 card.question = card.answer
                 card.pdf_question_path = card.pdf_answer_path
-                card.answer = prefix + getattr(card, SectionNames.PROOF.name)
+                if prefix is not None:
+                    card.answer = prefix + getattr(card, SectionNames.PROOF.name)
+                else:
+                    card.answer = getattr(card, SectionNames.PROOF.name)
                 card.pdf_answer_path = getattr(card, f"pdf_{SectionNames.PROOF.name}_path")
                 delattr(card, SectionNames.PROOF.name)
                 delattr(card, f"pdf_{SectionNames.PROOF.name}_path")
@@ -256,7 +261,7 @@ class TexCompilationManager:
         tex: string containig latex code
         returns: path to compiled pdf or None if compilation fails
         """
-        source = tex.source #type: ignore
+        source = tex.source
         tex_str = str(tex)
         tex_hash = "empty" if not tex_str else self.get_hash(tex_str)
         if tex_hash in self.cache.keys():
@@ -270,8 +275,7 @@ class TexCompilationManager:
 
 
 
-            cmd = ['latexmk', '-pdflatex=pdflatex -interaction=nonstopmode', f'-output-directory={str(tmpdir)}',"-pdf", str(tex_file_path)]
-            #cmd = ['pdflatex', '-interaction=nonstopmode', '-output-directory', str(tmpdir), str(tex_file_path)]
+            cmd = ['latexmk', "-f", '-pdflatex=pdflatex -interaction=nonstopmode', f'-output-directory={str(tmpdir)}',"-pdf", str(tex_file_path)]
             logger.debug(f"Attempting to compile card")
             result = subprocess.run(
                     cmd,
@@ -279,10 +283,12 @@ class TexCompilationManager:
                     )
             # Command did not run successfully
             if result.returncode != 0:
-                logger.error(f"Failed to run {' '.join(cmd)}. Tex file contents: {tex_str}, stderr={result.stderr}\nSource={source}")
-                return None
+                logger.error(f"Error running {' '.join(cmd)}. Tex file contents: {tex_str}, stderr={result.stderr}\nSource={source}")
 
-            logger.info(f"Successfully compiled card")
+                if not pdf_file_path.is_file(): # Error != no pdf produced
+                    return None
+
+            logger.info(f"Successfully generated pdf")
             new_path = pdf_file_path.rename(self.cache_dir / f"{tex_hash}.pdf").resolve()
 
         return str(new_path)
