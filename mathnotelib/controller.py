@@ -1,10 +1,11 @@
 from pathlib import Path
 import subprocess
+from .note import NotesManager, MainWindow
 from .course import Courses, Course
 import logging
 from typing import Protocol
 from .utils import load_json, dump_json
-from .note import NotesManager
+
 
 logger = logging.getLogger("mathnote")
 
@@ -87,6 +88,7 @@ class FlashcardCommand(Command):
 
 class CourseCommand(Command):
     """ Class command """
+
     def __init__(self, project_config):
         self.project_config = project_config
         self.courses_obj = Courses(self.project_config)
@@ -121,9 +123,6 @@ class CourseCommand(Command):
             self.create_course(namespace)
             return
 
-#        if namespace.current_course:
-#            self.handle_active()
-
         if namespace.information:
             self.get_course_information(course)
 
@@ -151,10 +150,13 @@ class CourseCommand(Command):
             if val:
                 continue
 
-            print(f"Input value for key: {key}")
-            self._additional_message(key)
+            if "time" in key:
+                print("Input time in format HH:MM with leading zeros if necessary: ")
+            elif "weekday" in key:
+                print("Enter a list of comma seperated days for which the course occurs. e.g. Monday, Tuesday")
+            elif "date" in key:
+                print("Enter date in the format yyyy/mm/dd")
             res = input("$ ").strip()
-#            self._validate_user_input(res)
             dic[key] = res
         dump_json(str(path), dic)
 
@@ -162,16 +164,6 @@ class CourseCommand(Command):
     def beautify_output(info: dict):
         """ convert dictionary into a more readable string """
         return '\n'.join([f"{k}: {v}" for k, v in info.items()])
-
-    @staticmethod
-    def _additional_message(key):
-        if "time" in key:
-            print("Input time in format HH:MM (24 hour clock format) with leading zeros")
-
-        elif "weekday" in key:
-            print("Enter a list of comma seperated days for which the course occurs. ie Monday, Tuesday")
-        elif "date" in key:
-            print("Enter date in the format yyyy/mm/dd ")
 
     def open_main(self, name: str):
         course = self.courses_obj.get_course(name)
@@ -238,3 +230,13 @@ class NoteCommand(Command):
                 print(f"False")
             else:
                 print(f"True")
+
+        elif namespace.plot_network:
+            from PyQt6.QtWidgets import QApplication
+            import sys
+            matrix = notes.build_adj_matrix()
+            app = QApplication(sys.argv)
+            window = MainWindow()
+            window.show()
+            sys.exit(app.exec())
+

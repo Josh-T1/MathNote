@@ -175,7 +175,7 @@ class NotesManager:
 \begin{{center}}
     {{\Large \textbf{{{title}}} }}
 \end{{center}}
-        """
+"""
         with filepath.open('r') as file:
             lines = file.readlines()
         start_idx, end_idx = None, None
@@ -189,7 +189,7 @@ class NotesManager:
         if start_idx is None or end_idx is None or start_idx != end_idx - 1:
             print("Warning template has invalid format, unable to add title")
             return
-        lines = lines[:start_idx] + [title] + lines[end_idx:]
+        lines = lines[:start_idx + 1] + [title] + lines[end_idx:]
         with filepath.open("w") as f:
             f.writelines(lines)
 
@@ -242,5 +242,15 @@ class NotesManager:
     def get_note(self, name: str) -> Note | None:
         return self.notes.get(name, None)
 
-    def build_adjacency_matrix(self):
+    def build_adj_matrix(self):
+        for note in self.note_dir.iterdir():
+            if note.is_dir() and note.stem != "resources":
+                aux_file = note / note.stem / ".aux"
+                if aux_file.is_file():
+                    print("found")
+#                    with aux_file.open("r") as f:
+#                        pass
+                else:
+                    print(aux_file, "Not a file")
+
         pass

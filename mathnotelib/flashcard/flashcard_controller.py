@@ -111,7 +111,7 @@ class FlashcardController:
 
     def show_flashcard_info(self):
         if self.model.current_card is None:
-            message = "No flashcard selected. This button display info regarding source of flashcard"
+            message = "No flashcard has been loaded\nDisplays flash card source information"
         else:
             tracked_string = self.model.current_card.question if self.view.document == self.model.current_card.pdf_question_path else self.model.current_card.answer
             if isinstance(tracked_string, TrackedString):

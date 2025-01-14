@@ -123,6 +123,7 @@ note_parser_arguments = [
         ("-ls", "--list-notes", {"action": "store_true", "help": "list notes"}),
         ("-o", "--open-note", {"nargs": 1, "help": "open note"}),
         ("-c", "--compile-note", {"nargs": 1, "help": "compile note"}),
+        ("-p", "--plot-network", {"action": "store_true", "help": "Displays network representation of notes"}),
         ("--rename", {"nargs": 2, "help": "rename note (old name, new name)"}),
         ("-t", "--tag" , {"nargs": 2, "help": "add tag to note (note name, tag)"}),
         ("--remove-tag", {"nargs": 1, "help": "remove tag from note"}),
