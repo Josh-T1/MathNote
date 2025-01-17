@@ -227,14 +227,15 @@ class NoteCommand(Command):
         elif namespace.exists:
             note = notes.get_note(namespace.exists[0])
             if note is None:
-                print(f"False")
+                print("0")
             else:
-                print(f"True")
+                print("1")
 
         elif namespace.plot_network:
             from PyQt6.QtWidgets import QApplication
             import sys
-            matrix = notes.build_adj_matrix()
+            # Consider the error when file has never been compiled
+#            matrix = notes.build_adj_matrix()
             app = QApplication(sys.argv)
             window = MainWindow()
             window.show()

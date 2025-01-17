@@ -8,7 +8,7 @@ templates_path= Path(__file__).parent / "templates"
 
 def config_dir():
     if os.name == "nt":
-        config_dir = Path(os.getenv("APPDATA")) / "mathnote"
+        config_dir = Path(os.getenv("APPDATA")) / "MathNote"
     elif os.name == "posix":
         config_dir = Path.home() / ".config" / "MathNote"
     else:

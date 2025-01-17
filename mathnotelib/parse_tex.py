@@ -434,8 +434,6 @@ class FlashcardBuilder(BuildFlashcardStage):
                 continue
 
             parent_section = section.name # the command title. e.g \defin{...}{...}
-            print(isinstance(section.title, TrackedString))
-            print(isinstance(section.content, TrackedString))
             flashcards.append(
                     Flashcard(section.name, section.title, section.content)
                     )

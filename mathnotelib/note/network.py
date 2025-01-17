@@ -1,8 +1,9 @@
-from PyQt6.QtWidgets import (QCheckBox, QComboBox, QGraphicsScene, QGraphicsView, QHBoxLayout, QLabel, QListView, QMessageBox, QSizePolicy, QSpacerItem, QVBoxLayout,
+from collections.abc import Callable
+from PyQt6.QtWidgets import (QCheckBox, QComboBox, QGraphicsEllipseItem, QGraphicsScene, QGraphicsView, QHBoxLayout, QLabel, QListView, QMessageBox, QPinchGesture, QSizePolicy, QSpacerItem, QVBoxLayout,
                              QWidget, QPushButton, QMainWindow, QSpacerItem, QSizePolicy, QScrollArea, QApplication)
 from PyQt6.QtPdfWidgets import QPdfView
 from PyQt6.QtPdf import QPdfDocument
-from PyQt6.QtCore import Qt, pyqtSignal, QPoint, QPointF
+from PyQt6.QtCore import QEvent, Qt, pyqtSignal, QPoint, QPointF
 from PyQt6.QtGui import QBrush, QColor, QPainter, QPalette, QStandardItem, QStandardItemModel, QPen,QFont
 import networkx as nx
 import numpy as np
@@ -14,6 +15,52 @@ adj_matrix = np.array([
     [0, 1, 1, 0, 1],  # Node 3 is connected to Node 1, Node 2, and Node 4
     [1, 0, 0, 1, 0],  # Node 4 is connected to Node 0 and Node 3
 ])
+
+
+class GraphNode(QGraphicsEllipseItem):
+    """
+    Wrapper for QGraphicsEllipseItem that has callback option on mousePressEvent. Pass callback: Callable
+    as kwarg
+    """
+    def __init__(self, *args, **kwargs):
+        if "callback" in kwargs:
+            self.callback = kwargs.pop("callback")
+        super().__init__(*args, **kwargs)
+#        self.callback = kwargs.get("callback", None)
+
+    def mousePressEvent(self, event) -> None:
+        if self.callback is not None:
+            self.callback()
+        return super().mousePressEvent(event)
+
+class ZoomableGraphicsView(QGraphicsView):
+    def __init__(self, scene):
+        super().__init__(scene)
+        self.setViewportUpdateMode(QGraphicsView.ViewportUpdateMode.FullViewportUpdate)
+        self.grabGesture(Qt.GestureType.PinchGesture)
+        self.scale_factor = 1.0
+
+    def gestureEvent(self, event):
+        if isinstance(event.gesture(Qt.GestureType.PinchGesture), QPinchGesture):
+            pinch = event.gesture(Qt.GestureType.PinchGesture)
+            if pinch.changeFlags() & QPinchGesture.ChangeFlag.ScaleFactorChanged:
+                self.scale(pinch.scaleFactor(), pinch.scaleFactor())
+            return True
+        return False
+
+    def event(self, event):
+        if event is None:
+            return
+        if event.type() == QEvent.Type.Gesture:
+            return self.gestureEvent(event)
+        return super().event(event)
+
+    def wheelEvent(self, event):
+        if event is None:
+            return
+        delta = event.angleDelta().y() / 120  # Typical mouse wheel delta scaling
+        factor = 1.1 if delta > 0 else 0.9
+        self.scale(factor, factor)
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -35,7 +82,7 @@ class MainWindow(QMainWindow):
 
     def _create_widgets(self):
         self.scene = QGraphicsScene()
-        self.view = QGraphicsView(self.scene)
+        self.view = ZoomableGraphicsView(self.scene) # TODO
         self.view.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         self._create_graph()
 
@@ -60,20 +107,20 @@ class MainWindow(QMainWindow):
     def _add_node(self, node, pos):
         # Add a circle for the node
         radius = 20
-        ellipse = self.scene.addEllipse(
-            pos.x() - radius, pos.y() - radius, radius * 2, radius * 2,
-            QPen(Qt.GlobalColor.black), QBrush(Qt.GlobalColor.lightGray)
-        )
-        ellipse.setToolTip(f"Node {node}")
+        node = GraphNode(pos.x() - radius, pos.y() - radius, radius * 2, radius * 2, callback=self._node_clicked)
+        node.setPen(QPen(Qt.GlobalColor.black))
+        node.setBrush(QBrush(Qt.GlobalColor.lightGray))
+        self.scene.addItem(node)
+#        ellipse.setToolTip(f"Node {node}")
 
         # Add a label for the node
         text = self.scene.addText(str(node), QFont("Arial", 12))
         text.setPos(pos.x() - 10, pos.y() - 10)  # Adjust for centering
 
         # Attach an event to the node
-        ellipse.setFlag(ellipse.GraphicsItemFlag.ItemIsSelectable, True)
-        ellipse.setCursor(Qt.CursorShape.PointingHandCursor)
-        ellipse.mousePressEvent = lambda event: self._node_clicked(node)
+        node.setFlag(node.GraphicsItemFlag.ItemIsSelectable, True)
+        node.setCursor(Qt.CursorShape.PointingHandCursor)
+
 
     def _add_edge(self, edge, pos):
         # Add a line for the edge
