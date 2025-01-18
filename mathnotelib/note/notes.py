@@ -3,6 +3,7 @@ import json
 import shutil
 import subprocess
 from mathnotelib.utils import open_cmd
+import re
 from ..utils import config
 
 class Note:
@@ -155,7 +156,7 @@ class NotesManager:
 
 
         with self.refs_file.open(mode="a") as f:
-            f.write(f"\\externaldocument[{note}-]{{../note/{note}}}")
+            f.write(f"\\externaldocument[{note}-]{{../{note}/{note}}}\n")
         new_note = Note(dir)
         self.notes[new_note.name()] = new_note
 
@@ -164,32 +165,20 @@ class NotesManager:
 
     def insert_title(self, filepath: Path, title: str):
         """
-        Given a file with the format
-        text....
-        %mathnote
-        %mathnote
-        text...
-        Latex code for creating the title will be inserted between the comments
+        Adds title to note template
         """
-        title = fr"""
-\begin{{center}}
-    {{\Large \textbf{{{title}}} }}
-\end{{center}}
-"""
+        title = fr"""\begin{{center}}{{\Large \textbf{{{title}}}}}\end{{center}}""" + "\n"
         with filepath.open('r') as file:
             lines = file.readlines()
-        start_idx, end_idx = None, None
+        idx = None
         for i, line in enumerate(lines):
-            if "%" in line and "mathnote" in line:
-                if start_idx is None:
-                    start_idx = i
-                else:
-                    end_idx = i
-                    break
-        if start_idx is None or end_idx is None or start_idx != end_idx - 1:
+            if "\\begin{document}" in line:
+                idx = i
+                break
+        if idx is None:
             print("Warning template has invalid format, unable to add title")
             return
-        lines = lines[:start_idx + 1] + [title] + lines[end_idx:]
+        lines = lines[:idx + 1] + [title] + lines[idx + 1:]
         with filepath.open("w") as f:
             f.writelines(lines)
 
@@ -236,6 +225,15 @@ class NotesManager:
             return
         if note.path.exists() and note.path.is_dir():
             shutil.rmtree(note.path)
+
+        with self.refs_file.open("r") as f:
+            lines = f.readlines()
+        pattern = re.compile(rf"\\externaldocument\[.*?\]{{\.\./{re.escape(name)}/.*?}}")
+        with self.refs_file.open("w") as f:
+            for line in lines:
+                if not pattern.search(line):
+                    f.write(line)
+
         del self.notes[name]
         del note
 

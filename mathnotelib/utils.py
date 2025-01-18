@@ -142,6 +142,7 @@ def update_config():
     shutil.copy(note_macros, root / "Notes/resources/macros.tex")
     shutil.copy(note_preamble, root / "Notes/resources/preamble.tex")
 
+
 def load_json(file: str):
     with open(file, "r") as f:
         contents = json.load(f)

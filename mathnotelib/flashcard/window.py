@@ -12,8 +12,7 @@ from ..course import Courses, Course
 
 logger = logging.getLogger("mathnote")
 
-ZOOM_FACTOR = 2
-WEEKS_IN_SEMESTER = 11  # This needs to be changed at some point. Dynamically generate flashcards
+ZOOM_FACTOR = 3
 
 
 class InfoButton(QWidget):

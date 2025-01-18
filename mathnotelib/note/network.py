@@ -1,19 +1,18 @@
-from collections.abc import Callable
-from PyQt6.QtWidgets import (QCheckBox, QComboBox, QGraphicsEllipseItem, QGraphicsScene, QGraphicsView, QHBoxLayout, QLabel, QListView, QMessageBox, QPinchGesture, QSizePolicy, QSpacerItem, QVBoxLayout,
-                             QWidget, QPushButton, QMainWindow, QSpacerItem, QSizePolicy, QScrollArea, QApplication)
-from PyQt6.QtPdfWidgets import QPdfView
-from PyQt6.QtPdf import QPdfDocument
-from PyQt6.QtCore import QEvent, Qt, pyqtSignal, QPoint, QPointF
-from PyQt6.QtGui import QBrush, QColor, QPainter, QPalette, QStandardItem, QStandardItemModel, QPen,QFont
+from PyQt6.QtWidgets import (QGraphicsEllipseItem, QGraphicsScene, QGraphicsView, QHBoxLayout, QPinchGesture, QVBoxLayout, QWidget, QMainWindow)
+from PyQt6.QtCore import QEvent, Qt, QPointF
+from PyQt6.QtGui import QPainter, QPen,QFont
 import networkx as nx
 import numpy as np
+from ..utils import open_cmd
+import subprocess
+from pathlib import Path
 
 adj_matrix = np.array([
-    [0, 1, 0, 0, 1],  # Node 0 is connected to Node 1 and Node 4
-    [1, 0, 1, 1, 0],  # Node 1 is connected to Node 0, Node 2, and Node 3
-    [0, 1, 0, 1, 0],  # Node 2 is connected to Node 1 and Node 3
-    [0, 1, 1, 0, 1],  # Node 3 is connected to Node 1, Node 2, and Node 4
-    [1, 0, 0, 1, 0],  # Node 4 is connected to Node 0 and Node 3
+    [0, 1, 0, 0, 1],
+    [1, 0, 1, 1, 0],
+    [0, 1, 0, 1, 0],
+    [0, 1, 1, 0, 1],
+    [1, 0, 0, 1, 0],
 ])
 
 
@@ -23,15 +22,23 @@ class GraphNode(QGraphicsEllipseItem):
     as kwarg
     """
     def __init__(self, *args, **kwargs):
-        if "callback" in kwargs:
-            self.callback = kwargs.pop("callback")
+        self.pdf: Path | None = None
+        if "pdf" in kwargs:
+            pdf = kwargs.pop("pdf")
+            if (pdf:=Path(pdf)).is_file():
+                self.pdf = pdf
         super().__init__(*args, **kwargs)
-#        self.callback = kwargs.get("callback", None)
 
     def mousePressEvent(self, event) -> None:
-        if self.callback is not None:
-            self.callback()
+        if self.pdf is not None:
+            subprocess.run([open_cmd(), str(self.pdf)])
         return super().mousePressEvent(event)
+
+    def __str__(self):
+        if self.pdf is None:
+            return "Error"
+        else:
+            return self.pdf.parent.parent.stem
 
 class ZoomableGraphicsView(QGraphicsView):
     def __init__(self, scene):
@@ -39,6 +46,10 @@ class ZoomableGraphicsView(QGraphicsView):
         self.setViewportUpdateMode(QGraphicsView.ViewportUpdateMode.FullViewportUpdate)
         self.grabGesture(Qt.GestureType.PinchGesture)
         self.scale_factor = 1.0
+        self.setStyleSheet("background-color: Gray;")
+        self.setDragMode(QGraphicsView.DragMode.RubberBandDrag)
+        self.last_pos = None
+        self.setRenderHints(QPainter.RenderHint.Antialiasing)
 
     def gestureEvent(self, event):
         if isinstance(event.gesture(Qt.GestureType.PinchGesture), QPinchGesture):
@@ -50,7 +61,7 @@ class ZoomableGraphicsView(QGraphicsView):
 
     def event(self, event):
         if event is None:
-            return
+            return False
         if event.type() == QEvent.Type.Gesture:
             return self.gestureEvent(event)
         return super().event(event)
@@ -62,16 +73,35 @@ class ZoomableGraphicsView(QGraphicsView):
         factor = 1.1 if delta > 0 else 0.9
         self.scale(factor, factor)
 
+    def mousePressEvent(self, event):
+        if event and event.button() == Qt.MouseButton.LeftButton:
+            self.last_pos = event.position()
+
+    def mouseMoveEvent(self, event):
+        if self.last_pos is not None and event:
+            delta = event.position() - self.last_pos
+            self.translateScene(delta.x(), delta.y())
+            self.last_pos = event.position()
+
+    def mouseReleaseEvent(self, event):
+        if event and event.button() == Qt.MouseButton.LeftButton:
+            self.last_pos = None
+
+    def translateScene(self, dx, dy):
+        if (horizontal_scroll_bar := self.horizontalScrollBar()):
+            horizontal_scroll_bar.setValue(int(horizontal_scroll_bar.value() - dx))
+        if (vertical_scroll_bar := self.verticalScrollBar()):
+            vertical_scroll_bar.setValue(int(vertical_scroll_bar.value() - dy))
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.resize(1000, 600)
         self.setMinimumSize(400, 300)
-
         self.widget = QWidget()
         self.main_layout = QHBoxLayout(self.widget)
         self.main_flashcard_layout = QVBoxLayout()
-
         self.setCentralWidget(self.widget)
         self.initUi()
 
@@ -107,9 +137,9 @@ class MainWindow(QMainWindow):
     def _add_node(self, node, pos):
         # Add a circle for the node
         radius = 20
-        node = GraphNode(pos.x() - radius, pos.y() - radius, radius * 2, radius * 2, callback=self._node_clicked)
-        node.setPen(QPen(Qt.GlobalColor.black))
-        node.setBrush(QBrush(Qt.GlobalColor.lightGray))
+        node = GraphNode(pos.x() - radius, pos.y() - radius, radius * 2, radius * 2, pdf = "/Users/joshuataylor/MathNote/math-361/main/main.pdf")
+#        node.setPen(QPen(Qt.GlobalColor.black))
+#        node.setBrush(QBrush(Qt.GlobalColor.lightGray))
         self.scene.addItem(node)
 #        ellipse.setToolTip(f"Node {node}")
 
@@ -128,10 +158,4 @@ class MainWindow(QMainWindow):
         start_pos = QPointF(pos[start][0] * 300, pos[start][1] * 300)
         end_pos = QPointF(pos[end][0] * 300, pos[end][1] * 300)
         self.scene.addLine(start_pos.x(), start_pos.y(), end_pos.x(), end_pos.y(), QPen(Qt.GlobalColor.black))
-
-    def _node_clicked(self, node):
-        # Open a PDF or perform another action
-        print(f"Node {node} clicked!")
-#        pdf_path = f"file:///path/to/pdf_for_node_{node}.pdf"  # Replace with actual paths
-#        webbrowser.open(pdf_path)
 
