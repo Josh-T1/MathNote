@@ -135,7 +135,7 @@ class Course:
         return res
 
     @staticmethod
-    def get_header_footer(filepath: Path, end_header_pattern: str = "start_lectures", end_body_pattern: str = "end lectures") -> tuple[str, str, str]:
+    def get_header_footer(filepath: Path, end_header_pattern: str = "begin lectures", end_body_pattern: str = "end lectures") -> tuple[str, str, str]:
         """ Copy header and footer from main.tex, includes line with end_(header/footer)_pattern in header and footer respectively
         -- Params --
         filepath: path to file
@@ -192,7 +192,7 @@ class Course:
         """
         mainTex = self.main_path / "main.tex"
         logger.debug("Updating main.tex")
-        header, body, footer = self.get_header_footer(mainTex)
+        header, _, footer = self.get_header_footer(mainTex)
         body = ''.join([r'\input{lectures/' + number2filename(number) + '}\n' for number in lecture_nums])
         mainTex.write_text(header + body + footer)
 
@@ -216,7 +216,7 @@ class Course:
         """
         Create new assignment using the naming convention course_course_number_A{assignment number}
         """
-        new_num = 1
+        new_num = 0
         stems: list[list] = [file.stem.split("_") for file in self.assignment_path.iterdir() if file.is_file() and file.suffix == ".tex"]
         for e in stems:
             if len(e) == 3:
