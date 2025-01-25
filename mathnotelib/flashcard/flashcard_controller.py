@@ -11,7 +11,6 @@ from ..course.courses import Courses
 import threading
 from ..utils import SectionNames, SectionNamesDescriptor, LatexCompilationError
 from .edit_tex import open_file_with_editor
-
 logger = logging.getLogger("mathnote")
 
 
@@ -45,7 +44,6 @@ class FlashcardController:
         self.view.show()
         self.model.compile_thread.start()
         sys.exit(app.exec())
-
 
     def handle_dynamic_data(self):
         """ Flashcards must have a question and answer, however they may have other optional fields such as a proof or note

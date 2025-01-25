@@ -109,11 +109,11 @@ Flags:
 Before installing MathNote, ensure the following prerequisites are met:
 1. Python: Ensure you have Python 3.7 of higher installed
 2. Latex: Install a LaTex distribution. Examples include
-    * Tex Live (cross-platform): [Download TeX Live]()
-    * MikeTex (Windows): [Download MikTeX]()
-    * MacTex (macOS): [Download MacTex]()
+    * Tex Live (cross-platform): [Download TeX Live](https://www.tug.org/texlive/)
+    * MikeTex (Windows): [Download MikTeX](https://miktex.org/)
+    * MacTex (macOS): [Download MacTex](https://www.tug.org/mactex/)
 
-3. Latexmk: Most Latex distributions include `latexmk`. If not installed, intall via your package manager
+3. Latexmk: Most Latex distributions include `latexmk`. If not installed, install via your package manager
 
 Installing MathNote
 
@@ -197,7 +197,3 @@ Under `{config directory}/MathNote/` you can specify the following optional temp
 4. `preamble.tex`: The preamble used for compiling notes
 After a new template has been added or edits have been made, you must run `mathnote --update-config` for the changes to take effect.
 
-## Aknowledgment
-This project was largely inspired by [https://castel.dev.post/lecture-notes-1](https://castel.dev/post/lecture-notes-1/), which I would 
-highly recommend reading. If you are interested in typesetting your lecture notes in real time, you may find the following blog interesting 
-[https://ejmastnak.com/tutorials/vim-latex/intro/](https://ejmastnak.com/tutorials/vim-latex/intro/)

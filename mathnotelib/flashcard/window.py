@@ -313,6 +313,7 @@ class MainWindow(QMainWindow):
     @property
     def document(self):
         return self.pdf_window.document
+
     def setCloseCallback(self, callback):
         self.close_callback = callback
 
