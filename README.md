@@ -3,7 +3,7 @@
 
 MathNote is a Latex note taking tool, used to:
 1. Maintain course notes in a structured format
-2. Automatically create LaTex flashcards from a course
+2. Automatically create LaTeX flashcards from a course
 3. Manage a collection of shorter notes and visualize their connections (through references) using network analysis
 
 ## Usage
@@ -15,8 +15,8 @@ Flags:
 ran before changes take effect. See [templates](#templates)
 
 The command line interface has three main subcommands:
-1. `course`: command used for setting up the directory structure, getting course information, and other housekeeping tasks
-2. `flashcard`: used to generate pdf flashcards, parsed from Tex files
+1. `course`: command used for setting up the directory structure, getting course information, and other "housekeeping" tasks
+2. `flashcard`: used to generate pdf flashcards, parsed from LaTeX files
 3. `note`: used for creating, managing, and providing network analysis of short notes.
 
 ### Flashcard
@@ -27,7 +27,7 @@ Flags:
 * `-f`, `--file`: Load flashcards from file. Must provide full path as flag argument
 
 The `flashcard` command requires lecture notes to follow fairly strict formatting. In order to generate flashcards
-from a tex file, all relevant definitions, theorems, and other sections, must be contained in their own
+from a LaTeX file, all relevant definitions, theorems, and other sections, must be contained in their own
 "namespace", having the syntax
 ```
 \sectionName{ ... }{
@@ -35,8 +35,8 @@ latex code
 }
 ```
 where sectionName would be one of: "definition, "theorem", "proof", ect.
-Additionally theorem/lemma/proposition flashcards, by default include the proof as an additional "answer". Note that theorem/lemma/proposition
-section flashcards will only have a corresponding proof when directly followed by a proof section in the Tex file.
+Additionally theorem/lemma/proposition flashcards, by default include the proof as a second answer on the flashcard.
+Note that theorem/lemma/proposition section flashcards will only have a corresponding proof when directly followed by a proof section in the Tex file.
 For example:
 ```
 \theo{Pythagorean theorem}{
@@ -46,8 +46,8 @@ pythagonrean theorem statement
 pythagorean theorem proof
 }
 ```
-Any Tex file following the above syntactic rules can be parsed into flashcards-- my personal
-approach has been to define a `\newtcbtheorem` environment for each section in the preamble. For example suppose
+Any LaTeX file following the above syntactic rules can be parsed into flashcards -- my personal
+approach has been to define a `\newtcbtheorem` environment for each section in the preamble. For example; suppose
 you have defined the `\newtcbtheorem` section "Theorem". I would then include the following command in macros.tex
 ```tex
 \newcommand{\theo}[2]{\begin{Theorem*}{#1}{}#2\end{Theorem*}}
@@ -67,7 +67,8 @@ Flags:
 * `-i`, `--information`: Display class information for {course_name}
 * `-u`, `--user-input`: Initializes course.json through user input
 * `-o`, `--open-main`: Opens main.pdf file corresponding to course {course_name}
-* `-a`, `--new-assignment`: Create new assignment under `{course_name}/assignments/`
+* `-a`, `--new-assignment`: Copy's assignment template to `{course_name}/assignments/{course_name}_A{number}.tex`, where {number} will be 
+        i + 1, where i is the number of existing assignments.
 * `-l`, `--new-lecture`: Creates new lecture file for {course_name}
 
 When a new course is created, the following directories are created under `NewCourse`
@@ -83,7 +84,7 @@ root/
      │
      ├── resources/         # external resources included in main.tex (e.g figure.svg)
      ├── assignments/       # default location for assingments when created using 'course' cmd
-     ├── problems/          # location for worksheets, ect
+     ├── problems/          # location for problem sets, ect
      └──course_info.json    # course configuration and information
 
 ```
