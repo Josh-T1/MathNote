@@ -462,6 +462,12 @@ class FlashcardsPipeline:
     """ Generator Object
     TODO: Different stages can have different return types, so I leave it up to the user to use these stages in correct order (last stage must return list[Flashcard])
     Implementing some sort of type hinting (or class re design) to make this ordering less ambigous would be nice
+
+
+    SOLUTION IDEA: Each stage needs a return and input type property, users must add stages through FlashcardsPipeline.add_stage method.
+    FlashcardsPipeline will check the input and return types, raising an error if they do not match. Additionally to use the pipeline users
+    must first call FlashcardsPipeline.build_pipe. This method will have two features, 1. prevent the addition of new stages (pipeline is now fixed),
+    2. check that final stage has correct return type.
     """
     def __init__(self, data_iterable: Iterable, flashcard_builder: BuildFlashcardStage, stages: list[Stage] | None = None):
         self.builder = flashcard_builder
