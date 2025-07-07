@@ -1,0 +1,155 @@
+ul, li {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+#tree-view {
+  padding-left: 20px;
+}
+
+body {
+  margin: 0;
+  font-family: sans-serif;
+}
+
+#sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 200px;
+  background: #2E2E2E;
+  color: #d3d3d3;
+  box-sizing: border-box;
+  transform: translateX(-100%);
+  transition: transform 0.3s ease;
+  padding-top: 50px;
+  padding-left: 10px;
+}
+
+#sidebar ul  {
+  color: #d3d3d3;
+}
+#sidebar li  {
+  color: #d3d3d3;
+}
+
+#sidebar.open {
+  transform: translateX(0);
+}
+
+#sidebar.open #sidebar-toggle-button {
+  display: block;
+}
+
+#sidebar-toggle-button {
+  display: none;
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: #2E2E2E;
+  color: #d3d3d3;
+  border: none;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+
+#toggle-button {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  background: transparent;
+  color: #2E2E2E;
+  border: none;
+  padding: 8px 12px;
+  cursor: pointer;
+  z-index: 1000;
+  transition: left 0.3s ease;
+  font-size: 24px;
+}
+
+
+
+
+/* Directory row with caret */
+.dir-row {
+  display: flex;
+  align-items: center;
+  padding: 6px 0px;
+  cursor: pointer;
+  border-radius: 6px;
+  user-select: none;
+}
+
+.dir-row:hover {
+  background-color: #444;
+}
+
+/* Caret icon before directory text */
+.caret::before {
+  content: "\203A"; /* right-pointing arrow */
+  display: inline-block;
+  margin-right: 6px;
+  font-size: 18px;
+  transition: transform 0.3s ease;
+}
+
+/* Rotate caret when active */
+.caret-down::before {
+  transform: rotate(90deg);
+}
+
+/* File row */
+.file-row {
+  display: flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.file-row:hover {
+  background-color: #444;
+}
+
+/* Nested lists are hidden by default */
+.nested {
+  display: none;
+  padding-left: 0px;
+}
+
+/* Show nested when active */
+.nested.active {
+  display: block;
+}
+
+.indent {
+  display: inline-block;  /* or flex item */
+  width: calc(var(--level, 0)* 10px);
+  height: 0;             /* prevent vertical space */
+  margin: 0;
+  padding: 0;
+  line-height: 0;        /* remove extra line height */
+  flex-shrink: 0;        
+
+}
+
+span.content {
+  display: inline-block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%; /* or a fixed width like 200px */
+  vertical-align: middle;
+}
+
+
+span.content:hover {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+}
+

@@ -1,7 +1,7 @@
 import argparse
 import shutil
 import sys
-from .controller import CourseCommand, FlashcardCommand, NoteCommand
+from .controller import CourseCommand, FlashcardCommand, NoteCommand, NoteViewer
 from .utils import config, config_dir, update_config
 import logging
 import logging.config
@@ -99,6 +99,7 @@ subparsers = global_parser.add_subparsers(title="Subcommands", help="Note taking
 course_parser = subparsers.add_parser("course", help="Create course file structure and inizialize course json file")
 flashcard_parser = subparsers.add_parser("flashcard", help="Generate flashcards from .tex files")
 note_parser = subparsers.add_parser("note", help="Create latex notes")
+view_parser = subparsers.add_parser("view", help="TODO")
 
 course_parser_arguments = [
         ("name",{"nargs": 1, "help": "Course name"}),
@@ -118,7 +119,8 @@ course_parser_arguments = [
 
         ]
 note_parser_arguments = [
-        ("-n", "--new-note", {"nargs": 1, "help": "create new note"}),
+        ("--new-note", {"nargs": 1, "help": "create new note with 'name'"}),
+        ("--new-category", {"nargs": 1, "help": "create new category with 'name'"}),
         ("-rm", "--remove-note", {"nargs": 1, "help": "remove note"}),
         ("-ls", "--list-notes", {"action": "store_true", "help": "list notes"}),
         ("-o", "--open-note", {"nargs": 1, "help": "open note"}),
@@ -128,6 +130,8 @@ note_parser_arguments = [
         ("-t", "--tag" , {"nargs": 2, "help": "add tag to note (note name, tag)"}),
         ("--remove-tag", {"nargs": 1, "help": "remove tag from note"}),
         ("--exists", {"nargs": 1, "help": "returns true if note exists"}),
+        ("--parent", {"nargs": 1, "default": [None], "help": "Sets note category to parent directory. Defaults to none"}),
+        ("--note-type", {"nargs": 1, "default": ["typ"], "help": "Sets note category to parent directory. Defaults to none"}),
         ]
 
 flashcard_parser_arguments = [
@@ -152,7 +156,8 @@ args = global_parser.parse_args()
 command_mapping = {
         "course": CourseCommand,
         "flashcard": FlashcardCommand,
-        "note": NoteCommand
+        "note": NoteCommand,
+        "view": NoteViewer
         }
 
 def main():
