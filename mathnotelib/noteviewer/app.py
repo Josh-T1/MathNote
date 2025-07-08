@@ -1,6 +1,6 @@
 from re import sub
 import re
-from flask import Flask, request, send_file, send_from_directory, abort, jsonify
+from flask import Flask, request, send_file, send_from_directory, abort, jsonify, Response
 import subprocess
 import shutil
 import os
@@ -11,29 +11,32 @@ from ..utils import config_dir, config
 from pathlib import Path
 import tempfile
 
-OUTPUT_PATH = Path(tempfile.gettempdir()) / "rendered.svg"
+#OUTPUT_PATH = Path(tempfile.gettempdir()) / "rendered.svg"
+OUTPUT_FILE_NAME = "rendered.svg"
 
 app = Flask(__name__, static_folder="static")
 ROOT_DIR = Path(config['root'])
 
-def typst_to_svg(path: Path) -> int:
+def typst_to_svg(path: Path, tmpdir: Path) -> int:
+    output_file_path = tmpdir / OUTPUT_FILE_NAME
     if not path.is_file():
         return 1
-    result = subprocess.run(["tinymist", "compile", path, OUTPUT_PATH], cwd=ROOT_DIR)
+    result = subprocess.run(["tinymist", "compile", path, tmpdir/ OUTPUT_FILE_NAME], cwd=ROOT_DIR, stdout=subprocess.DEVNULL ,stderr=subprocess.DEVNULL)
     try:
-        shutil.move(path.with_suffix(".svg"), OUTPUT_PATH)
+        shutil.move(path.with_suffix(".svg"), output_file_path)
     except Exception as e:
         return 1
     return result.returncode
 
-def latex_to_svg(path: Path) -> int:
+def latex_to_svg(path: Path, tmpdir: Path) -> int:
+    output_file_path = tmpdir / OUTPUT_FILE_NAME
     if not path.is_file():
         return 1
-    result_1 = subprocess.run(["latex", "-interaction=nonstopmode", "-output-directory=/tmp", path], cwd=ROOT_DIR)
+    result_1 = subprocess.run(["pdflatex", "-interaction=nonstopmode", f"-output-directory={tmpdir}", path], cwd=path.parent, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     if result_1.returncode != 0:
         return 1
-    dvi_path = (Path(tempfile.gettempdir()) / path.stem).with_suffix('.dvi')
-    result_2 = subprocess.run(["dvisvgm", dvi_path , "-o", OUTPUT_PATH])
+    dvi_path = (Path(tempfile.gettempdir()) / path.stem).with_suffix('.pdf')
+    result_2 = subprocess.run(["pdf2svg", dvi_path , output_file_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     return result_2.returncode
 
 @app.route('/')
@@ -48,16 +51,19 @@ def render():
     ext = ".tex" if file_type == "LaTeX" else ".typ" # assumes only two file types...
     path = ROOT_DIR / (parent_path / file_name / file_name).with_suffix(ext)
 
-    if file_type == "Typst":
-        return_code = typst_to_svg(path)
-    elif file_type == "LaTeX":
-        return_code = latex_to_svg(path)
-    else: return_code = 1
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir_path = Path(tmpdir)
+        if file_type == "Typst":
+            return_code = typst_to_svg(path, tmpdir_path)
+        elif file_type == "LaTeX":
+            return_code = latex_to_svg(path, tmpdir_path)
+        else: return_code = 1
 
-    if return_code == 1:
-        return abort(400, "Invalid path")
-
-    return send_file(OUTPUT_PATH, mimetype="image/svg+xml")
+        if return_code == 1:
+            return abort(400, "Invalid path")
+        with open(tmpdir_path / OUTPUT_FILE_NAME, "r", encoding="utf-8") as f:
+            svg_content = f.read()
+    return Response(svg_content, mimetype="image/svg+xml")
 
 
 @app.route('/tree')
