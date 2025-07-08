@@ -39,6 +39,8 @@ function createNavTree(data, parentTag, depth=0){
         spanIndent.style.setProperty("--level", depth + 1);
         spanContent.textContent = i.name;
         spanContent.classList.add("content");
+        spanContent.setAttribute("data-type", i.type)
+        spanContent.setAttribute("data-name", i.name)
 
         div.appendChild(spanIndent);
         div.appendChild(spanContent);
@@ -86,19 +88,18 @@ export async function setupTreeView(){
         var fileName = "No File Found";
         e.stopPropagation();
         const dirDiv = this.parentElement.parentElement.parentElement.querySelector('div.dir-row');
-        if (dirDiv) {
-          fileName = dirDiv.dataset.path + "/" + file.textContent + "/" + file.textContent + ".typ";
-        }
-        
+        const parentPath = dirDiv.dataset.path
 
-        // Check file is valid
-        const response = await fetch(`/render?path=${encodeURIComponent(fileName)}`);
+        const spanContent = this.querySelector("span.content")
+        const name = spanContent.dataset.name
+        
+        const fileType = this.querySelector("span.content").dataset.type;
+        const response = await fetch(`/render?parentPath=${encodeURIComponent(parentPath)}&name=${encodeURIComponent(name)}&type=${encodeURIComponent(fileType)}`);
         
         if (!response.ok){
           console.error("Failed to fetch SVG: ", await response.text());
           return;
         }
-
 
         const svg = await response.text();
         preview.innerHTML = svg;

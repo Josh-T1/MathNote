@@ -2,12 +2,13 @@ from pathlib import Path
 import json
 import shutil
 import subprocess
-
-from mathnotelib.utils import open_cmd
+from mathnotelib.utils import open_cmd, config
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import List, Optional
 from enum import Enum
+
+ROOT_DIR = Path(config['root'])
 
 # wtf is this
 PROTECTED = ["resources"]
@@ -105,6 +106,10 @@ class Note(ABC):
     @abstractmethod
     def compile(self) -> int:...
 
+    @staticmethod
+    @abstractmethod
+    def get_type() -> str:...
+
     def open(self):
         """
         Opens note as pdf
@@ -141,6 +146,10 @@ class TeXNote(Note):
         print(result.stdout)
         return result.returncode
 
+    @staticmethod
+    def get_type():
+        return NoteType.LaTeX.value
+
     def __post_init__(self):
         if not Path.is_dir(self.path):
             raise ValueError(f"Directory {self.path} does not exist")
@@ -161,6 +170,10 @@ class TypNote(Note):
             cwd = self.path
             )
         return result.returncode
+
+    @staticmethod
+    def get_type():
+        return NoteType.Typst.value
 
     def __post_init__(self):
         if not Path.is_dir(self.path):
@@ -318,7 +331,13 @@ def serialize_category(cat: Category) -> dict:
     # Should probably be name: {}
     return {
             "name": cat.name,
-            "path": str(cat.path).split("MathNote/")[1], # this breaks if dir chagnes from MathNote
-            "notes": [{"name": note.name} for note in cat.notes],
+            "path": str(cat.path.relative_to(ROOT_DIR).as_posix()), # this breaks if dir chagnes from MathNote
+            "notes": [
+                {
+                    "name": note.name,
+                    "type": note.get_type()
+                }
+                for note in cat.notes
+                ],
             "children": [serialize_category(child) for child in cat.children]
             }
