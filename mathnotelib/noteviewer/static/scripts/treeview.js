@@ -1,5 +1,3 @@
-const preview = document.getElementById("preview");
-
 function createNavTree(data, parentTag, depth=0){
 
     const li = document.createElement('li');
@@ -85,7 +83,6 @@ export async function setupTreeView(){
   files.forEach(file => {
       file.addEventListener('click', async function(e){
         const preview = document.getElementById("preview");
-        var fileName = "No File Found";
         e.stopPropagation();
         const dirDiv = this.parentElement.parentElement.parentElement.querySelector('div.dir-row');
         const parentPath = dirDiv.dataset.path
