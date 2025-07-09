@@ -1,17 +1,11 @@
-from re import sub
-import re
-from flask import Flask, request, send_file, send_from_directory, abort, jsonify, Response
+from flask import Flask, request, abort, jsonify, Response
 import subprocess
 import shutil
-import os
-
-from flask.typing import RouteCallable
 from ..note import NotesManager, serialize_category
-from ..utils import config_dir, config
+from ..utils import config
 from pathlib import Path
 import tempfile
 
-#OUTPUT_PATH = Path(tempfile.gettempdir()) / "rendered.svg"
 OUTPUT_FILE_NAME = "rendered.svg"
 
 app = Flask(__name__, static_folder="static")
@@ -21,7 +15,8 @@ def typst_to_svg(path: Path, tmpdir: Path) -> int:
     output_file_path = tmpdir / OUTPUT_FILE_NAME
     if not path.is_file():
         return 1
-    result = subprocess.run(["tinymist", "compile", path, tmpdir/ OUTPUT_FILE_NAME], cwd=ROOT_DIR, stdout=subprocess.DEVNULL ,stderr=subprocess.DEVNULL)
+    result = subprocess.run(["tinymist", "compile", path, tmpdir/ OUTPUT_FILE_NAME],
+                            cwd=ROOT_DIR, stdout=subprocess.DEVNULL ,stderr=subprocess.DEVNULL)
     try:
         shutil.move(path.with_suffix(".svg"), output_file_path)
     except Exception as e:
@@ -32,11 +27,13 @@ def latex_to_svg(path: Path, tmpdir: Path) -> int:
     output_file_path = tmpdir / OUTPUT_FILE_NAME
     if not path.is_file():
         return 1
-    result_1 = subprocess.run(["pdflatex", "-interaction=nonstopmode", f"-output-directory={tmpdir}", path], cwd=path.parent, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    result_1 = subprocess.run(["pdflatex", "-interaction=nonstopmode", f"-output-directory={tmpdir}", path],
+                              cwd=path.parent, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     if result_1.returncode != 0:
         return 1
-    dvi_path = (Path(tempfile.gettempdir()) / path.stem).with_suffix('.pdf')
-    result_2 = subprocess.run(["pdf2svg", dvi_path , output_file_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    dvi_path = (Path(tempfile.gettempdir()) / f"{path.stem}.dvi").resolve()
+    result_2 = subprocess.run(["pdf2svg", dvi_path , output_file_path],
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     return result_2.returncode
 
 @app.route('/')
@@ -46,10 +43,12 @@ def index():
 @app.route('/render')
 def render():
     # TODO: clean this up
-    parent_path, file_name, file_type = Path(request.args.get('parentPath', "")), request.args.get("name", ""), request.args.get("type")
+    parent_path = Path(request.args.get('parentPath', ""))
+    file_name = request.args.get("name", "")
+    file_type = request.args.get("type")
 
-    ext = ".tex" if file_type == "LaTeX" else ".typ" # assumes only two file types...
-    path = ROOT_DIR / (parent_path / file_name / file_name).with_suffix(ext)
+    ext = ".tex" if file_type == "LaTeX" else ".typ"
+    path = (ROOT_DIR / (parent_path / file_name / f"{file_name}{ext}")).resolve()
 
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir_path = Path(tmpdir)
@@ -69,9 +68,7 @@ def render():
 @app.route('/tree')
 def tree():
     # root_dir should probably be ROOT_DIR only, to include courses + other things. Different parsing?
-    root_dir = Path(ROOT_DIR) / "Notes"
+    root_dir = ROOT_DIR / "Notes"
     notes = NotesManager(root_dir)
     tree = serialize_category(notes.root_category)
     return jsonify(tree)
-
-

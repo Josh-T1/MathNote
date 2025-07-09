@@ -6,29 +6,30 @@ import json
 import logging
 import shutil
 import subprocess
-from ..utils import config, open_cmd
+from ..utils import config, open_cmd, NoteType
 
 logger = logging.getLogger("mathnote")
 
-def number2filename(n: int):
+def number2filename_tex(n: int):
     return 'lec_{0:02d}.tex'.format(n)
 
-def filename2number(s: str):
-    return int(s.replace('.tex', '').replace('lec_', '').lstrip("0"))
+def number2filename_typ(n: int):
+    return 'lec_{0:02d}.typ'.format(n)
+
+def filename2number(p: Path):
+    return int(p.stem.replace('lec_', '').lstrip("0"))
 
 class Lecture():
     def __init__(self, file_path: Path) -> None:
-        if not isinstance(file_path, Path):
-            raise ValueError("file path must be type 'Path'")
         self.path = file_path
 
     def number(self) -> int:
         """" returns: lecture number """
-        num = filename2number(str(self.path.name))
+        num = filename2number(self.path)
         return num
 
     def name(self) -> str:
-        """ lecture file name. e.g lec_01.tex """
+        """ lecture file name. e.g lec_01.tex(typ) """
         return self.path.name
 
     def last_edit(self) -> float:
@@ -41,9 +42,6 @@ class Lecture():
         return other.path == self.path
 
 class Course:
-    """
-    Represents university course
-    """
     def __init__(self, path: Path):
         """
         path: root path to course directory
@@ -56,6 +54,8 @@ class Course:
         self._course_info: dict | None = None
         self._lectures: None | list[Lecture] = None
 
+    def filetype(self) -> str:
+        return self.course_info.get("filetype", "LaTeX")
 
     def last_edit(self):
         """ Returns time in secods since a lecture file has been edited """
@@ -100,11 +100,16 @@ class Course:
     def _weekdays_string_to_list(data: str):
         return [day.strip() for day in data.split(",")]
 
+
     @property
     def lectures(self) -> list[Lecture]:
         if self._lectures is not None:
             return self._lectures
-        files = self.lectures_path.glob('lec_*.tex')
+
+        file_type = self.filetype()
+
+        ext = ".tex" if file_type.upper() == NoteType.LaTeX.value.upper() else ".typ"
+        files = self.lectures_path.glob(f'lec_*.{ext}')
         self._lectures = sorted((Lecture(f) for f in files), key=lambda l: l.number())
         return self._lectures
 
@@ -187,24 +192,34 @@ class Course:
         return ceil(lecture.number() / len(self.days()))
 
     def update_lectures_in_master(self, lecture_nums: list[int]) -> None:
-        """ Update main.tex with new lectures
+        """ Update main file with new lectures
         lecture_nums: list of all numbers corresponds to a lecture
         """
-        mainTex = self.main_path / "main.tex"
-        logger.debug("Updating main.tex")
-        header, _, footer = self.get_header_footer(mainTex)
-        body = ''.join([r'\input{lectures/' + number2filename(number) + '}\n' for number in lecture_nums])
-        mainTex.write_text(header + body + footer)
+        file_type = self.filetype()
+        ext = ".tex" if file_type.upper() == NoteType.LaTeX.value.upper() else ".typ"
+        main_file = self.main_path / f"main.{ext}" # TODO
+        logger.debug("Updating main file")
+        header, _, footer = self.get_header_footer(main_file)
+
+        if file_type.upper() == NoteType.LaTeX.value.upper():
+            body = ''.join([r'\input{lectures/' + number2filename_tex(number) + '}\n' for number in lecture_nums])
+        else:
+            body = ''.join([r'\input{lectures/' + number2filename_typ(number) + '}\n' for number in lecture_nums])
+        main_file.write_text(header + body + footer)
 
     def new_lecture(self):
         """ Creates a new lecture """
+        filetype = self.filetype()
         new_lecture_number = 1 if not self.lectures else self.lectures[-1].number() + 1
-        new_lecture_path = self.lectures_path / number2filename(new_lecture_number)
+        if filetype.upper() == NoteType.LaTeX.value.upper():
+            new_lecture_path = self.lectures_path / number2filename_tex(new_lecture_number)
+        else:
+            new_lecture_path = self.lectures_path / number2filename_typ(new_lecture_number)
 
         logger.info(f"Creating lecture: {new_lecture_path}")
         new_lecture_path.touch() # Copy file template instead of touch?
 #        new_lecture_path.write_text(f'\\{{lecture{{{new_lecture_number}}}}}\n')
-        logger.debug("Updating main.tex file")
+        logger.debug("Updating main file")
         self.update_lectures_in_master([i for i in range(1, new_lecture_number + 1)]) # TODO test
 
         new_lecture = Lecture(new_lecture_path)
@@ -212,12 +227,12 @@ class Course:
         self.lectures.append(new_lecture)
         return new_lecture
 
-    def new_assignment(self):
+    def new_assignment(self, filetype: NoteType = NoteType.LaTeX):
         """
         Create new assignment using the naming convention course_course_number_A{assignment number}
         """
         new_num = 0
-        stems: list[list] = [file.stem.split("_") for file in self.assignment_path.iterdir() if file.is_file() and file.suffix == ".tex"]
+        stems: list[list] = [file.stem.split("_") for file in self.assignment_path.iterdir() if file.is_file() and file.suffix == ".tex" or file.suffix == ".typ"]
         for e in stems:
             if len(e) == 3:
                 match = e[2].replace("A", "")
@@ -225,27 +240,45 @@ class Course:
                     new_num = max(new_num, match)
 
         new_num += 1
-        filename = f"{self.name.replace("-", "_")}_A{new_num}.tex"
+        if filetype == NoteType.LaTeX:
+            filename = f"{self.name.replace("-", "_")}_A{new_num}.tex"
+            template = config["assignment-template-tex"]
+        else:
+            filename = f"{self.name.replace("-", "_")}_A{new_num}.typ"
+            template = config["assignment-template-typ"]
+
         assignment_path = self.assignment_path / filename
         if assignment_path.is_file():
             raise ValueError
-        shutil.copy(config["assignment-template"], assignment_path)
+        shutil.copy(template, assignment_path)
 
 
-    def compile_main(self, lectures_only: bool=False):
+    def compile_main(self):
         """ Compile main file
         lectures_only: If True pdf will only contain lecture notes, otherwise endnotes and prelimanary sections
         will be included
-        returns: error code. e.i {0, 1}
+        returns: error code. e.i {}
         """
-        mainTex = self.main_path / "main.tex"
-        logger.debug(f"Attempting to compile {mainTex}")
-        result = subprocess.run(
-                ['latexmk', "-pdf", str(mainTex)],
-                stdout = subprocess.DEVNULL,
-                stderr = subprocess.DEVNULL,
-                cwd=self.path
-                )
+        # TODO allow for typst compilation
+        if self.filetype().upper() == NoteType.LaTeX.value.upper():
+            mainfile= self.main_path / "main.tex"
+            logger.debug(f"Attempting to compile {mainfile}")
+            result = subprocess.run(
+                    ['latexmk', "-pdf", str(mainfile)],
+                    stdout = subprocess.DEVNULL,
+                    stderr = subprocess.DEVNULL,
+                    cwd=self.path
+                    )
+        else:
+            # TODO test this
+            mainfile= self.main_path / "main.tex"
+            logger.debug(f"Attempting to compile {mainfile}")
+            result = subprocess.run(
+                    ['tinymist', "compile", str(mainfile)],
+                    stdout = subprocess.DEVNULL,
+                    stderr = subprocess.DEVNULL,
+                    cwd=self.path
+                    )
         return result.returncode
 
     def __eq__(self, other):
@@ -281,11 +314,12 @@ class Courses():
         courses = [Course(course) for course in course_directories]
         return list(sorted(courses, key=_key))
 
-    def macros_path(self):
-        return self.root / "macros.tex"
-
-    def preamble_path(self):
-        return self.root / "preamble.tex"
+    # TODO delete if not referenced
+#    def macros_path(self):
+#        return self.root / "macros.tex"
+#
+#    def preamble_path(self):
+#        return self.root / "preamble.tex"
 
     def get_course(self, name: str) -> Course | None:
         return self.courses.get(name, None)

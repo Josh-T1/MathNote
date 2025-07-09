@@ -6,16 +6,10 @@ from mathnotelib.utils import open_cmd, config
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import List, Optional
-from enum import Enum
+from ..utils import NoteType
 
 ROOT_DIR = Path(config['root'])
 
-# wtf is this
-PROTECTED = ["resources"]
-
-class NoteType(Enum):
-    LaTeX = "LaTeX"
-    Typst = "Typst"
 
 @dataclass
 class Metadata:
@@ -234,7 +228,7 @@ class NotesManager:
 
     def new_note(self, name: str, parent: Category, note_type: NoteType) -> None:
         """
-        name: note name, stem of .tex file path (no suffix)
+        name: note name, stem of .tex/typ file path (no suffix)
         """
         if name.upper() in set(note.name.upper() for note in parent.notes):
             print(f"Failed to create '{name}'. Its equal (up to capatilization) to existing note")
@@ -250,11 +244,24 @@ class NotesManager:
             metadata_path = note_dir_path / "metadata.json"
 
             note_dir_path.mkdir()
-            note_path.touch()
             self._init_metadata(metadata_path)
+
+            note_template = Path(config["note-template"])
+            dest = note_dir_path / f"{name}.tex"
+            shutil.copy(note_template, dest)
+            # TODO support references?
+#            with self.refs_file.open(mode="a") as f:
+#                f.write(f"\\externaldocument[{note}-]{{../{note}/{note}}}\n")
+#            new_note = Note(dir)
+
+            # TODO support auto generated titles
+#            if config["set-note-title"]:
+#                self.insert_title(dir / f"{name}.tex", new_note.name())
 
             note = TeXNote(note_dir_path, Metadata(), parent)
             parent.notes.append(note)
+
+
 
         elif note_type == NoteType.Typst:
             note_dir_path = parent.path / name
@@ -306,6 +313,7 @@ class NotesManager:
 
 
     def rename(self, note: Note, new_name):
+        # TODO
         pass
 
     def del_note(self, note: Note):
@@ -328,7 +336,6 @@ class NotesManager:
 
 
 def serialize_category(cat: Category) -> dict:
-    # Should probably be name: {}
     return {
             "name": cat.name,
             "path": str(cat.path.relative_to(ROOT_DIR).as_posix()), # this breaks if dir chagnes from MathNote

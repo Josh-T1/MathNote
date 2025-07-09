@@ -3,8 +3,13 @@ import json
 import platform
 import os
 import shutil
+from enum import Enum
 
 templates_path= Path(__file__).parent / "templates"
+
+class NoteType(Enum):
+    LaTeX = "LaTeX"
+    Typst = "Typst"
 
 def config_dir():
     if os.name == "nt":

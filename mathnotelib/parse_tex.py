@@ -191,6 +191,7 @@ class CleanStage(Stage):
     def __init__(self, macros: dict) -> None:
         super().__init__()
         self.macros = macros
+
     def process(self, data: TrackedString) -> TrackedString:
         logger.debug(f"Starting {self.process}")
         tracked_string = self.remove_comments(data)

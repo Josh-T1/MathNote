@@ -36,8 +36,10 @@ def _initialize_root_tree():
     """ Create MathNote directory with required subdirectories and files """
     macros, preamble = Path(config["macros"]), Path(config["preamble"])
     root_dir.mkdir()
-    shutil.copy(macros, root_dir / "macros.tex")
-    shutil.copy(preamble, root_dir / "preamble")
+    preambles_path = root_dir / "Preambles"
+    preambles_path.mkdir()
+    shutil.copy(macros, preambles_path / "macros.tex")
+    shutil.copy(preamble, preambles_path / "preamble")
     _initialize_note_tree()
 
 
