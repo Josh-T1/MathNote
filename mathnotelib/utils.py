@@ -57,8 +57,11 @@ def get_config() -> dict:
 config = get_config()
 
 
-
+# TODO should be 'LaTeX'
 class LatexCompilationError(Exception):
+    pass
+
+class TypstCompilationError(Exception):
     pass
 
 def open_cmd() -> str:
@@ -134,6 +137,7 @@ class SectionNames(metaclass=ImmutableMeta):
     LEMMA = "lemma"
     PROPOSITION = "proposition"
 
+# TODO update to support typst
 def update_config():
     """
     Users may specify latex templates in config directory. These templates are copied into the required directories when

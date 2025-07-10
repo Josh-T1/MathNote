@@ -1,12 +1,12 @@
 from pathlib import Path
 import json
-from typing import Iterable, Union, Generator, List, Callable
+from typing import Iterable, Union, Generator, List, Callable, Generic, TypeVar, get_args, get_origin
 import re
 from collections import namedtuple
 import logging
 from abc import abstractmethod, ABC
 from dataclasses import dataclass, field
-from .utils import SectionNamesDescriptor, config
+from .utils import NoteType, SectionNamesDescriptor, config
 
 logger = logging.getLogger("mathnote")
 
@@ -92,10 +92,12 @@ class Flashcard:
     section_name: str
     question: TrackedString
     answer: TrackedString
+    file_type: NoteType
     pdf_answer_path: None | str = None
     pdf_question_path: None | str = None
     additional_info: dict = field(default_factory=dict)
     seen: bool = False
+
 
     def add_info(self, name: str, info: str):
         self.additional_info[name] = info
@@ -103,17 +105,20 @@ class Flashcard:
     def __repr__(self):
         question = "..." if self.question else 'None'
         answer = "..." if self.answer else 'None'
-        return f"Flashcard(question={question}, answer={answer}, pdf_answer_path={self.pdf_question_path}, pdf_question_path={self.pdf_answer_path})"
+        return f"Flashcard(question={question}, answer={answer}, pdf_answer_path={self.pdf_question_path}, pdf_question_path={self.pdf_answer_path}, file_type={self.file_type})"
 
     def __str__(self):
         return f"Flashcard(question={self.question}, answer={self.answer}, pdf_answer_path={self.pdf_question_path}, pdf_question_path={self.pdf_answer_path})"
 
+Input = TypeVar("Input")
+Output = TypeVar("Output")
 
-class Stage(ABC):
+class Stage(ABC, Generic[Input, Output]):
     @abstractmethod
     def process(self, data: TrackedString) -> TrackedString:
         pass
 
+# TODO remove this abstact class
 class BuildFlashcardStage(ABC):
     @abstractmethod
     def build(self, data: TrackedString) -> list[Flashcard]:
@@ -187,7 +192,7 @@ class TexDataGenerator:
             return_value = TrackedString(file_contents, source=source)
             yield return_value
 
-class CleanStage(Stage):
+class CleanStage(Stage[TrackedString, TrackedString]):
     def __init__(self, macros: dict) -> None:
         super().__init__()
         self.macros = macros
@@ -474,8 +479,35 @@ class FlashcardsPipeline:
         self.builder = flashcard_builder
         self.data_iterable = data_iterable
         self.stages = [] if stages is None else stages
+        self.last_output_type = None
+
+    def add_stage(self, stage: Stage):
+        # TODO make sure first stage takes valid input
+        if not self.stages:
+            self.stages.append(stage)
+            return
+        stage_type = type(stage)
+        input_type, output_type = None, None
+        for base in getattr(stage_type, "__orig_bases__", []):
+            if get_origin(base) is Stage:
+                input_type, output_type = get_args(base)
+                break
+        if input_type is None or output_type is None:
+            raise TypeError("Stage must subclass Stage[Input, Output]")
+        if self.last_output_type != input_type:
+            raise TypeError(f"Incompactiable stage: expected input {self.last_output_type}, got {input_type}")
+        self.stages.append(stage)
+        self.last_output_type = output_type
+
+    # TODO fix this
+    def _validate(self):
+        return self.last_output_type == List[Flashcard]
 
     def __iter__(self) -> Generator[List[Flashcard], None, None]:
+        valid = self._validate()
+        if not valid:
+            raise TypeError(f"Invalid pipeline: expected last stage output type to be List[Flashcard], got {self.last_output_type}")
+
         for chunk in self.data_iterable:
             if chunk is None:
                 yield []
@@ -495,41 +527,11 @@ def find_math_mode(tex: str):
 
     return re.match(r"^\\[.*?\\]", tex)
 
-
-def tex_to_mathjax(tex: str):
-    for pattern, replacement in TEX_PATTERN_TO_MATHJAX.items():
-        tex = re.sub(pattern, replacement, tex)
-    return tex
-
-
-def mathjax_to_html(tex: str):
-    html = ""
-    counter = 0
-    while counter < len(tex): # check this is what i want
-        if tex[counter] != '\\':
-            html += tex[counter]
-            counter += 1
-            continue
-
-        match = find_math_mode(tex[counter:])
-
-        if match is None or match.group(0) == r'\\':
-            html += tex[counter]
-            counter += 1
-            continue
-
-        math_mode = "inline" if match.group(0)[1] == "(" else "display" # )
-        math_block = f'<span class="math {math_mode}">{match.group(0)}</span>'
-        html += math_block
-
-        counter = counter + len(match.group(0)) + 1 # This sets counter equal to last character in command, +1 to move to character after command
-
-    return html
-
 def get_hack_macros():
     """tmp fix for removing macros"""
     return {"framedtext": {"num_args": '1', "command": ""}}
 
+# TODO re work this
 def load_macros(macros_path: Path, macro_names: list[str]) -> dict[str,dict]:
     r""" Gets all user commands from macro_path
     Macros beign parsed have the form:

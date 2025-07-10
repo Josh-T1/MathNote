@@ -11,7 +11,9 @@ def latex_template(tex: str) -> str:
 {tex}
 \end{{document}}"""
 
-
+# TODO
+def typst_template(typ: str) -> str:
+    return ""
 
 def open_file_with_editor(filename):
     import iterm2

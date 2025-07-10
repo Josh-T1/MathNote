@@ -109,7 +109,7 @@ class Course:
         file_type = self.filetype()
 
         ext = ".tex" if file_type.upper() == NoteType.LaTeX.value.upper() else ".typ"
-        files = self.lectures_path.glob(f'lec_*.{ext}')
+        files = self.lectures_path.glob(f'lec_*{ext}')
         self._lectures = sorted((Lecture(f) for f in files), key=lambda l: l.number())
         return self._lectures
 
@@ -314,12 +314,17 @@ class Courses():
         courses = [Course(course) for course in course_directories]
         return list(sorted(courses, key=_key))
 
-    # TODO delete if not referenced
-#    def macros_path(self):
-#        return self.root / "macros.tex"
-#
-#    def preamble_path(self):
-#        return self.root / "preamble.tex"
+    def macros_path(self, note_type: NoteType = NoteType.LaTeX):
+        if note_type.value.upper() == "LATEX":
+            return self.root / "Preambles" / "macros.tex"
+        else:
+            return self.root / "Preambles" / "macros.typ"
+
+    def preamble_path(self, note_type: NoteType = NoteType.Typst):
+        if note_type.value.upper() == "LATEX":
+            return self.root / "Preambles" / "preamble.tex"
+        else:
+            return self.root / "Preambles" / "preabmle.typ"
 
     def get_course(self, name: str) -> Course | None:
         return self.courses.get(name, None)

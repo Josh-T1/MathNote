@@ -41,6 +41,7 @@ class FlashcardCommand(Command):
 
     @staticmethod
     def _has_dependecies():
+        # ensure dependencies exist for typst or latex but not necessairly both
         dependencies = [
                 (None, "latexmk"),
                 (None, "tlmgr"),

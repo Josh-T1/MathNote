@@ -1,3 +1,7 @@
+
+
+
+
 export function setupSidebar(){
   const sidebar = document.getElementById('sidebar');
   const openBtn = document.getElementById('toggle-button');
