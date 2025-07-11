@@ -39,7 +39,10 @@ class TrackedText:
     def sub(self, pattern: str, repl: str) -> 'TrackedText':
         new_text = re.sub(pattern, repl, self.text)
         return TrackedText(new_text, source=self.source)
-
+    def encode(self, encoding: str = 'utf-8', errors: str = 'strict'):
+        return self.text.encode(encoding=encoding, errors=errors)
+    def __bool__(self):
+        return len(self.text) != 0
     def __add__(self, other: 'TrackedText'):
         """
         Other must be of type TrackedText and be of the same file type
@@ -101,7 +104,7 @@ class Flashcard:
     def __repr__(self):
         question = "..." if self.question else 'None'
         answer = "..." if self.answer else 'None'
-        return f"Flashcard(question={question}, answer={answer}, pdf_answer_path={self.pdf_question_path}, pdf_question_path={self.pdf_answer_path}, file_type={self.file_type})"
+        return f"Flashcard(question={question}, answer={answer}, pdf_answer_path={self.pdf_question_path}, pdf_question_path={self.pdf_answer_path}, file_type={self.filetype()})"
 
     def __str__(self):
         return f"Flashcard(question={self.question}, answer={self.answer}, pdf_answer_path={self.pdf_question_path}, pdf_question_path={self.pdf_answer_path})"
@@ -211,10 +214,10 @@ class CleanStage(Stage[TrackedText, TrackedText]):
         """ It is assume the tex string passed starts with curly bracket """
         paren_stack = []
 
-        if text[0] != "{": # } <- this comment is to keep vim lsp happy
-            raise ValueError(f"String passed does not begin with curly opening brace: {tex[:50]}, {tex.source}")
+        if str(text[0]) != "{": # } <- this comment is to keep vim lsp happy
+            raise ValueError(f"String passed does not begin with curly opening brace: {text[:50]}, {text.source}")
 
-        for index, char in enumerate(text):
+        for index, char in enumerate(str(text)):
             if char == "{":
                 paren_stack.append(char)
             elif char == "}":
@@ -292,20 +295,20 @@ class SectionFinder(ABC):
         pass
 
     @staticmethod
-    def _content_inside_paren(tex: TrackedText, paren: tuple[str, str]=("{", "}")) -> TrackedText:
+    def _content_inside_paren(text: TrackedText, paren: tuple[str, str]=("{", "}")) -> TrackedText:
         """ It is assume the tex string passed starts paren[0] and for every opening paren we have a matching close paren """
         paren_stack = []
 
-        if tex[0] != paren[0]:
-            raise ValueError(f"String passed does not begin with '{{': {tex[:50]}, {tex.source}") # }}} <= keep lsp happy
+        if str(text[0]) != paren[0]:
+            raise ValueError(f"String passed does not begin with '{{': {text[:50]}, {text.source}") # }}} <= keep lsp happy
 
-        for index, char in enumerate(tex):
+        for index, char in enumerate(str(text)):
             if char == paren[0]:
                 paren_stack.append(char)
             elif char == paren[1]:
                 paren_stack.pop()
             if not paren_stack:
-                return tex[1:index]
+                return text[1:index]
         raise ValueError("Invalid string")
 
 class SubSectionFinder(SectionFinder):
@@ -331,7 +334,7 @@ class ProofSectionFinder(SubSectionFinder):
         return Section(header, content, member.name, end_content_index)
 
 
-    def is_section(self, text) -> tuple[bool, SectionNamesDescriptor | None]:
+    def is_section(self, text: TrackedText) -> tuple[bool, SectionNamesDescriptor | None]:
 
         if len(text) < 2:
             return (False, None)
@@ -371,10 +374,12 @@ class MainSectionFinder(SectionFinder):
     def is_section(self, line: TrackedText) -> tuple[bool, SectionNamesDescriptor | None]:
         """ We make the assumtion the only text that starts with a section name and is followd by closing curly brace
         is a valid MainSection """
+        print("called")
         if len(line) < 2:
             return (False, None)
 
         for member in self.possible_names:
+            print(line[1:])
             if line[1:].startswith(member.value):
                 return (True, member)
         return (False, None)
@@ -414,7 +419,7 @@ class BuilderStage(Stage[TrackedText, List[Flashcard]]):
                 counter += comment_len
                 continue
 
-            if data[counter] != '\\':
+            if str(data[counter]) != '\\':
                 counter += 1
                 continue
 
@@ -434,10 +439,9 @@ class BuilderStage(Stage[TrackedText, List[Flashcard]]):
             if section is None:
                 counter += 1
                 continue
-
             parent_section = section.name # the command title. e.g \defin{...}{...}
             flashcards.append(
-                    Flashcard(section.name, section.title, section.content)
+                    Flashcard(section.name, section.header, section.content)
                     )
             counter += section.end_index + 1  # This sets counter equal to last character in command, +1 to move to character after command
         return flashcards

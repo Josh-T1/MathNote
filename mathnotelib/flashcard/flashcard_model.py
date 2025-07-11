@@ -391,7 +391,6 @@ class FlashcardModel:
         pipeline = parse_tex.FlashcardsPipeline(data_iterable)
         pipeline.add_stage(clean_data_stage)
         pipeline.add_stage(build_stage)
-
         for flash_cards in pipeline:
             if shuffle:
                 random.shuffle(flash_cards)
