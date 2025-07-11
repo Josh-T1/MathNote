@@ -10,6 +10,7 @@ templates_path= Path(__file__).parent / "templates"
 class NoteType(Enum):
     LaTeX = "LaTeX"
     Typst = "Typst"
+    Unsupported = "Unsupported"
 
 def config_dir():
     if os.name == "nt":

@@ -3,7 +3,6 @@ from PyQt6.QtGui import QStandardItemModel
 from PyQt6.QtWidgets import QListView
 from pathlib import Path
 
-from mathnotelib.parse_tex import TrackedString
 from .flashcard_model import FlashcardModel, FlashcardNotFoundException
 import sys
 import logging
@@ -11,6 +10,7 @@ from ..course.courses import Courses
 import threading
 from ..utils import SectionNames, SectionNamesDescriptor, LatexCompilationError
 from .edit_tex import open_file_with_editor
+
 logger = logging.getLogger("mathnote")
 
 
@@ -112,16 +112,10 @@ class FlashcardController:
             message = "No flashcards have been loaded"
         else:
             tracked_string = self.model.current_card.question if self.view.document == self.model.current_card.pdf_question_path else self.model.current_card.answer
-            if isinstance(tracked_string, TrackedString):
-                source = tracked_string.source
-            else:
-                source = "Error"
-                print(isinstance(self.model.current_card.question, TrackedString), "question")
-                print(isinstance(self.model.current_card.answer, TrackedString), "answer")
 
             if len(tracked_string) >= 300:
                 tracked_string = tracked_string[:301]
-            message = f"Source: {source}. Latex: {str(tracked_string)}"
+            message = f"Source: {tracked_string.source}. Latex: {str(tracked_string)}"
         self.view.flashcard_info_button().set_message(message)
 
     def create_flashcards_from_file(self, path: Path, shuffle=False):

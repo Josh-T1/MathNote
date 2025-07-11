@@ -216,7 +216,7 @@ class TexCompilationManager:
 
     def compile_card(self, card: parse_tex.Flashcard) -> None:
         """ Attemps to compile flashcard question/answer latex. If compilation fails """
-        card.pdf_question_path = self.compile_latex(card.question) # str needed to convert TrackedString -> str for hash value
+        card.pdf_question_path = self.compile_latex(card.question)
         card.pdf_answer_path = self.compile_latex(card.answer)
 
         for member_name, content in card.additional_info.items():
@@ -255,7 +255,7 @@ class TexCompilationManager:
         del self.cache[filepath.name]
         filepath.unlink()
 
-    def compile_latex(self, tex: parse_tex.TrackedString) -> str | None:
+    def compile_latex(self, tex: parse_tex.TrackedText) -> str | None:
 
         """ Attempts to compile latex string
         -- Params --
@@ -379,15 +379,18 @@ class FlashcardModel:
         if shuffle:
             random.shuffle(paths)
 
-        data_iterable = parse_tex.TexDataGenerator(paths)
+        data_iterable = parse_tex.DataGenerator(paths)
         # TODO fix get_hack_macros
         clean_data_stage = parse_tex.CleanStage(self.macros | parse_tex.get_hack_macros())
-        filter_and_build_flashcards = parse_tex.FlashcardBuilder(parse_tex.MainSectionFinder(section_names))
 
-        filter_and_build_flashcards.add_subsection_finder(parse_tex.ProofSectionFinder(
+        build_stage = parse_tex.BuilderStage(parse_tex.MainSectionFinder(section_names))
+
+        build_stage.add_subsection_finder(parse_tex.ProofSectionFinder(
             SectionNames.PROOF, [SectionNames.THEOREM, SectionNames.PROPOSITION, SectionNames.LEMMA, SectionNames.COROLLARY]) #type: ignore __getattr__ returns SectionNamesDescriptor not str
                                                               )
-        pipeline = parse_tex.FlashcardsPipeline(data_iterable, filter_and_build_flashcards, [clean_data_stage])
+        pipeline = parse_tex.FlashcardsPipeline(data_iterable)
+        pipeline.add_stage(clean_data_stage)
+        pipeline.add_stage(build_stage)
 
         for flash_cards in pipeline:
             if shuffle:
@@ -466,7 +469,7 @@ class FlashcardModel:
                 return
 
             cached_paths = self.compiler.list_cache_by_oldest()
-            flashcard_hash = (set(self.compiler.get_hash(flashcard.question) for flashcard in self.flashcards)
+            flashcard_hash = (set(self.compiler.get_hash(str(flashcard.question)) for flashcard in self.flashcards)
                               | set(self.compiler.get_hash(value) for _card in self.flashcards for value in _card.additional_info.values()))
 
             # delete cached file starting from oldest if hash(flashcards.question) != hash(cached file)

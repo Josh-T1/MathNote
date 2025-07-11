@@ -1,8 +1,8 @@
 from pathlib import Path
 import json
-from typing import Iterable, Union, Generator, List, Callable, Generic, TypeVar, get_args, get_origin
+from typing import Iterable, SupportsIndex, Union, Generator, List, Callable, Generic, TypeVar, get_args, get_origin
 import re
-from collections import namedtuple
+from functools import reduce
 import logging
 from abc import abstractmethod, ABC
 from dataclasses import dataclass, field
@@ -12,91 +12,87 @@ logger = logging.getLogger("mathnote")
 
 """
 parse_tex.py aims to provide a customizable pipeline that takes in file paths (.tex files) and returns 'cleaned' tex. This cleaned latex code can then
-be utilized to build Flashcards objects, or converted to other formats such as mathjax (work in progess, only flashcards supported at the moment)
+be utilized to build Flashcards objects
 
-
---- Notes/TODO
-1. The lsp warning Cannot access memeber '.source' from TrackString can be ignored. The TrackString class is not inizialized with that property as it subclasses str which is
-immutable. However when __new__ is called the property is set. If there is a way to do this 'properly' that would be great
 1. Get macro names dynamically
 """
 
 MACRO_PATH = config["macros"]
-TEX_PATTERN_TO_MATHJAX = {r"\\begin\{equation\*\}": r"\[",
-                        r"\\end\{equation\*\}": r"\]",
-                        ">": "&gt;",
-                        "<": "&lt;",
-                        "&": "&amp;",
-                          }
 
+class TrackedText:
+    def __init__(self, text: str, source: Path | None = None):
+        self.text = text
+        self.source = source
 
-class TrackedString(str):
-    """
-    string object that keeps a record of its source, e.g file.
-
-    --- Limitations:
-        1. We give priority to left TrackedString. If string = TrackedString1(...) + TrackedString2(...) string.source will only contain
-        the history of TrackedString1(...). This asserts there will always be exactly one 'root' source at the expense of tracking 'all' sources
-
-        2. There has to be a better solution...
-    """
-
-    def __new__(cls, string,  source: str | None = None):
-        """
-        source: path to source file
-        """
-        instance = super().__new__(cls, string)
-        instance.source = source #type: ignore
-        return instance
-
-    def join(self, iterable):
+    def join(self, iterable: Iterable["TrackedText"]):
         if not iterable:
-            return TrackedString("")
+            return TrackedText("")
+        joined_text = self.text.join([str(tracked_text) for tracked_text in iterable])
+        return TrackedText(joined_text, source = self.source)
 
-        joined_tex = self.__str__().join([str(tracked_string) for tracked_string in iterable])
-        source = iterable[0].source
-        return TrackedString(joined_tex, source =source)
+    def __getitem__(self, __key) -> 'TrackedText':
+        return TrackedText(self.text.__getitem__(__key), source=self.source)
 
+    def apply_func(self, func: Callable[[str], str]): #replace instances of modify text with this
+        new_text = func(self.text)
+        return TrackedText(new_text)
+    def sub(self, pattern: str, repl: str) -> 'TrackedText':
+        new_text = re.sub(pattern, repl, self.text)
+        return TrackedText(new_text, source=self.source)
 
-    def __getitem__(self, __key) -> 'TrackedString':
-        return TrackedString(super().__getitem__(__key), source=self.source)
+    def __add__(self, other: 'TrackedText'):
+        """
+        Other must be of type TrackedText and be of the same file type
 
-    def modify_text(self, func: Callable[[str], str]):
-        """ Method for using Trackedstring as argument for function: str -> str and using output to create new Trackedstring
-        -- Params --
-        func: function with str type param and str return type. functools.partial is helpfull here"""
-        new_text = func(self.__str__())
-        return TrackedString(new_text, source=self.source)
+        Left add has priority except for the special case where the string on the left has None as source. e.g.,
 
-    def sub(self, pattern: str, repl: str) -> "TrackedString":
-        new_text = re.sub(pattern, repl, self.__str__())
-        return TrackedString(new_text, self.source)
+        T1 = TrackedText(...)
+        T2 = TrackedText(...)
+        result = T1 + T2
 
-    def __add__(self, other):
-        """ Left add has priority. If result = TrackedString1(...) + TrackedString2(...), result.source.parent = TrackedString1(...) """
-        if not isinstance(other, str):
+        Then result has source property equal to T1.source
+        """
+
+        if not isinstance(other, TrackedText):
             raise TypeError(f"Other must be type str not type {type(other)}")
-        other_text = other if not isinstance(other, TrackedString) else other.__str__()
-        return TrackedString(super().__str__() + other_text,
-                             source=self.source)
+        elif other.source is None or self.source is None:
+            return TrackedText(self.text + other.text, source=self.source)
+        elif other.source.suffix != self.source.suffix:
+            raise TypeError(f"Incompatible source file types, expected filetype {self.source.suffix}, got {other.source.suffix}")
+        return TrackedText(self.text + other.text, source=self.source)
 
+    def split(self, sep: str | None = None, maxsep: SupportsIndex = -1) -> list['TrackedText']:
+        return [TrackedText(e, source=self.source) for e in self.text.split(sep, maxsep)]
     def __str__(self):
-        return super().__str__()
-
+        return self.text
+    def __iter__(self): # Should this iterate over self.text str chars or TrackedText(char)?
+        return self.text.__iter__()
+    def __len__(self):
+        return len(self.text)
     def __repr__(self):
-        return (f"TrackedString({super().__repr__()}, self.source={self.source})")
+        return (f"TrackedText({self.text}, self.source={self.source})")
+    def startswith(self, prefix: str | tuple[str, ...], *args) -> bool:
+        return self.text.startswith(prefix, *args)
+    def isalpha(self) -> bool:
+        return self.text.isalpha()
 
 
 @dataclass
 class Flashcard:
     section_name: str
-    question: TrackedString
-    answer: TrackedString
-    file_type: NoteType
+    question: TrackedText
+    answer: TrackedText
     pdf_answer_path: None | str = None
     pdf_question_path: None | str = None
     additional_info: dict = field(default_factory=dict)
     seen: bool = False
+
+
+    def filetype(self) -> NoteType:
+        suffix_map = {".typ": NoteType.Typst, ".tex": NoteType.LaTeX}
+        if self.question.source is None:
+            return NoteType.Unsupported
+        return suffix_map.get(self.question.source.suffix, NoteType.Unsupported)
 
 
     def add_info(self, name: str, info: str):
@@ -115,13 +111,7 @@ Output = TypeVar("Output")
 
 class Stage(ABC, Generic[Input, Output]):
     @abstractmethod
-    def process(self, data: TrackedString) -> TrackedString:
-        pass
-
-# TODO remove this abstact class
-class BuildFlashcardStage(ABC):
-    @abstractmethod
-    def build(self, data: TrackedString) -> list[Flashcard]:
+    def process(self, data: Input) -> Output:
         pass
 
 class FlashcardCache:
@@ -171,7 +161,7 @@ class FlashcardCache:
         return None
 
 
-class TexDataGenerator:
+class DataGenerator:
     """ Generates data in chunks. Each chunk corresponds to the contents of a file... Works well with 'lecture' tex files (small files), could use a re design
     to inlcude a chunk_size param if we are reading from any tex file
     """
@@ -188,16 +178,16 @@ class TexDataGenerator:
                 yield None
                 continue
 
-            source = str(file_path)
-            return_value = TrackedString(file_contents, source=source)
+            return_value = TrackedText(file_contents, source=file_path)
             yield return_value
 
-class CleanStage(Stage[TrackedString, TrackedString]):
+
+class CleanStage(Stage[TrackedText, TrackedText]):
     def __init__(self, macros: dict) -> None:
         super().__init__()
         self.macros = macros
 
-    def process(self, data: TrackedString) -> TrackedString:
+    def process(self, data: TrackedText) -> TrackedText:
         logger.debug(f"Starting {self.process}")
         tracked_string = self.remove_comments(data)
         tracked_string = self.remove_macros(tracked_string)
@@ -205,59 +195,59 @@ class CleanStage(Stage[TrackedString, TrackedString]):
         return tracked_string
 
 
-    def remove_comments(self, tex: TrackedString) -> TrackedString:
+    def remove_comments(self, text: TrackedText) -> TrackedText:
         pattern = r'% .*?\n'
-        return tex.sub(pattern, '')
+        return text.sub(pattern, '')
 
-    def _find_cmd(self, tex: str, macros: list[str]) -> Union[str, None]:
+    def _find_cmd(self, text: TrackedText, macros: list[str]) -> Union[str, None]:
         """ It is assumed tex string starts with backslash character """
         for pattern in macros:
-            if tex.startswith(pattern) and not tex[len(pattern)].isalpha(): # Not sure this covers all cases. We make sure line starts with command and next letter is not alphanumeric as that would indicate we got partial match. ie matching operator on operatorname
+            if text.startswith(pattern) and not text[len(pattern)].isalpha(): # Not sure this covers all cases. We make sure line starts with command and next letter is not alphanumeric as that would indicate we got partial match. ie matching operator on operatorname
                 return pattern
         return None
 
     @staticmethod
-    def _find_arg(tex: TrackedString) -> Union[TrackedString, None]:
+    def _find_arg(text: TrackedText) -> Union[TrackedText, None]:
         """ It is assume the tex string passed starts with curly bracket """
         paren_stack = []
 
-        if tex[0] != "{": # } <- this comment is to keep vim lsp happy
+        if text[0] != "{": # } <- this comment is to keep vim lsp happy
             raise ValueError(f"String passed does not begin with curly opening brace: {tex[:50]}, {tex.source}")
 
-        for index, char in enumerate(tex):
+        for index, char in enumerate(text):
             if char == "{":
                 paren_stack.append(char)
             elif char == "}":
                 paren_stack.pop()
             if not paren_stack:
-                return tex[1:index]
+                return text[1:index]
         return None
 
-    def remove_macros(self, tex: TrackedString) -> TrackedString:
+    def remove_macros(self, text: TrackedText) -> TrackedText:
         """ Replaces all user defined macros with 'pure tex' in the sence that it would compile without a specific macros.tex/preamble.tex
         ** Limited to replacing macros of the form: \\macro_name{title}{tex}. This can not handle more complex macros
         :param tex: latex code as string
         :param macros: dictionary with key values of the form; macro_name: macro_dict_info. ie {defin: {command_in_tex: tex, ....},...}
         """
-        tex_pcs = []
+        text_pcs = []
         counter = 0
 
-        while counter < len(tex):
+        while counter < len(text):
 
-            if tex[counter] != '\\':
-                tex_pcs.append(tex[counter])
+            if text[counter] != '\\':
+                text_pcs.append(text[counter])
                 counter += 1
                 continue
 
-            cmd = self._find_cmd(tex[counter+1:], list(self.macros.keys()))
+            cmd = self._find_cmd(text[counter+1:], list(self.macros.keys()))
 
             if cmd == None:
-                tex_pcs.append(tex[counter])
+                text_pcs.append(text[counter])
                 counter += 1
                 continue
 
             end_cmd_index = counter + len(cmd)  # -1 to accound for backslash character being in command, we want all end_*_index variables to be inclusive
-            arg = self._find_arg(tex[end_cmd_index +1:])
+            arg = self._find_arg(text[end_cmd_index +1:])
 
             if arg is None:
                 logging.warn("Something went wrong while calling clean_self.tex")
@@ -270,33 +260,39 @@ class CleanStage(Stage[TrackedString, TrackedString]):
             new_cmd = cmd_template.replace("#1", cleaned_arg)
             num_brackets_ignored = 2
 
-            if tex[counter-1].isalpha(): # Add space character to prevent joining text, however ensure previous charcater is
+            if str(text[counter-1]).isalpha(): # Add space character to prevent joining text, however ensure previous charcater is
                 new_cmd = " " + new_cmd
             new_cmd += " "
-            tex_pcs.append(TrackedString(new_cmd, source=cleaned_arg.source))
+            text_pcs.append(TrackedText(new_cmd, source=cleaned_arg.source))
             counter = len(arg) + end_cmd_index + num_brackets_ignored +1 #This sets counter equal to last character in command, +1 to move to character after command
-        new_tex = TrackedString("").join(tex_pcs)
-        return new_tex
+        new_text = TrackedText("").join(text_pcs) #TODO this will now work
+        return new_text
 
-    def add_arg_spaces(self, command: str, arg: TrackedString):
+    def add_arg_spaces(self, command: TrackedText, arg: TrackedText) -> TrackedText:
         if "#1" not in command:
-            return TrackedString("")
+            return TrackedText("")
         command_split = command.split("#1")
         if command_split[1][0].isalpha():
-            arg += " "
+            arg += TrackedText(" ")
         if command_split[0][-1].isalpha():
-            arg = arg.modify_text(" ".__add__)
+            arg = reduce(lambda x, y: x + y, command_split)
         return arg
 
-Section = namedtuple("MainSection", ["title", "content", "name", "end_index"])
+@dataclass
+class Section:
+    header: TrackedText
+    content: TrackedText
+    name: str
+    end_index: int
+
 
 class SectionFinder(ABC):
     @abstractmethod
-    def find_section(self, text: TrackedString) -> Section | None:
+    def find_section(self, text: TrackedText) -> Section | None:
         pass
 
     @staticmethod
-    def _content_inside_paren(tex: TrackedString, paren: tuple[str, str]=("{", "}")) -> TrackedString:
+    def _content_inside_paren(tex: TrackedText, paren: tuple[str, str]=("{", "}")) -> TrackedText:
         """ It is assume the tex string passed starts paren[0] and for every opening paren we have a matching close paren """
         paren_stack = []
 
@@ -322,17 +318,17 @@ class ProofSectionFinder(SubSectionFinder):
         super().__init__([parent.name for parent in parent_names])
         self.section_name_members = names if isinstance(names, list) else [names]
 
-    def find_section(self, text: TrackedString) -> Section | None:
+    def find_section(self, text: TrackedText) -> Section | None:
         section, member = self.is_section(text)
         if not section or not member:
             return None
         first_curly_brace_index = len(member.value) + 1
-        _title = self._content_inside_paren(text[first_curly_brace_index:])
+        header = self._content_inside_paren(text[first_curly_brace_index:])
         # index relative to whole text block
-        end_title_index = first_curly_brace_index + len(_title) +1 # first_curly_brace_index includes \\name{, len(title) includes {title}_, -1 to get back to }
+        end_title_index = first_curly_brace_index + len(header) +1 # first_curly_brace_index includes \\name{, len(title) includes {title}_, -1 to get back to }
         content = self._content_inside_paren(text[end_title_index +1:])
         end_content_index = end_title_index + len(content) + 1 # +1 to make non inclusive. ie text[end_content_index] == a closing paren
-        return Section(_title, content, member.name, end_content_index)
+        return Section(header, content, member.name, end_content_index)
 
 
     def is_section(self, text) -> tuple[bool, SectionNamesDescriptor | None]:
@@ -359,20 +355,20 @@ class MainSectionFinder(SectionFinder):
         """
         self.possible_names = names if isinstance(names, list) else [names]
 
-    def find_section(self, text: TrackedString) -> None | Section:
+    def find_section(self, text: TrackedText) -> None | Section:
         is_section, member = self.is_section(text)
         if not is_section or member is None:
             return None
         # text[len(self.name + 1)] is openening bracket character
         first_curly_brace_index = len(member.value) + 1
-        title = self._content_inside_paren(text[first_curly_brace_index:])
+        header = self._content_inside_paren(text[first_curly_brace_index:])
         # index relative to whole text block
-        end_title_index = first_curly_brace_index + len(title) +1 # first_curly_brace_index includes \\name{, len(title) includes {title}_, -1 to get back to }
+        end_title_index = first_curly_brace_index + len(header) +1 # first_curly_brace_index includes \\name{, len(title) includes {title}_, -1 to get back to }
         content = self._content_inside_paren(text[end_title_index +1:])
         end_content_index = end_title_index + len(content) + 1 # +1 to make non inclusive. ie text[end_content_index] == a closing paren
-        return Section(title, content, member.name, end_content_index)
+        return Section(header, content, member.name, end_content_index)
 
-    def is_section(self, line: TrackedString) -> tuple[bool, SectionNamesDescriptor | None]:
+    def is_section(self, line: TrackedText) -> tuple[bool, SectionNamesDescriptor | None]:
         """ We make the assumtion the only text that starts with a section name and is followd by closing curly brace
         is a valid MainSection """
         if len(line) < 2:
@@ -383,13 +379,13 @@ class MainSectionFinder(SectionFinder):
                 return (True, member)
         return (False, None)
 
-class FlashcardBuilder(BuildFlashcardStage):
+class BuilderStage(Stage[TrackedText, List[Flashcard]]):
     def __init__(self, main_section_finder: MainSectionFinder, sub_section_finders: list[SubSectionFinder] | None = None) -> None:
         self.main_section_finder = main_section_finder
         self.sub_section_finders = [] if sub_section_finders is None else sub_section_finders
 
     @staticmethod
-    def index_of_line_end(tex: TrackedString) -> int | None:
+    def index_of_line_end(tex: TrackedText) -> int | None:
         """
         :param tex: latex code as string
         :returns int: index of line end, None if no newline character, could occur on last line in file
@@ -399,9 +395,9 @@ class FlashcardBuilder(BuildFlashcardStage):
                 return index +1
         return None
 
-    def process_chunk(self, data: TrackedString):
+    def process_chunk(self, data: TrackedText):
         """
-        :param data: data as string
+        :param data: data as TrackedText
         :param section_names: gets all data from sections contained in section_names
         :returns list: [(name, section_contents)....] """
         flashcards = []
@@ -446,7 +442,7 @@ class FlashcardBuilder(BuildFlashcardStage):
             counter += section.end_index + 1  # This sets counter equal to last character in command, +1 to move to character after command
         return flashcards
 
-    def build(self, data: TrackedString) -> list[Flashcard]:
+    def process(self, data: TrackedText) -> list[Flashcard]:
         logger.debug(f"Calling {__class__.__name__}.process")
         chunk_flashcards = self.process_chunk(data)
 #        chunk_flashcards = self.re_format_flashcards(chunk_flashcards)
@@ -461,31 +457,17 @@ class FlashcardBuilder(BuildFlashcardStage):
             if len(flashcard.question) > 4 or not hasattr(flashcard, "proof"):
                 continue
             flashcard.question = flashcard.answer
-            flashcard.answer = flashcard.proof
+            flashcard.answer = flashcard.proof # probably ignore?
         return flashcards
 
 class FlashcardsPipeline:
-    """ Generator Object
-    TODO: Different stages can have different return types, so I leave it up to the user to use these stages in correct order (last stage must return list[Flashcard])
-    Implementing some sort of type hinting (or class re design) to make this ordering less ambigous would be nice
-
-
-    SOLUTION IDEA: Each stage needs a return and input type property, users must add stages through FlashcardsPipeline.add_stage method.
-    FlashcardsPipeline will check the input and return types, raising an error if they do not match. Additionally to use the pipeline users
-    must first call FlashcardsPipeline.build_pipe. This method will have two features, 1. prevent the addition of new stages (pipeline is now fixed),
-    2. check that final stage has correct return type.
-    """
-    def __init__(self, data_iterable: Iterable, flashcard_builder: BuildFlashcardStage, stages: list[Stage] | None = None):
-        self.builder = flashcard_builder
+    def __init__(self, data_iterable: Iterable):
         self.data_iterable = data_iterable
-        self.stages = [] if stages is None else stages
+        self.stages = []
         self.last_output_type = None
 
     def add_stage(self, stage: Stage):
         # TODO make sure first stage takes valid input
-        if not self.stages:
-            self.stages.append(stage)
-            return
         stage_type = type(stage)
         input_type, output_type = None, None
         for base in getattr(stage_type, "__orig_bases__", []):
@@ -494,17 +476,14 @@ class FlashcardsPipeline:
                 break
         if input_type is None or output_type is None:
             raise TypeError("Stage must subclass Stage[Input, Output]")
-        if self.last_output_type != input_type:
-            raise TypeError(f"Incompactiable stage: expected input {self.last_output_type}, got {input_type}")
+
+        if len(self.stages) != 0 and self.last_output_type != input_type:
+            raise TypeError(f"Incompatible stage: expected input {self.last_output_type}, got {input_type}")
         self.stages.append(stage)
         self.last_output_type = output_type
 
-    # TODO fix this
-    def _validate(self):
-        return self.last_output_type == List[Flashcard]
-
     def __iter__(self) -> Generator[List[Flashcard], None, None]:
-        valid = self._validate()
+        valid = get_origin(self.last_output_type) == list and get_args(self.last_output_type) == (Flashcard,)
         if not valid:
             raise TypeError(f"Invalid pipeline: expected last stage output type to be List[Flashcard], got {self.last_output_type}")
 
@@ -514,8 +493,7 @@ class FlashcardsPipeline:
                 continue
             for stage in self.stages:
                 chunk = stage.process(chunk)
-            flashcards = self.builder.build(chunk)
-            yield flashcards
+            yield chunk
 
 
 def find_math_mode(tex: str):
