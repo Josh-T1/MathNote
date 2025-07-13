@@ -101,7 +101,7 @@ subparsers = global_parser.add_subparsers(title="Subcommands", help="Note taking
 course_parser = subparsers.add_parser("course", help="Create course file structure and inizialize course json file")
 flashcard_parser = subparsers.add_parser("flashcard", help="Generate flashcards from .tex files")
 note_parser = subparsers.add_parser("note", help="Create latex notes")
-view_parser = subparsers.add_parser("view", help="TODO")
+view_parser = subparsers.add_parser("view", help="View notes with gui in browser")
 
 course_parser_arguments = [
         ("name",{"nargs": 1, "help": "Course name"}),

@@ -3,14 +3,15 @@ import threading
 import tempfile
 from pathlib import Path
 import time
+import shutil
 import subprocess
 import hashlib
 from typing import OrderedDict, Deque
 from .. import parse_tex
 import logging
 from collections import deque
-from ..utils import SectionNames, SectionNamesDescriptor, config
-from .edit_tex import latex_template
+from ..utils import NoteType, SectionNames, SectionNamesDescriptor, config
+from .edit_tex import latex_template, typst_template
 from ..course import Courses
 logger = logging.getLogger("mathnote")
 
@@ -155,7 +156,7 @@ class FlashcardDoubleLinkedList:
             current = current.next
 
 
-class TexCompilationManager:
+class CompilationManager:
     """ Handles compilation of latex, flashcard cache, and formating of flashcard."""
 
     def __init__(self, cache_root: str ="cache_tex", cache_size: int = 200) -> None:
@@ -216,12 +217,13 @@ class TexCompilationManager:
 
     def compile_card(self, card: parse_tex.Flashcard) -> None:
         """ Attemps to compile flashcard question/answer latex. If compilation fails """
-        card.pdf_question_path = self.compile_latex(card.question)
-        card.pdf_answer_path = self.compile_latex(card.answer)
+        compile_func = self.compile_latex if card.question.filetype() == NoteType.LaTeX else self.compile_typst # TODO not handling Unsupported note typst. Catch earlier
+        card.pdf_question_path = compile_func(card.question)
+        card.pdf_answer_path = compile_func(card.answer)
 
         for member_name, content in card.additional_info.items():
             if SectionNames.is_name(member_name):
-                path = self.compile_latex(content)
+                path = compile_func(content)
                 setattr(card, f"pdf_{member_name}_path", path)
                 setattr(card, f"{member_name}", content)
 
@@ -294,10 +296,51 @@ class TexCompilationManager:
 
         return str(new_path)
 
+    # TODO refactor this and compile latex
+    def compile_typst(self, typst: parse_tex.TrackedText) -> str | None:
+        """ Compile typst string
+        -- Params --
+        tex: string containig latex code
+        returns: path to compiled pdf or None if compilation fails
+        """
+        # TODO: I dont think cache is working properly
+        source = typst.source
+        if source is None: return #TODO fix this
+        typst_str = str(typst)
+        typst_hash = "empty" if not typst_str else self.get_hash(typst_str)
+        if typst_hash in self.cache.keys():
+            logger.debug(f"Getting file {typst_hash} from cache")
+            return self.cache[typst_hash]
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            typst_file_path = Path(tmpdir) / "temp.typ"
+            pdf_file_path = Path(tmpdir) / "temp.pdf"
+            typst_file_path.write_text(typst_template(typst_str), encoding='utf-8')
+
+
+            cmd = ['typst','compile', "--format", "pdf", str(typst_file_path)]
+            logger.debug(f"Attempting to compile card")
+            result = subprocess.run(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE
+                    )
+            # Command did not run successfully
+            if result.returncode != 0:
+                logger.error(f"Error running {' '.join(cmd)}. Tex file contents: {typst_str}, stderr={result.stderr}\nSource={source}")
+
+                if not pdf_file_path.is_file(): # Error != no pdf produced
+                    return None
+            logger.info(f"Successfully generated pdf")
+            new_path = pdf_file_path.rename(self.cache_dir / f"{typst_hash}.pdf").resolve()
+
+        return str(new_path)
+
+
 class FlashcardModel:
     """ Acts as a container for the flashcard data. MVC architecture for gui """
 
-    def __init__(self, compiler: TexCompilationManager) -> None:
+    def __init__(self, compiler: CompilationManager) -> None:
         """
         -- Params --
         compiler: manages compilation of flash cards, type TexCompilationManager
@@ -431,6 +474,7 @@ class FlashcardModel:
                 paths.append(card.pdf_question_path)
         return paths
 
+    # TODO: prevent other methods from calling?
     def _compile(self, event: threading.Event, compile_num=2):
         """ Inteded to be executed by StoppableThread
         -- Params --

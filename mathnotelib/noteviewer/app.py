@@ -7,33 +7,65 @@ from pathlib import Path
 import tempfile
 
 OUTPUT_FILE_NAME = "rendered.svg"
-
-app = Flask(__name__, static_folder="static")
 ROOT_DIR = Path(config['root'])
 
+app = Flask(__name__, static_folder="static")
+
 def typst_to_svg(path: Path, tmpdir: Path) -> int:
-    output_file_path = tmpdir / OUTPUT_FILE_NAME
+    """
+    Compile typst file to SVG using tinymist
+
+    path: Path of typst file
+    tmpdir: Directory where compilation occurs. Typically a temporary directory to ensure intermediate files (e.g., .aux, .log, .svg) are cleaned up after each run.
+    """
+    print("typst")
     if not path.is_file():
         return 1
-    result = subprocess.run(["tinymist", "compile", path, tmpdir/ OUTPUT_FILE_NAME],
-                            cwd=ROOT_DIR, stdout=subprocess.DEVNULL ,stderr=subprocess.DEVNULL)
+
+    output_file_path = tmpdir / OUTPUT_FILE_NAME
+
+    result = subprocess.run(
+            ["tinymist", "compile", path, "--format", "svg"],
+            cwd=path.parent,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+            )
     try:
         shutil.move(path.with_suffix(".svg"), output_file_path)
     except Exception as e:
         return 1
+
     return result.returncode
 
 def latex_to_svg(path: Path, tmpdir: Path) -> int:
-    output_file_path = tmpdir / OUTPUT_FILE_NAME
+    """
+    Compile latex to svg
+
+    path: Path of typst file
+    tmpdir: Directory where compilation occurs. Typically a temporary directory to ensure intermediate files (e.g., .aux, .log, .svg) are cleaned up after each run.
+    """
+
     if not path.is_file():
         return 1
-    result_1 = subprocess.run(["pdflatex", "-interaction=nonstopmode", f"-output-directory={tmpdir}", path],
-                              cwd=path.parent, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    output_file_path = tmpdir / OUTPUT_FILE_NAME
+
+    result_1 = subprocess.run(
+            ["pdflatex", "-interaction=nonstopmode", f"-output-directory={tmpdir}", path],
+              cwd=path.parent,
+              stdout=subprocess.DEVNULL,
+              stderr=subprocess.DEVNULL
+              )
+
     if result_1.returncode != 0:
         return 1
-    dvi_path = (Path(tempfile.gettempdir()) / f"{path.stem}.dvi").resolve()
-    result_2 = subprocess.run(["pdf2svg", dvi_path , output_file_path],
-                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    pdf_path = (tmpdir/path.stem).with_suffix(".pdf")
+    result_2 = subprocess.run(
+            ["pdf2svg", pdf_path , output_file_path],
+              stdout=subprocess.DEVNULL,
+              stderr=subprocess.DEVNULL
+              )
     return result_2.returncode
 
 @app.route('/')
@@ -42,7 +74,11 @@ def index():
 
 @app.route('/render')
 def render():
-    # TODO: clean this up
+    """
+    Get args specifying file to compile along with any options. Compile and return svg code
+
+    return: Response containg svg content
+    """
     parent_path = Path(request.args.get('parentPath', ""))
     file_name = request.args.get("name", "")
     file_type = request.args.get("type")
@@ -52,6 +88,8 @@ def render():
 
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir_path = Path(tmpdir)
+        rendered_path = tmpdir_path / OUTPUT_FILE_NAME
+
         if file_type == "Typst":
             return_code = typst_to_svg(path, tmpdir_path)
         elif file_type == "LaTeX":
@@ -60,8 +98,10 @@ def render():
 
         if return_code == 1:
             return abort(400, "Invalid path")
-        with open(tmpdir_path / OUTPUT_FILE_NAME, "r", encoding="utf-8") as f:
+
+        with open(rendered_path, "r", encoding="utf-8") as f:
             svg_content = f.read()
+
     return Response(svg_content, mimetype="image/svg+xml")
 
 

@@ -277,7 +277,7 @@ class Course:
                     ['tinymist', "compile", str(mainfile)],
                     stdout = subprocess.DEVNULL,
                     stderr = subprocess.DEVNULL,
-                    cwd=self.path
+                    cwd=self.path.parent.parent
                     )
         return result.returncode
 
@@ -302,7 +302,7 @@ class Courses():
     """ Container for all Course objects """
     def __init__(self, config: dict[str, str]):
         self.config = config
-        self.root = Path(config["root"])
+        self.root = Path(config["root"]) / "Courses"
         self._courses = {}
 
     def _find_courses(self, _key = lambda c: c.name) -> list[Course]:

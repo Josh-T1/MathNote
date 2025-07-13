@@ -211,6 +211,8 @@ class CleanStage(Stage[TrackedText, TrackedText]):
     @staticmethod
     def _find_arg(text: TrackedText) -> Union[TrackedText, None]:
         """ It is assume the tex string passed starts with curly bracket """
+        print(text.source, "source")
+        print(text.filetype())
         paren = ("{", "}") if text.filetype() == NoteType.LaTeX else ("[", "]") # TODO -currently no handling of unsupported
 
         paren_stack = []
@@ -296,13 +298,12 @@ class SectionFinder(ABC):
         pass
 
     @staticmethod
-    def _content_inside_paren(text: TrackedText, paren: tuple[str, str]=("{", "}")) -> TrackedText:
+    def _content_inside_paren(text: TrackedText, paren: tuple[str, str]) -> TrackedText:
         """ It is assume the tex string passed starts paren[0] and for every opening paren we have a matching close paren """
-        paren = ("{", "}") if text.filetype() == NoteType.LaTeX else ("[", "]") # TODO -currently no handling of unsupported
         paren_stack = []
 
         if str(text[0]) != paren[0]:
-            raise ValueError(f"String passed does not begin with '{{': {text[:50]}, {text.source}") # }}} <= keep lsp happy
+            raise ValueError(f"String passed does not begin with '{paren[0]}': {text[:50]}, {text.source}") # }}} <= keep lsp happy
 
         for index, char in enumerate(str(text)):
             if char == paren[0]:
@@ -324,14 +325,17 @@ class ProofSectionFinder(SubSectionFinder):
         self.section_name_members = names if isinstance(names, list) else [names]
 
     def find_section(self, text: TrackedText) -> Section | None:
+        title_paren = ("{", "}") if text.filetype() == NoteType.LaTeX else ("(", ")") # TODO -currently no handling of unsupported
+        body_paren = ("{", "}") if text.filetype() == NoteType.LaTeX else ("[", "]") # TODO -currently no handling of unsupported
+
         section, member = self.is_section(text)
         if not section or not member:
             return None
         open_paren_index = len(member.value) + 1
-        header = self._content_inside_paren(text[open_paren_index:])
+        header = self._content_inside_paren(text[open_paren_index:], title_paren)
         # index relative to whole text block
         end_title_index = open_paren_index + len(header) +1 # first_curly_brace_index includes \\name{, len(title) includes {title}_, -1 to get back to }
-        content = self._content_inside_paren(text[end_title_index +1:])
+        content = self._content_inside_paren(text[end_title_index +1:], body_paren)
         end_content_index = end_title_index + len(content) + 1 # +1 to make non inclusive. ie text[end_content_index] == a closing paren
         return Section(header, content, member.name, end_content_index)
 
@@ -367,15 +371,18 @@ class MainSectionFinder(SectionFinder):
         self.possible_names = names if isinstance(names, list) else [names]
 
     def find_section(self, text: TrackedText) -> None | Section:
+        title_paren = ("{", "}") if text.filetype() == NoteType.LaTeX else ("(", ")") # TODO -currently no handling of unsupported
+        body_paren = ("{", "}") if text.filetype() == NoteType.LaTeX else ("[", "]") # TODO -currently no handling of unsupported
+
         is_section, member = self.is_section(text)
         if not is_section or member is None:
             return None
         # text[len(self.name + 1)] is openening bracket character
         open_paren_index = len(member.value) + 1
-        header = self._content_inside_paren(text[open_paren_index:])
+        header = self._content_inside_paren(text[open_paren_index:], title_paren)
         # index relative to whole text block
         end_title_index = open_paren_index + len(header) +1 # open_paren_index includes \\name{, len(title) includes {title}_, -1 to get back to }
-        content = self._content_inside_paren(text[end_title_index +1:])
+        content = self._content_inside_paren(text[end_title_index +1:], body_paren)
         end_content_index = end_title_index + len(content) + 1 # +1 to make non inclusive. ie text[end_content_index] == a closing paren
         return Section(header, content, member.name, end_content_index)
 
@@ -446,6 +453,8 @@ class BuilderStage(Stage[TrackedText, List[Flashcard]]):
                 counter += 1
                 continue
             parent_section = section.name # the command title. e.g \defin{...}{...}
+            if data.filetype() == NoteType.Typst: # TODO clean this up
+                section.header = TrackedText(str(section.header).replace("name: ", "").replace('"', ""), source=data.source)
             flashcards.append(
                     Flashcard(section.name, section.header, section.content)
                     )

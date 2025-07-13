@@ -64,11 +64,11 @@ class FlashcardCommand(Command):
     def _ensure_import(cls):
         if cls._app is None or cls._window is None or cls._model is None or cls._compilation_manager is None or cls._controller is None:
             from PyQt6.QtWidgets import QApplication
-            from .flashcard import FlashcardModel, TexCompilationManager, MainWindow, FlashcardController
+            from .flashcard import FlashcardModel, CompilationManager, MainWindow, FlashcardController
             cls._app = QApplication([])
             cls._window = MainWindow
             cls._model = FlashcardModel
-            cls._compilation_manager = TexCompilationManager
+            cls._compilation_manager = CompilationManager
             cls._controller = FlashcardController
 
     def cmd(self, namespace):

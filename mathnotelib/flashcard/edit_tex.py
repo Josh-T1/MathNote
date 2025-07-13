@@ -13,7 +13,14 @@ def latex_template(tex: str) -> str:
 
 # TODO
 def typst_template(typ: str) -> str:
-    return ""
+    return fr"""
+#set page(
+        width: auto,
+        height: auto,
+        margin: 5pt
+        )
+{typ}
+"""
 
 def open_file_with_editor(filename):
     import iterm2
