@@ -33,6 +33,12 @@ class TrackedText:
     def __getitem__(self, __key) -> 'TrackedText':
         return TrackedText(self.text.__getitem__(__key), source=self.source)
 
+    def filetype(self) -> NoteType:
+        suffix_map = {".typ": NoteType.Typst, ".tex": NoteType.LaTeX}
+        if self.source is None:
+            return NoteType.Unsupported
+        return suffix_map.get(self.source.suffix, NoteType.Unsupported)
+
     def apply_func(self, func: Callable[[str], str]): #replace instances of modify text with this
         new_text = func(self.text)
         return TrackedText(new_text)
@@ -90,13 +96,8 @@ class Flashcard:
     additional_info: dict = field(default_factory=dict)
     seen: bool = False
 
-
     def filetype(self) -> NoteType:
-        suffix_map = {".typ": NoteType.Typst, ".tex": NoteType.LaTeX}
-        if self.question.source is None:
-            return NoteType.Unsupported
-        return suffix_map.get(self.question.source.suffix, NoteType.Unsupported)
-
+        return self.question.filetype()
 
     def add_info(self, name: str, info: str):
         self.additional_info[name] = info
@@ -163,7 +164,6 @@ class FlashcardCache:
             return cache_value
         return None
 
-
 class DataGenerator:
     """ Generates data in chunks. Each chunk corresponds to the contents of a file... Works well with 'lecture' tex files (small files), could use a re design
     to inlcude a chunk_size param if we are reading from any tex file
@@ -183,7 +183,6 @@ class DataGenerator:
 
             return_value = TrackedText(file_contents, source=file_path)
             yield return_value
-
 
 class CleanStage(Stage[TrackedText, TrackedText]):
     def __init__(self, macros: dict) -> None:
@@ -297,6 +296,8 @@ class SectionFinder(ABC):
     @staticmethod
     def _content_inside_paren(text: TrackedText, paren: tuple[str, str]=("{", "}")) -> TrackedText:
         """ It is assume the tex string passed starts paren[0] and for every opening paren we have a matching close paren """
+        paren = ("{", "}") if text.filetype == NoteType.LaTeX else ("[", "]") # TODO -currently no handling of unsupported
+
         paren_stack = []
 
         if str(text[0]) != paren[0]:
@@ -325,17 +326,16 @@ class ProofSectionFinder(SubSectionFinder):
         section, member = self.is_section(text)
         if not section or not member:
             return None
-        first_curly_brace_index = len(member.value) + 1
-        header = self._content_inside_paren(text[first_curly_brace_index:])
+        open_paren_index = len(member.value) + 1
+        header = self._content_inside_paren(text[open_paren_index:])
         # index relative to whole text block
-        end_title_index = first_curly_brace_index + len(header) +1 # first_curly_brace_index includes \\name{, len(title) includes {title}_, -1 to get back to }
+        end_title_index = open_paren_index + len(header) +1 # first_curly_brace_index includes \\name{, len(title) includes {title}_, -1 to get back to }
         content = self._content_inside_paren(text[end_title_index +1:])
         end_content_index = end_title_index + len(content) + 1 # +1 to make non inclusive. ie text[end_content_index] == a closing paren
         return Section(header, content, member.name, end_content_index)
 
 
     def is_section(self, text: TrackedText) -> tuple[bool, SectionNamesDescriptor | None]:
-
         if len(text) < 2:
             return (False, None)
         for member in self.section_name_members:
@@ -347,9 +347,16 @@ class ProofSectionFinder(SubSectionFinder):
 class MainSectionFinder(SectionFinder):
     r"""
     Finds sections of the form:
-    \name{title}{
+
+    e.g., LaTeX
+    \cmd{name}{
             content
             }
+
+    e.g., Typst
+    #cmd(title: name)[
+            content
+            ]
     """
     def __init__(self, names: list[SectionNamesDescriptor] | SectionNamesDescriptor):
         """
@@ -363,10 +370,10 @@ class MainSectionFinder(SectionFinder):
         if not is_section or member is None:
             return None
         # text[len(self.name + 1)] is openening bracket character
-        first_curly_brace_index = len(member.value) + 1
-        header = self._content_inside_paren(text[first_curly_brace_index:])
+        open_paren_index = len(member.value) + 1
+        header = self._content_inside_paren(text[open_paren_index:])
         # index relative to whole text block
-        end_title_index = first_curly_brace_index + len(header) +1 # first_curly_brace_index includes \\name{, len(title) includes {title}_, -1 to get back to }
+        end_title_index = open_paren_index + len(header) +1 # open_paren_index includes \\name{, len(title) includes {title}_, -1 to get back to }
         content = self._content_inside_paren(text[end_title_index +1:])
         end_content_index = end_title_index + len(content) + 1 # +1 to make non inclusive. ie text[end_content_index] == a closing paren
         return Section(header, content, member.name, end_content_index)
@@ -374,7 +381,6 @@ class MainSectionFinder(SectionFinder):
     def is_section(self, line: TrackedText) -> tuple[bool, SectionNamesDescriptor | None]:
         """ We make the assumtion the only text that starts with a section name and is followd by closing curly brace
         is a valid MainSection """
-        print("called")
         if len(line) < 2:
             return (False, None)
 
@@ -405,6 +411,7 @@ class BuilderStage(Stage[TrackedText, List[Flashcard]]):
         :param data: data as TrackedText
         :param section_names: gets all data from sections contained in section_names
         :returns list: [(name, section_contents)....] """
+        cmd_char = "\\" if data.filetype() == NoteType.LaTeX else "#" # TODO - currently not handling unsported
         flashcards = []
         counter = 0
         parent_section = None
@@ -419,7 +426,7 @@ class BuilderStage(Stage[TrackedText, List[Flashcard]]):
                 counter += comment_len
                 continue
 
-            if str(data[counter]) != '\\':
+            if str(data[counter]) != cmd_char:
                 counter += 1
                 continue
 
@@ -447,6 +454,8 @@ class BuilderStage(Stage[TrackedText, List[Flashcard]]):
         return flashcards
 
     def process(self, data: TrackedText) -> list[Flashcard]:
+        #check types
+
         logger.debug(f"Calling {__class__.__name__}.process")
         chunk_flashcards = self.process_chunk(data)
 #        chunk_flashcards = self.re_format_flashcards(chunk_flashcards)
@@ -461,7 +470,7 @@ class BuilderStage(Stage[TrackedText, List[Flashcard]]):
             if len(flashcard.question) > 4 or not hasattr(flashcard, "proof"):
                 continue
             flashcard.question = flashcard.answer
-            flashcard.answer = flashcard.proof # probably ignore?
+            flashcard.answer = flashcard.proof # refactor flashcard to fix this
         return flashcards
 
 class FlashcardsPipeline:
@@ -509,6 +518,8 @@ def find_math_mode(tex: str):
 
     return re.match(r"^\\[.*?\\]", tex)
 
+
+# TODO refactor to fix this
 def get_hack_macros():
     """tmp fix for removing macros"""
     return {"framedtext": {"num_args": '1', "command": ""}}
