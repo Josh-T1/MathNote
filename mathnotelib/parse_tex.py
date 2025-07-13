@@ -211,15 +211,17 @@ class CleanStage(Stage[TrackedText, TrackedText]):
     @staticmethod
     def _find_arg(text: TrackedText) -> Union[TrackedText, None]:
         """ It is assume the tex string passed starts with curly bracket """
+        paren = ("{", "}") if text.filetype() == NoteType.LaTeX else ("[", "]") # TODO -currently no handling of unsupported
+
         paren_stack = []
 
-        if str(text[0]) != "{": # } <- this comment is to keep vim lsp happy
+        if str(text[0]) != paren[0]: # } <- this comment is to keep vim lsp happy
             raise ValueError(f"String passed does not begin with curly opening brace: {text[:50]}, {text.source}")
 
         for index, char in enumerate(str(text)):
-            if char == "{":
+            if char == paren[0]:
                 paren_stack.append(char)
-            elif char == "}":
+            elif char == paren[1]:
                 paren_stack.pop()
             if not paren_stack:
                 return text[1:index]
@@ -231,8 +233,8 @@ class CleanStage(Stage[TrackedText, TrackedText]):
         :param tex: latex code as string
         :param macros: dictionary with key values of the form; macro_name: macro_dict_info. ie {defin: {command_in_tex: tex, ....},...}
         """
-        text_pcs = []
-        counter = 0
+        text_pcs: list[TrackedText] = []
+        counter: int = 0
 
         while counter < len(text):
 
@@ -267,7 +269,7 @@ class CleanStage(Stage[TrackedText, TrackedText]):
             new_cmd += " "
             text_pcs.append(TrackedText(new_cmd, source=cleaned_arg.source))
             counter = len(arg) + end_cmd_index + num_brackets_ignored +1 #This sets counter equal to last character in command, +1 to move to character after command
-        new_text = TrackedText("").join(text_pcs) #TODO this will now work
+        new_text = reduce(lambda x, y: x + y, text_pcs)
         return new_text
 
     def add_arg_spaces(self, command: TrackedText, arg: TrackedText) -> TrackedText:
@@ -296,8 +298,7 @@ class SectionFinder(ABC):
     @staticmethod
     def _content_inside_paren(text: TrackedText, paren: tuple[str, str]=("{", "}")) -> TrackedText:
         """ It is assume the tex string passed starts paren[0] and for every opening paren we have a matching close paren """
-        paren = ("{", "}") if text.filetype == NoteType.LaTeX else ("[", "]") # TODO -currently no handling of unsupported
-
+        paren = ("{", "}") if text.filetype() == NoteType.LaTeX else ("[", "]") # TODO -currently no handling of unsupported
         paren_stack = []
 
         if str(text[0]) != paren[0]:
@@ -385,7 +386,6 @@ class MainSectionFinder(SectionFinder):
             return (False, None)
 
         for member in self.possible_names:
-            print(line[1:])
             if line[1:].startswith(member.value):
                 return (True, member)
         return (False, None)
@@ -396,12 +396,12 @@ class BuilderStage(Stage[TrackedText, List[Flashcard]]):
         self.sub_section_finders = [] if sub_section_finders is None else sub_section_finders
 
     @staticmethod
-    def index_of_line_end(tex: TrackedText) -> int | None:
+    def index_of_line_end(text: TrackedText) -> int | None:
         """
         :param tex: latex code as string
         :returns int: index of line end, None if no newline character, could occur on last line in file
         """
-        for index, char in enumerate(tex):
+        for index, char in enumerate(text):
             if char == "\n":
                 return index +1
         return None
@@ -411,13 +411,14 @@ class BuilderStage(Stage[TrackedText, List[Flashcard]]):
         :param data: data as TrackedText
         :param section_names: gets all data from sections contained in section_names
         :returns list: [(name, section_contents)....] """
-        cmd_char = "\\" if data.filetype() == NoteType.LaTeX else "#" # TODO - currently not handling unsported
+        # The issue is data has no source
+        cmd_char = '\\' if data.filetype() == NoteType.LaTeX else "#" # TODO - currently not handling unsported
         flashcards = []
         counter = 0
         parent_section = None
         while counter < len(data): # check this is what i want
 
-            if data[counter] == "%": # Do this everywhere
+            if data[counter] == "%": # TODO: Adjust for typst + old note which I can no longer decifer: Do this everywhere
                 comment_len = self.index_of_line_end(data[counter+1:])
 
                 if comment_len is None:
@@ -425,11 +426,9 @@ class BuilderStage(Stage[TrackedText, List[Flashcard]]):
 
                 counter += comment_len
                 continue
-
             if str(data[counter]) != cmd_char:
                 counter += 1
                 continue
-
             # add subsections to flashcard
             if parent_section:
                 for subsection_finder in self.sub_section_finders:
