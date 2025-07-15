@@ -52,27 +52,49 @@ body {
   display: block;
 }
 
-#new-note-button {
-  display: inline-block;
+#new-dir-button {
+
+  position: relative;
   top: 10px;
   left: 10px;
-  position: relative;
+
+  display: inline-block;
+  align-items: center;
+  justify-content: center;
   background: #2E2E2E;
   color: #d3d3d3;
   border: none;
-  padding: 8px 12px;
+  padding: 4px 6px;
   cursor: pointer;
-
 }
+
+#new-note-button {
+
+  position: relative;
+  top: 10px;
+  left: 10px;
+
+  display: inline-block;
+  align-items: center;
+  justify-content: center;
+  background: #2E2E2E;
+  color: #d3d3d3;
+  border: none;
+  padding: 4px 6px;
+  cursor: pointer;
+}
+
 #sidebar-toggle-button {
   display: inline-block;
   position: relative;
+  align-items: center;
+  justify-content: center;
   top: 10px;
   left: 10px;
   background: #2E2E2E;
   color: #d3d3d3;
   border: none;
-  padding: 8px 12px;
+  padding: 4px 6px;
   cursor: pointer;
 }
 
@@ -130,6 +152,10 @@ body {
   border-radius: 6px;
   cursor: pointer;
   user-select: none;
+}
+
+.highlight{
+  background-color: #444;
 }
 
 .file-row:hover {

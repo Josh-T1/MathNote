@@ -2,6 +2,7 @@ from flask import Flask, request, abort, jsonify, Response
 import subprocess
 import shutil
 from ..note import NotesManager, serialize_category
+from ..course import Courses
 from ..utils import config
 from pathlib import Path
 import tempfile
@@ -18,7 +19,6 @@ def typst_to_svg(path: Path, tmpdir: Path) -> int:
     path: Path of typst file
     tmpdir: Directory where compilation occurs. Typically a temporary directory to ensure intermediate files (e.g., .aux, .log, .svg) are cleaned up after each run.
     """
-    print("typst")
     if not path.is_file():
         return 1
 
@@ -95,7 +95,9 @@ def render():
         elif file_type == "LaTeX":
             return_code = latex_to_svg(path, tmpdir_path)
         else: return_code = 1
-
+        # TODO
+        print(path)
+        print(return_code, "return code")
         if return_code == 1:
             return abort(400, "Invalid path")
 
@@ -110,5 +112,23 @@ def tree():
     # root_dir should probably be ROOT_DIR only, to include courses + other things. Different parsing?
     root_dir = ROOT_DIR / "Notes"
     notes = NotesManager(root_dir)
-    tree = serialize_category(notes.root_category)
+    courses = Courses(config)
+
+    #TODO the issue is courses are difficult to compile. Maybe compile mainfile in place? but then we need more args
+    tree_1 = serialize_category(notes.root_category)
+    tree_2 = serialize_courses(courses)
+    tree = tree_1 | tree_2 # TODO fix this
     return jsonify(tree)
+
+
+def serialize_courses(courses: Courses) -> dict:
+    d = {"name": "Courses", "path": str(courses.root), "notes": [], "children": []}
+    for name, course in courses.courses.items():
+        d["children"].append({
+            "name": name,
+            "path": str(course.path),
+            #TODO filetype is not the correct obj
+            "notes": [{"name": "main", "type": course.filetype()}],
+            "children": [] # TODO add problems and lectures
+            })
+    return d

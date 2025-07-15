@@ -42,7 +42,7 @@ class InfoButton(QWidget):
 
     def _configure_widgets(self):
         self.info_button.setFixedSize(self.diameter, self.diameter)
-        self.info_button.setStyleSheet(f"border-radius: {self.radius}px; background-color: gray; font-weight: bold;")
+        self.info_button.setStyleSheet(f"border-radius: {self.radius}px; background-color: grey; font-weight: bold;")
         self.info_button.clicked.connect(self.clicked.emit)
 
     def set_message(self, msg: str):
@@ -244,7 +244,7 @@ class PdfWindow(QWidget):
     def _create_widgets(self):
         self.scroll_area = QScrollArea(self.parent_widget)
         self.pdf_viewer = QPdfView(self.scroll_area)
-        self.pallete = QPalette()
+        self._palette = QPalette()
         # Setting pdf_viewer parent to scroll_area allows QPdfView scroll bar. Setting hidden=True hides scroll_area box used to scroll gui window
         self.scroll_area.setHidden(True)
 
@@ -252,8 +252,8 @@ class PdfWindow(QWidget):
         self.pdf_layout.addWidget(self.pdf_viewer)
 
     def _configure_widgets(self):
-        self.pallete.setBrush(QPalette.ColorRole.Dark, QColor('white'))
-        self.pdf_viewer.setPalette(self.pallete)
+        self._palette.setBrush(QPalette.ColorRole.Dark, QColor('white'))
+        self.pdf_viewer.setPalette(self._palette)
 
     def _load_pdf(self, pdf_path: str, tex: str) -> QPdfDocument.Error:
         """ Loads pdf into pdf_viewer and set viewer settings

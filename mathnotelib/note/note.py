@@ -337,14 +337,15 @@ class NotesManager:
 
 def serialize_category(cat: Category) -> dict:
     return {
-            "name": cat.name,
-            "path": str(cat.path.relative_to(ROOT_DIR).as_posix()), # this breaks if dir chagnes from MathNote
-            "notes": [
-                {
-                    "name": note.name,
-                    "type": note.get_type()
+            cat.name: {
+                "path": str(cat.path.relative_to(ROOT_DIR).as_posix()), # this breaks if dir chagnes from MathNote
+                "notes": [
+                    {
+                        "name": note.name,
+                        "type": note.get_type()
+                    }
+                    for note in cat.notes
+                    ],
+                "children": [serialize_category(child) for child in cat.children]
                 }
-                for note in cat.notes
-                ],
-            "children": [serialize_category(child) for child in cat.children]
             }

@@ -92,12 +92,23 @@ export async function setupTreeView(){
         
         const fileType = this.querySelector("span.content").dataset.type;
         const response = await fetch(`/render?parentPath=${encodeURIComponent(parentPath)}&name=${encodeURIComponent(name)}&type=${encodeURIComponent(fileType)}`);
-        
+
+
         if (!response.ok){
           console.error("Failed to fetch SVG: ", await response.text());
           return;
         }
-
+        
+        // Handle highlighting
+        for (const file_tag of document.querySelectorAll('.file-row')) {
+          if (file_tag.classList.contains('highlight')) {
+            file_tag.classList.remove('highlight');
+          }
+        }
+ 
+        file.classList.add("highlight");
+        
+        // Set svg
         const svg = await response.text();
         preview.innerHTML = svg;
 
