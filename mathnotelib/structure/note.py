@@ -7,9 +7,21 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import List, Optional
 from ..utils import NoteType
+from enum import Enum
 
 ROOT_DIR = Path(config['root'])
 
+def load_from_json(path: Path) -> dict:
+    #TODO this is god awful and needs to be rethought
+    with open(path, "r") as f:
+        metadata = json.load(f)
+    if "tags" not in metadata:
+        metadata["tags"] = set()
+    return metadata
+
+class OutputFormat(Enum):
+    PDF = "pdf"
+    SVG = "svg"
 
 @dataclass
 class Metadata:
@@ -19,16 +31,61 @@ class Metadata:
         return {"tags": list[self.tags]}
 
 
-@dataclass
 class Category:
     """
     Category continaing a 'Tree' of child notes and child categories
     """
-    metadata: Metadata
-    path: Path
-    children: List["Category"] = field(default_factory=list)
-    parent: Optional["Category"] = None
-    notes: List["Note"] = field(default_factory=list)
+
+    def __init__(self, metadata: Metadata, path: Path, children: Optional[list['Category']]  = None, parent: Optional['Category'] = None):
+        self.metadata = metadata
+        self.path = path
+        self._children: Optional[list['Category']] = children
+        self._notes: Optional[list[Note]] = None
+        self.parent: Optional['Category'] = parent
+
+    def notes(self, force: bool = False) -> list['Note']:
+        """
+        force: If true notes will be generated from files even if this instance has a cached list of categories
+        """
+        if not force and self._notes:
+            return self._notes
+
+        notes = []
+        for dir in self.path.iterdir():
+            if not dir.is_dir():
+                continue
+            if (meta_file := dir / "metadata.json").is_file():
+                d = load_from_json(meta_file)
+                localmetadata = Metadata(d["tags"])
+
+                if any(file.suffix == ".typ" for file in dir.iterdir() if file.is_file()):
+                    note = TypNote(dir,localmetadata, self)
+                    notes.append(note)
+                else:
+                    note = TeXNote(dir,localmetadata, self)
+                    notes.append(note)
+        return notes
+
+    def children(self, force: bool = False) -> list['Category']:
+        """
+        force: If true children will be generated from files even if this instance has a cached list of categories
+        """
+        if not force and self._children:
+            return self._children
+
+        children = []
+        for dir in self.path.iterdir():
+            if not dir.is_dir():
+                continue
+            if (dir / "cat-metadata.json").is_file():
+                d = load_from_json(dir / "cat-metadata.json")
+                metadata = Metadata(d["tags"])
+                cat = Category(metadata, dir, parent=self)
+                children.append(cat)
+                cat.parent = self
+
+        return children
+
 
     @property
     def name(self) -> str:
@@ -50,7 +107,7 @@ class Category:
 
     def get_subcategory(self, path: Path) -> Optional["Category"]:
         res = None
-        for child in self.children:
+        for child in self.children():
             if child.path.resolve() == path.resolve():
                 return child
             else:
@@ -98,7 +155,11 @@ class Note(ABC):
             json.dump(d, f, indent=2)
 
     @abstractmethod
-    def compile(self) -> int:...
+    def compile(self,
+                output_format: OutputFormat = OutputFormat.PDF,
+                output_dir: Optional[Path] = None,
+                output_filename: Optional[str] = None
+                ) -> int:...
 
     @staticmethod
     @abstractmethod
@@ -125,20 +186,50 @@ class Note(ABC):
 @dataclass
 class TeXNote(Note):
 
-    def compile(self) -> int:
+    def compile(self,
+                output_format: OutputFormat = OutputFormat.PDF,
+                output_dir: Optional[Path] = None,
+                output_filename: Optional[str] = None
+                ) -> int:
         """
-        Compiles .tex file into a pdf and returns the returncode
+        TODO
         """
-        print(self.path / f"{self.path.name}.tex")
+        filepath = str(self.path / self.path.name) + ".tex"
+        cmd = ["pdflatex", "-interaction=nonstopmode"]
+        if output_dir:
+            cmd.append(f"-output-dir={output_dir}")
+        if output_format == OutputFormat.PDF and output_filename: #Untested
+            cmd.append(f"-jobname={output_filename}")
+        cmd.append(filepath)
         result = subprocess.run(
-            ['latexmk', "-pdf", str(self.path / f"{self.path.name}.tex")],
+            cmd,
             stdout = subprocess.PIPE,
             stderr = subprocess.PIPE,
             cwd = self.path
             )
-        print(result.stderr)
-        print(result.stdout)
-        return result.returncode
+        if output_format == OutputFormat.PDF or result.returncode !=0:
+            return result.returncode
+
+        if output_dir:
+            pdf_path = (output_dir / self.path.name).with_suffix(".pdf")
+        else:
+            pdf_path = (self.path / self.path.name).with_suffix(".pdf")
+        cmd_2 = ["pdf2svg", str(pdf_path)]
+
+        if output_filename:
+            cmd_2.append(str(pdf_path.with_name(output_filename)))
+        else:
+            cmd_2.append(str(pdf_path.with_suffix(".svg")))
+
+        cwd = self.path if not output_dir else output_dir
+
+        result_2 = subprocess.run(
+              cmd_2,
+              stdout=subprocess.DEVNULL,
+              stderr=subprocess.DEVNULL,
+              cwd=cwd
+                )
+        return result_2.returncode
 
     @staticmethod
     def get_type():
@@ -152,18 +243,38 @@ class TeXNote(Note):
 @dataclass
 class TypNote(Note):
 
-
-    def compile(self) -> int:
+    #add format option
+    #add clean resources
+    def compile(self,
+                output_format: OutputFormat = OutputFormat.PDF,
+                output_dir: Optional[Path] = None,
+                output_filename: Optional[str] = None
+                ) -> int:
         """
-        Compiles .tex file into a pdf and returns the returncode
+        TODO
+        output_dir: Hack
         """
+        filepath = str(self.path / self.path.name) + ".typ"
+        cmd = ["tinymist", "compile", filepath, "--format"]
+        cmd.append(output_format.value)
         result = subprocess.run(
-            ['typst', "compile", "-f", "pdf", str(self.path / f"{self.path.name}.typ")],
+            cmd,
             stdout = subprocess.PIPE,
             stderr = subprocess.PIPE,
             cwd = self.path
             )
+        if result.returncode == 1:
+            return 1
+
+        if output_dir:
+            name = output_filename if output_filename else self.path.name
+            out_path = str(output_dir/ name)
+            try:
+                shutil.move(Path(filepath).with_suffix(f".{output_format.value}"), out_path)
+            except Exception as e:
+                return 1
         return result.returncode
+
 
     @staticmethod
     def get_type():
@@ -175,8 +286,6 @@ class TypNote(Note):
 
 
 
-
-
 class NotesManager:
 
     def __init__(self, root: Path):
@@ -184,11 +293,19 @@ class NotesManager:
         root: directory at the root of notes
         """
         self.note_dir = root
-        self.root_category = self._init_root_cat()
+        self.root_category: Category = self._init_root_cat()
+        self.children: list['Category'] = []
+        self.notes: list['Note'] = []
         self._generate_tree(self.root_category)
 
+    @classmethod
+    def build_root_category(cls, root: Path) -> Category:
+        meta = Metadata(set(load_from_json(root / "cat-metadata.json")["tags"]))
+        root_cat = Category(meta, root)
+        return root_cat
+
     def _init_root_cat(self) -> Category:
-        meta = Metadata(set(self._load_from_json(self.note_dir/ "cat-metadata.json")["tags"]))
+        meta = Metadata(set(load_from_json(self.note_dir/ "cat-metadata.json")["tags"]))
         root_cat = Category(meta, self.note_dir)
         return root_cat
 
@@ -197,40 +314,20 @@ class NotesManager:
             if not dir.is_dir():
                 continue
             if (dir / "cat-metadata.json").is_file():
-                d = self._load_from_json(dir / "cat-metadata.json")
+                d = load_from_json(dir / "cat-metadata.json")
                 metadata = Metadata(d["tags"])
                 cat = Category(metadata, dir, parent=parent)
-                parent.children.append(cat)
                 cat.parent = parent
                 self._generate_tree(parent=cat)
-
-            elif (meta_file := dir / "metadata.json").is_file():
-                d = self._load_from_json(meta_file)
-                localmetadata = Metadata(d["tags"])
-
-                if any(file.suffix == ".typ" for file in dir.iterdir() if file.is_file()):
-                    note = TypNote(dir,localmetadata, parent)
-                    parent.notes.append(note)
-                else:
-                    note = TeXNote(dir,localmetadata, parent)
-                    parent.notes.append(note)
         return
 
 
-    @staticmethod
-    def _load_from_json(path: Path) -> dict:
-        #TODO this is god awful and needs to be rethought
-        with open(path, "r") as f:
-            metadata = json.load(f)
-        if "tags" not in metadata:
-            metadata["tags"] = set()
-        return metadata
 
     def new_note(self, name: str, parent: Category, note_type: NoteType) -> None:
         """
         name: note name, stem of .tex/typ file path (no suffix)
         """
-        if name.upper() in set(note.name.upper() for note in parent.notes):
+        if name.upper() in set(note.name.upper() for note in parent.notes()):
             print(f"Failed to create '{name}'. Its equal (up to capatilization) to existing note")
             return
 
@@ -258,8 +355,7 @@ class NotesManager:
 #            if config["set-note-title"]:
 #                self.insert_title(dir / f"{name}.tex", new_note.name())
 
-            note = TeXNote(note_dir_path, Metadata(), parent)
-            parent.notes.append(note)
+            parent.notes(force=True) # reload category notes
 
 
 
@@ -271,9 +367,7 @@ class NotesManager:
             note_dir_path.mkdir()
             note_path.touch()
             self._init_metadata(metadata_path)
-
-            note = TypNote(note_dir_path, Metadata(), parent)
-            parent.notes.append(note)
+            parent.notes(force=True) # reload category with notes
 
 #            note_template = Path(config["note-template"])
 #            dest = dir / f"{note}.tex"
@@ -288,23 +382,14 @@ class NotesManager:
 #            self.insert_title(dir / f"{name}.tex", new_note.name())
 
     def new_category(self, name, parent=None):
-        if parent is None:
-            if not name in (cat.name for cat in self.root_category.children):
-                cat = Category(Metadata(), self.note_dir / name)
-                self.root_category.children.append(cat)
-                cat.parent = self.root_category
-            else:
-                return
-        else:
-            if not name in (cat.name for cat in parent.children):
-                cat = Category(Metadata(), self.note_dir / name)
-                parent.children.append(cat)
-                cat.parent = parent
-            else:
-                return
-
-        cat.path.mkdir()
-        self._init_metadata(cat.path / "cat-metadata.json")
+        #raise NotImplemented("This does not currently work")
+        # we actually have to build directory and ensure it does not already exist
+        head: Category = self.root_category if parent is None else parent
+        if not name in (cat.name for cat in head.children()):
+            new_cat_path = head.path / name
+            new_cat_path.mkdir()
+            self._init_metadata(new_cat_path / "cat-metadata.json")
+            head.children(force=True) # re-fresh category children
 
     @staticmethod
     def _init_metadata(path: Path):
@@ -326,10 +411,10 @@ class NotesManager:
     def get_note(self, name: str, category: Category) -> Note | None:
         # Support filter by parent
         res = None
-        for note in category.notes:
+        for note in category.notes():
             if note.name == name:
                 return note
-        for child in category.children:
+        for child in category.children():
             res = self.get_note(name, child)
         return res
 
@@ -343,9 +428,10 @@ def serialize_category(cat: Category) -> dict:
                     {
                         "name": note.name,
                         "type": note.get_type()
+
                     }
-                    for note in cat.notes
+                    for note in cat.notes()
                     ],
-                "children": [serialize_category(child) for child in cat.children]
+                "children": [serialize_category(child) for child in cat.children()]
                 }
             }

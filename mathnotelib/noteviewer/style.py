@@ -1,3 +1,7 @@
+# #2E2E2E is a dark grey
+# #d3d3d3 is a light grey
+# #444 and #555 are very light grey's. #555 is lighter
+
 TOGGLE_BUTTON_CSS = """
 QPushButton {
     border-radius: 2px;
@@ -23,3 +27,8 @@ QTreeView::item:hover {
 }
 """
 
+SVG_VIEWER_CSS = """
+QSvgWidget {
+        background-color: white;
+        }
+"""

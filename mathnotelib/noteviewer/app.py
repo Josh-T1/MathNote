@@ -122,9 +122,9 @@ def tree():
 
 
 def serialize_courses(courses: Courses) -> dict:
-    d = {"name": "Courses", "path": str(courses.root), "notes": [], "children": []}
+    d = {"Courses": {"path": str(courses.root), "notes": [], "children": []}}
     for name, course in courses.courses.items():
-        d["children"].append({
+        d["Courses"]["children"].append({
             "name": name,
             "path": str(course.path),
             #TODO filetype is not the correct obj
