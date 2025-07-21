@@ -1,10 +1,6 @@
-from enum import CONFORM
 from pathlib import Path
 import subprocess
-
-from mathnotelib.note.note import Note, NoteType
-from .note import NotesManager, MainWindow
-from .course import Courses, Course
+from .structure import Courses, Course, NotesManager, Note, NoteType
 import logging
 from typing import Protocol
 from .utils import load_json, dump_json

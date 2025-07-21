@@ -16,6 +16,7 @@ TREE_VIEW_CSS = """
 QTreeView {
     background-color: #2E2E2E;
     color: #d3d3d3;
+    border: 1px solid #444;
     }
 QTreeView::item:selected {
     background-color: #444;
@@ -30,5 +31,12 @@ QTreeView::item:hover {
 SVG_VIEWER_CSS = """
 QSvgWidget {
         background-color: white;
+        }
+"""
+
+
+MAIN_WINDOW_CSS = """
+QMainWindow {
+        background-color: #2E2E2E;
         }
 """

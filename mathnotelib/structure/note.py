@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional
 from ..utils import NoteType
 from enum import Enum
+from .source_file import OutputFormat
 
 ROOT_DIR = Path(config['root'])
 
@@ -19,9 +20,6 @@ def load_from_json(path: Path) -> dict:
         metadata["tags"] = set()
     return metadata
 
-class OutputFormat(Enum):
-    PDF = "pdf"
-    SVG = "svg"
 
 @dataclass
 class Metadata:
@@ -158,7 +156,8 @@ class Note(ABC):
     def compile(self,
                 output_format: OutputFormat = OutputFormat.PDF,
                 output_dir: Optional[Path] = None,
-                output_filename: Optional[str] = None
+                output_filename: Optional[str] = None,
+                multi_page: bool = False,
                 ) -> int:...
 
     @staticmethod
@@ -189,10 +188,20 @@ class TeXNote(Note):
     def compile(self,
                 output_format: OutputFormat = OutputFormat.PDF,
                 output_dir: Optional[Path] = None,
-                output_filename: Optional[str] = None
+                output_filename: Optional[str] = None,
+                multi_page: bool = False
                 ) -> int:
         """
-        TODO
+        TODO: Test
+        TODO: multi page appears to work but idk...
+
+        output_format: Target output type
+        output_dir: Should be where compilation occurs, however TypNote implements a workaround by compiling in self.path then
+                    moving the files to output_dir / output_filename(self.path/self.name .ext). Typst compile does not have output dir flag
+        output_filename: Set to specify output file name. Defaults to {self.name}.{ext}
+        multi_page: If set to True, pages will be compiled with names {output_filename(self.name)}-{#}.ext
+
+        returns: return code of final compilation command
         """
         filepath = str(self.path / self.path.name) + ".tex"
         cmd = ["pdflatex", "-interaction=nonstopmode"]
@@ -248,31 +257,59 @@ class TypNote(Note):
     def compile(self,
                 output_format: OutputFormat = OutputFormat.PDF,
                 output_dir: Optional[Path] = None,
-                output_filename: Optional[str] = None
+                output_filename: Optional[str] = None,
+                multi_page: bool = False
                 ) -> int:
         """
-        TODO
-        output_dir: Hack
+        TODO: Has not been properly tested
+
+        output_format: Target output type
+        output_dir: Should be where compilation occurs, however TypNote implements a workaround by compiling in self.path then
+                    moving the files to output_dir / output_filename(self.path/self.name .ext). Typst compile does not have output dir flag
+        output_filename: Set to specify output file name. Defaults to {self.name}.{ext}
+        multi_page: If set to True, pages will be compiled with names {output_filename(self.name)}-{#}.ext
+
+        returns: return code of final compilation command
         """
+        # Set default output_filename if not specified
+        output_filename = output_filename if output_filename is not None else self.name + ".svg"
+        # Set pattern for output_filename if there are multipile pages
+        if multi_page and output_filename:
+            output_filename = output_filename.replace(".svg", "") + "-{p}.svg"
+        elif multi_page and output_filename is None:
+            output_filename = self.name + "-{p}.svg"
+
+        # Build compilation cmd
         filepath = str(self.path / self.path.name) + ".typ"
-        cmd = ["tinymist", "compile", filepath, "--format"]
+        cmd = ["typst", "compile", "--format"]
         cmd.append(output_format.value)
+        cmd.append(filepath)
+
+        if multi_page and output_filename: # verbose, lsp is dumb
+            cmd.append(output_filename)
+
         result = subprocess.run(
             cmd,
             stdout = subprocess.PIPE,
             stderr = subprocess.PIPE,
             cwd = self.path
             )
-        if result.returncode == 1:
+        if result.returncode != 0:
             return 1
 
+        # Move files as a workaround for lack of output directory flag
         if output_dir:
-            name = output_filename if output_filename else self.path.name
-            out_path = str(output_dir/ name)
-            try:
-                shutil.move(Path(filepath).with_suffix(f".{output_format.value}"), out_path)
-            except Exception as e:
-                return 1
+            if multi_page and output_filename: # verbose, lsp is dumb
+                files = sorted(self.path.glob(f"{output_filename.split("-")[0]}*.svg"))
+            else:
+                files = [filepath.replace(".typ", ".svg")]
+            partial_out_name = output_filename.split(".")[0]
+            for i, file in enumerate(files, start=1):
+                try:
+
+                    shutil.move(file, output_dir / f"{partial_out_name}-{i}.svg")
+                except Exception as e:
+                    return 1
         return result.returncode
 
 
@@ -320,8 +357,6 @@ class NotesManager:
                 cat.parent = parent
                 self._generate_tree(parent=cat)
         return
-
-
 
     def new_note(self, name: str, parent: Category, note_type: NoteType) -> None:
         """
@@ -417,21 +452,3 @@ class NotesManager:
         for child in category.children():
             res = self.get_note(name, child)
         return res
-
-
-
-def serialize_category(cat: Category) -> dict:
-    return {
-            cat.name: {
-                "path": str(cat.path.relative_to(ROOT_DIR).as_posix()), # this breaks if dir chagnes from MathNote
-                "notes": [
-                    {
-                        "name": note.name,
-                        "type": note.get_type()
-
-                    }
-                    for note in cat.notes()
-                    ],
-                "children": [serialize_category(child) for child in cat.children()]
-                }
-            }

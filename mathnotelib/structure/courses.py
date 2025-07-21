@@ -388,7 +388,6 @@ class Courses():
         lectures_dir = main_dir / "lectures"
         lectures_dir.mkdir()
 
-
         shutil.copy(self.config["main-template"], main_dir / "main.tex")
         template_path = self.config["course-info-template"]
         shutil.copy(template_path, course_path / "course_info.json")

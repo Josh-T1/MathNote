@@ -1,32 +1,150 @@
+import subprocess
 import sys
 import tempfile
 from typing import Callable, Optional
-from PyQt6.QtGui import QMouseEvent, QPalette, QStandardItem, QStandardItemModel
-from PyQt6.QtWidgets import (QApplication, QFrame, QHBoxLayout, QMainWindow, QPushButton, QSizePolicy,
+from PyQt6.QtGui import QBrush, QMouseEvent, QPalette, QStandardItem, QStandardItemModel, QTransform, QWheelEvent
+from PyQt6.QtWidgets import (QApplication, QFrame, QGestureEvent, QGraphicsRectItem, QGraphicsScene, QGraphicsView, QHBoxLayout, QMainWindow, QPinchGesture, QPushButton, QScrollArea, QSizePolicy,
                              QSpacerItem, QStyle, QStyleOptionViewItem, QToolBar, QTreeView, QVBoxLayout, QWidget)
-from PyQt6.QtCore import QFileSystemWatcher, QModelIndex, QProcess, pyqtSignal, Qt
-from PyQt6.QtSvgWidgets import QSvgWidget
-from mathnotelib.note.note import Category, Note, OutputFormat
-from .style import SVG_VIEWER_CSS, TOGGLE_BUTTON_CSS, TREE_VIEW_CSS
-from mathnotelib.course.courses import Course, Courses
-from ..utils import NoteType, config
-from ..note import NotesManager
+from PyQt6.QtCore import QEvent, QFileSystemWatcher, QModelIndex, QProcess, pyqtSignal, Qt
+from PyQt6.QtSvgWidgets import QGraphicsSvgItem, QSvgWidget
+from PyQt6 import QtCore
+from mathnotelib.structure.note import Note
+from .style import MAIN_WINDOW_CSS, SVG_VIEWER_CSS, TOGGLE_BUTTON_CSS, TREE_VIEW_CSS
+from ..utils import  config
+from ..structure import NotesManager, Courses, Category, OutputFormat
 from pathlib import Path
 
 ROOT_DIR = Path(config["root"])
+VIEWER_SIZE = (800, 1000)
 
-OUTPUT_FILE_NAME = "rendered.svg"
+OUTPUT_FILE_NAME_TYPST = "rendered.svg"
+OUTPUT_FILE_NAME_PDF2SVG = "rendered-%d.svg"
 TYP_FILE_LIVE = "/tmp/live.typ"
 SVG_FILE_LIVE = "/tmp/live.svg"
 
-FILE_ROLE = Qt.ItemDataRole.UserRole + 1
+NOTE_ROLE = Qt.ItemDataRole.UserRole + 1
 DIR_ROLE = Qt.ItemDataRole.UserRole + 2
 LOADED_ROLE = Qt.ItemDataRole.UserRole + 3
+COURSE_FILE_ROLE = Qt.ItemDataRole.UserRole + 4
+COURSE_CONTAINER_ROLE = Qt.ItemDataRole.UserRole + 5
+
+class ZMultiPageViewer(QGraphicsView):
+    def __init__(self):
+        super().__init__()
+        self._scene = QGraphicsScene()
+        self.setScene(self._scene)
+        self.setBackgroundBrush(QBrush(Qt.GlobalColor.white))
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self._zoom = 1.0
+        self._zoom_min = 1.0
+        self._zoom_max = 5.0
+        self._last_pinch_scale = 1.0
+
+        self.target_width = 800
+        self.target_height = 1000
+
+    def load(self, svg_paths: list[str] | str):
+        scene = self.scene()
+        if scene is None: return
+        scene.clear()
+        self.reset_zoom()
+        y_offset = 0
+        paths = svg_paths if isinstance(svg_paths, list) else [svg_paths]
+        for path in paths:
+            item = QGraphicsSvgItem(path)
+            item.setPos(0, y_offset)
+            bounds = item.boundingRect()
+            scale_x = self.target_width / bounds.width()
+            scale_y = self.target_height / bounds.height()
+            item.setTransform(QTransform().scale(scale_x, scale_y))
+            scene.addItem(item)
+            y_offset += bounds.height()*scale_y + 20
+
+        scene.setSceneRect(0, 0, self.target_width, y_offset - 20)
+
+    def event(self, event: Optional[QtCore.QEvent]) -> bool:
+        if event is None: return False
+        if event.type() == QEvent.Type.NativeGesture.value:
+            print("yes")
+            return self.native_gesture_event(event)
+        return super().event(event)
+
+    def scale_view(self, factor):
+        new_zoom = self._zoom * factor
+        if new_zoom < self._zoom_min:
+            factor = self._zoom_min / self._zoom
+            new_zoom = self._zoom_min
+        elif new_zoom > self._zoom_max:
+            factor = self._zoom_max / self._zoom
+            new_zoom = self._zoom_max
+        self.scale(factor, factor)
+        self._zoom = new_zoom
+
+    def native_gesture_event(self, event):
+        gesture_type = event.gestureType()
+        if gesture_type.value == 3:
+            delta = event.value()
+            scale_factor = 1.0 + delta
+            self.scale_view(scale_factor)
+            return True
+        return False
+
+    def gestureEvent(self, event: QGestureEvent):
+        pinch = event.gesture(Qt.GestureType.PinchGesture)
+        if isinstance(pinch, QPinchGesture):
+            self.handle_pinch(pinch)
+            return True
+        return False
+
+    def handle_pinch(self, pinch: QPinchGesture):
+        if pinch.state() == Qt.GestureState.GestureStarted:
+            self._last_pinch_scale = 1.0
+        elif pinch.state() == Qt.GestureState.GestureUpdated:
+            current = pinch.scaleFactor()
+            delta = current / max(self._last_pinch_scale, 0.1)
+            self.scale(delta, delta)
+            self._last_pinch_scale = current
+
+    def reset_zoom(self):
+        self.resetTransform()
+        self._zoom = 1
+
+class MultiPageViewer(QScrollArea):
+    def __init__(self):
+        super().__init__()
+        self.container = QWidget()
+        self.main_layout = QVBoxLayout(self.container)
+        self.setWidget(self.container)
+        self.setWidgetResizable(True)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        # Set placeholder
+        svg_widget = QSvgWidget()
+        svg_widget.setStyleSheet(SVG_VIEWER_CSS)
+
+        self.main_layout.addWidget(svg_widget)
+
+    def load(self, svg_paths: list[str] | str):
+        while self.main_layout.count():
+            item = self.main_layout.takeAt(0)
+            if item is None: continue
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+
+        paths = svg_paths if isinstance(svg_paths, list) else [svg_paths]
+        for path in paths:
+            svg_widget = QSvgWidget()
+            svg_widget.setFixedSize(800, 1000)
+            svg_widget.setStyleSheet(SVG_VIEWER_CSS)
+            svg_widget.load(path)
+            self.main_layout.addWidget(svg_widget)
+
+
 
 class Navbar(QWidget):
     file_opened = pyqtSignal(str)
 
-    def __init__(self, callback: Callable[[str], None]):
+    def __init__(self, callback: Callable[[list[str]], None]):
         """
         callback: callable with str argument, should be a valid typst path
         """
@@ -43,30 +161,37 @@ class Navbar(QWidget):
 
     def initUI(self):
         self._create_widgets()
+        self._configure_widgets()
         self._add_widgets()
-
         self.populate_tree()
 
     def _create_widgets(self):
-        palette = QPalette()
-
         self.toggle_button = QPushButton("x")
         self.menu_bar_layout = QHBoxLayout()
+        self.model = QStandardItemModel()
+        self.tree = QTreeView()
+        self.root_item = self.model.invisibleRootItem()
+
+    def _configure_widgets(self):
         self.toggle_button.setStyleSheet(TOGGLE_BUTTON_CSS)
         self.toggle_button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         self.toggle_button.clicked.connect(self.toggle_tree)
-        self.model = QStandardItemModel()
-        self.tree = QTreeView()
-        self.tree.setModel(self.model)
-        self.tree.setPalette(palette)
-        self.tree.setFrameShape(QFrame.Shape.NoFrame)
-        self.tree.header().hide() #TODO: don't think header() every returns none..
-        self.root_item = self.model.invisibleRootItem()
-        self.tree.expanded.connect(self._carrot_clicked)
-        self.tree.setStyleSheet(TREE_VIEW_CSS)
-        self.tree.clicked.connect(self._on_item_clicked)
 
-    def _carrot_clicked(self, index: QModelIndex):
+        self.tree.setModel(self.model)
+        self.tree.setFrameShape(QFrame.Shape.NoFrame)
+        self.tree.header().hide() #TODO: don't think header() every returns None..
+        self.tree.expanded.connect(self._expand_callback)
+        self.tree.setStyleSheet(TREE_VIEW_CSS)
+        self.tree.clicked.connect(self._item_clicked_callback)
+
+    def _add_widgets(self):
+        self.menu_bar_layout.addWidget(self.toggle_button)
+#        self.hidden_layout.setFixedWidth(40)
+        self.menu_bar_layout.addSpacerItem(QSpacerItem(15, 15, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed))
+        self.main_layout.addLayout(self.menu_bar_layout)
+        self.main_layout.addWidget(self.tree)
+
+    def _expand_callback(self, index: QModelIndex):
         # Remark: the item will originally expand with the placeholder element. Once this occurs
         # we will remove placeholder and populate with correct options. This could give rise to a bug where placeholder persists
         item = self.model.itemFromIndex(index)
@@ -78,28 +203,23 @@ class Navbar(QWidget):
             if loaded is False:
                 self._load_item(item, cat)
 
-    def _add_widgets(self):
-        self.menu_bar_layout.addWidget(self.toggle_button)
-#        self.hidden_layout.setFixedWidth(40)
-        self.menu_bar_layout.addSpacerItem(QSpacerItem(15, 15, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed))
-        self.main_layout.addLayout(self.menu_bar_layout)
-        self.main_layout.addWidget(self.tree)
-
     # How do I deal with courses?
-    def _on_item_clicked(self, index: QModelIndex):
+    # TODO add lazy compile - check if pdf exists
+    # TODO compile in batches
+    def _item_clicked_callback(self, index: QModelIndex):
         item = self.model.itemFromIndex(index)
         if item is None:
             return
 
         # TODO: handle failed compilation
-        if item.data(FILE_ROLE) is not None:
-            note: Note = item.data(FILE_ROLE)
+        if item.data(NOTE_ROLE) is not None:
+            note: Note = item.data(NOTE_ROLE)
 
             with tempfile.TemporaryDirectory() as tmpdir:
                 tmpdir_path = Path(tmpdir)
-                rendered_path = tmpdir_path / OUTPUT_FILE_NAME
-                code = note.compile(OutputFormat.SVG, tmpdir_path, OUTPUT_FILE_NAME)
-                self.update_svg_func(str(rendered_path))
+                code = note.compile(OutputFormat.SVG, tmpdir_path, OUTPUT_FILE_NAME_TYPST, multi_page=True)
+                svg_files = sorted(Path(tmpdir).glob("rendered-*.svg"))
+                self.update_svg_func([str(f) for f in svg_files])
 
         # For any item with this role we must do 2 things:
         #   1. Check to see if we should expand or collapse tree around item
@@ -111,13 +231,30 @@ class Navbar(QWidget):
                 cat: Category = item.data(DIR_ROLE)
                 self._load_item(item, cat)
 
-            if self.tree.isExpanded(index):
-                self.tree.collapse(index)
-            else:
-                self.tree.expand(index)
+            if self.tree.isExpanded(index): self.tree.collapse(index)
+            else: self.tree.expand(index)
+
+        elif item.data(COURSE_CONTAINER_ROLE):
+            if self.tree.isExpanded(index): self.tree.collapse(index)
+            else: self.tree.expand(index)
+
+        # TODO handle compilation failure
+        elif item.data(COURSE_FILE_ROLE):
+            pdf: str = item.data(COURSE_FILE_ROLE)
+            pdf_path = Path(pdf)
+            if not pdf_path.is_file():
+                return #TODO raise popup
+            with tempfile.TemporaryDirectory() as tmpdir:
+                output_path = Path(tmpdir) / OUTPUT_FILE_NAME_PDF2SVG
+                cmd = ["pdf2svg", pdf, str(output_path), "all"]
+                result = subprocess.run(cmd)
+                svg_files = sorted(Path(tmpdir).glob("rendered-*.svg"))
+                # TODO
+                self.update_svg_func([str(f) for f in svg_files])
+
 
     def _load_item(self, item: QStandardItem, cat: Category):
-                # Check for placeholder row
+        # Check for placeholder row
         if (c1 := item.child(0)):
             if c1.text() == "placeholder":
                 item.removeRow(0)
@@ -132,21 +269,37 @@ class Navbar(QWidget):
 
         for note in cat.notes():
             note_item = QStandardItem(note.name)
-            note_item.setData(note, FILE_ROLE)
+            note_item.setData(note, NOTE_ROLE)
             item.appendRow(note_item)
 
         item.setData(True, LOADED_ROLE)
 
     def populate_tree(self):
+        if self.root_item is None: return
         notes_dir = ROOT_DIR / "Notes"
         root_cat = NotesManager.build_root_category(notes_dir)
         courses = Courses(config)
 
         root_notes_item = QStandardItem(root_cat.name)
+        root_course_item = QStandardItem("Courses")
+
         root_notes_item.setData(root_cat, DIR_ROLE)
         root_notes_item.setData(False, LOADED_ROLE)
         root_notes_item.appendRow(QStandardItem("placeholder"))
+
+        root_course_item.setData(True, COURSE_CONTAINER_ROLE)
+
         self.root_item.appendRow(root_notes_item)
+        self.root_item.appendRow(root_course_item)
+
+        for name, course in courses.courses.items():
+            course_item = QStandardItem(name)
+            course_item.setData(True, COURSE_CONTAINER_ROLE)
+            root_course_item.appendRow(course_item)
+
+            main_item = QStandardItem("main")
+            main_item.setData(course.main_path / "main.pdf", COURSE_FILE_ROLE)
+            course_item.appendRow(main_item)
 
     def toggle_tree(self):
         self.tree_visible = not self.tree_visible
@@ -163,44 +316,44 @@ class MainWindow(QMainWindow):
         self.initUi()
 
         # TODO
-        self.compile_typst(TYP_FILE_LIVE)
+#        self.compile_typst(TYP_FILE_LIVE)
         self.watcher.addPath(TYP_FILE_LIVE)
 
     def initUi(self):
-        self.setStyleSheet("QMainWindow { background-color: #2E2E2E; }")
         self._create_widgets()
+        self._configure_widgets()
         self._add_widgets()
 
     def _create_widgets(self):
         self.toolbar = QToolBar()
-        self.addToolBar(self.toolbar)
-        self.viewer = QSvgWidget()
-        self.viewer.setStyleSheet(SVG_VIEWER_CSS)
-        self.viewer.setFixedSize(800, 1000)
+        self.viewer = ZMultiPageViewer()
         self.watcher = QFileSystemWatcher()
-        self.watcher.fileChanged.connect(self.on_typ_changed)
-
         self.nav_bar = Navbar(self.update_svg)
 
+    def _configure_widgets(self):
+        self.setStyleSheet(MAIN_WINDOW_CSS)
+#        self.viewer.setStyleSheet(SVG_VIEWER_CSS)
+        self.viewer.setFixedSize(800, 1000)
+        self.watcher.fileChanged.connect(self.on_typ_changed)
+
     def _add_widgets(self):
-        self.main_layout.addWidget(self.nav_bar)
-        self.main_layout.addWidget(self.viewer)
+        self.addToolBar(self.toolbar)
+        self.main_layout.addWidget(self.nav_bar, alignment=Qt.AlignmentFlag.AlignLeft)
+        self.main_layout.addWidget(self.viewer, alignment=Qt.AlignmentFlag.AlignCenter)
 
     def on_typ_changed(self):
         self.watcher.removePath(TYP_FILE_LIVE)
         self.watcher.addPath(TYP_FILE_LIVE)
         self.compile_typst(TYP_FILE_LIVE)
 
-    def render_note(self, path: str):
-        pass
-
     def compile_typst(self, path: str):
         self.process = QProcess()
         self.process.start("typst", ["compile", path, "--format", "svg"])
         self.process.finished.connect(lambda : self.update_svg(path))
 
-    def update_svg(self, path: str):
-        if Path(path).exists():
+    def update_svg(self, path: str | list[str]):
+        paths = path if isinstance(path, list) else [path]
+        if all(Path(p).exists() for p in paths):
             self.viewer.load(path)
 
 if __name__ == "__main__":

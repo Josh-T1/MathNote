@@ -1,8 +1,7 @@
 from flask import Flask, request, abort, jsonify, Response
 import subprocess
 import shutil
-from ..note import NotesManager, serialize_category
-from ..course import Courses
+from ..structure import NotesManager, Courses
 from ..utils import config
 from pathlib import Path
 import tempfile
