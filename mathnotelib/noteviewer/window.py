@@ -1,6 +1,7 @@
 import subprocess
 import sys
 import tempfile
+from pathlib import Path
 from typing import Callable, Optional
 from PyQt6.QtGui import QBrush, QMouseEvent, QPalette, QStandardItem, QStandardItemModel, QTransform, QWheelEvent
 from PyQt6.QtWidgets import (QApplication, QFrame, QGestureEvent, QGraphicsRectItem, QGraphicsScene, QGraphicsView, QHBoxLayout, QMainWindow, QPinchGesture, QPushButton, QScrollArea, QSizePolicy,
@@ -12,7 +13,7 @@ from mathnotelib.structure.note import Note
 from .style import MAIN_WINDOW_CSS, SVG_VIEWER_CSS, TOGGLE_BUTTON_CSS, TREE_VIEW_CSS
 from ..utils import  config
 from ..structure import NotesManager, Courses, Category, OutputFormat
-from pathlib import Path
+
 
 ROOT_DIR = Path(config["root"])
 VIEWER_SIZE = (800, 1000)
@@ -65,7 +66,6 @@ class ZMultiPageViewer(QGraphicsView):
     def event(self, event: Optional[QtCore.QEvent]) -> bool:
         if event is None: return False
         if event.type() == QEvent.Type.NativeGesture.value:
-            print("yes")
             return self.native_gesture_event(event)
         return super().event(event)
 
@@ -218,7 +218,7 @@ class Navbar(QWidget):
             with tempfile.TemporaryDirectory() as tmpdir:
                 tmpdir_path = Path(tmpdir)
                 code = note.compile(OutputFormat.SVG, tmpdir_path, OUTPUT_FILE_NAME_TYPST, multi_page=True)
-                svg_files = sorted(Path(tmpdir).glob("rendered-*.svg"))
+                svg_files = sorted(Path(tmpdir).glob("rendered*.svg"))
                 self.update_svg_func([str(f) for f in svg_files])
 
         # For any item with this role we must do 2 things:
@@ -248,7 +248,9 @@ class Navbar(QWidget):
                 output_path = Path(tmpdir) / OUTPUT_FILE_NAME_PDF2SVG
                 cmd = ["pdf2svg", pdf, str(output_path), "all"]
                 result = subprocess.run(cmd)
-                svg_files = sorted(Path(tmpdir).glob("rendered-*.svg"))
+
+                svg_files = sorted(Path(tmpdir).glob("rendered*.svg"))
+                print(svg_files)
                 # TODO
                 self.update_svg_func([str(f) for f in svg_files])
 
@@ -332,7 +334,6 @@ class MainWindow(QMainWindow):
 
     def _configure_widgets(self):
         self.setStyleSheet(MAIN_WINDOW_CSS)
-#        self.viewer.setStyleSheet(SVG_VIEWER_CSS)
         self.viewer.setFixedSize(800, 1000)
         self.watcher.fileChanged.connect(self.on_typ_changed)
 

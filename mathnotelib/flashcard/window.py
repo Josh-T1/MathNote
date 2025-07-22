@@ -1,14 +1,14 @@
-from collections.abc import Callable
 import math
+import logging
+from collections.abc import Callable
 from PyQt6.QtWidgets import (QCheckBox, QComboBox, QHBoxLayout, QLabel, QListView, QMessageBox, QSizePolicy, QSpacerItem, QVBoxLayout,
                              QWidget, QPushButton, QMainWindow, QSpacerItem, QSizePolicy, QScrollArea)
 from PyQt6.QtPdfWidgets import QPdfView
 from PyQt6.QtPdf import QPdfDocument
 from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtGui import QColor, QPalette, QStandardItem, QStandardItemModel
-import logging
 from ..utils import LatexCompilationError, config
-from ..course import Courses, Course
+from ..structure import Courses, Course
 
 logger = logging.getLogger("mathnote")
 

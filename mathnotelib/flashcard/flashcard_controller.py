@@ -1,15 +1,14 @@
+from pathlib import Path
+import sys
+import logging
+import threading
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QStandardItemModel
 from PyQt6.QtWidgets import QListView
-from pathlib import Path
-
 from .flashcard_model import FlashcardModel, FlashcardNotFoundException
-import sys
-import logging
-from ..course.courses import Courses
-import threading
-from ..utils import SectionNames, SectionNamesDescriptor, LatexCompilationError
 from .edit_tex import open_file_with_editor
+from ..structure import Courses
+from ..utils import SectionNames, SectionNamesDescriptor, LatexCompilationError
 
 logger = logging.getLogger("mathnote")
 

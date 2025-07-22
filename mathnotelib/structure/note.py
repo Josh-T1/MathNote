@@ -2,13 +2,12 @@ from pathlib import Path
 import json
 import shutil
 import subprocess
-from mathnotelib.utils import open_cmd, config
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import List, Optional
 from ..utils import NoteType
-from enum import Enum
 from .source_file import OutputFormat
+from mathnotelib.utils import open_cmd, config
 
 ROOT_DIR = Path(config['root'])
 
@@ -20,6 +19,9 @@ def load_from_json(path: Path) -> dict:
         metadata["tags"] = set()
     return metadata
 
+@dataclass
+class TypsetFile:
+    pass
 
 @dataclass
 class Metadata:
@@ -110,7 +112,6 @@ class Category:
                 return child
             else:
                 res = child.get_subcategory(path)
-
         return res
 
 @dataclass
@@ -203,12 +204,13 @@ class TeXNote(Note):
 
         returns: return code of final compilation command
         """
+        output_filename_without_ext = output_filename.split(".")[0] if output_filename else self.name
         filepath = str(self.path / self.path.name) + ".tex"
         cmd = ["pdflatex", "-interaction=nonstopmode"]
         if output_dir:
             cmd.append(f"-output-dir={output_dir}")
-        if output_format == OutputFormat.PDF and output_filename: #Untested
-            cmd.append(f"-jobname={output_filename}")
+        if output_filename: #Untested
+            cmd.append(f"-jobname={output_filename_without_ext}")
         cmd.append(filepath)
         result = subprocess.run(
             cmd,
@@ -216,22 +218,21 @@ class TeXNote(Note):
             stderr = subprocess.PIPE,
             cwd = self.path
             )
+        # TODO
         if output_format == OutputFormat.PDF or result.returncode !=0:
             return result.returncode
 
-        if output_dir:
-            pdf_path = (output_dir / self.path.name).with_suffix(".pdf")
-        else:
-            pdf_path = (self.path / self.path.name).with_suffix(".pdf")
+
+        out_dir = output_dir if output_dir else self.path
+        pdf_path = out_dir / f"{output_filename_without_ext}.pdf"
+
         cmd_2 = ["pdf2svg", str(pdf_path)]
-
-        if output_filename:
-            cmd_2.append(str(pdf_path.with_name(output_filename)))
-        else:
-            cmd_2.append(str(pdf_path.with_suffix(".svg")))
-
+        pdf_path = (out_dir / f"{output_filename_without_ext}.pdf")
+        output_path = out_dir / f"{output_filename_without_ext}-%d.svg"
+        cmd_2.append(str(output_path))
+        if multi_page:
+            cmd_2.append("all")
         cwd = self.path if not output_dir else output_dir
-
         result_2 = subprocess.run(
               cmd_2,
               stdout=subprocess.DEVNULL,
@@ -416,10 +417,10 @@ class NotesManager:
 #        if config["set-note-title"]:
 #            self.insert_title(dir / f"{name}.tex", new_note.name())
 
-    def new_category(self, name, parent=None):
+    def new_category(self, name, parent: Optional[Category] = None):
         #raise NotImplemented("This does not currently work")
         # we actually have to build directory and ensure it does not already exist
-        head: Category = self.root_category if parent is None else parent
+        head = self.root_category if parent is None else parent
         if not name in (cat.name for cat in head.children()):
             new_cat_path = head.path / name
             new_cat_path.mkdir()

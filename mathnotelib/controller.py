@@ -1,9 +1,9 @@
 from pathlib import Path
 import subprocess
-from .structure import Courses, Course, NotesManager, Note, NoteType
 import logging
 from typing import Protocol
 from .utils import load_json, dump_json
+from .structure import Courses, Course, NotesManager, Note, NoteType
 from .noteviewer import app
 
 logger = logging.getLogger("mathnote")

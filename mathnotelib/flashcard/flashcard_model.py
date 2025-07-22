@@ -1,18 +1,18 @@
 import random
 import threading
 import tempfile
-from pathlib import Path
 import time
-import shutil
 import subprocess
-import hashlib
-from typing import OrderedDict, Deque
-from .. import parse_tex
 import logging
+import hashlib
+from pathlib import Path
+from typing import OrderedDict, Deque
 from collections import deque
-from ..utils import NoteType, SectionNames, SectionNamesDescriptor, config
 from .edit_tex import latex_template, typst_template
-from ..course import Courses
+from ..structure import Courses
+from ..utils import NoteType, SectionNames, SectionNamesDescriptor, config
+from .. import parse_tex
+
 logger = logging.getLogger("mathnote")
 
 
