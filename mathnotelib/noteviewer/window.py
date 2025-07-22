@@ -1,12 +1,14 @@
+from dataclasses import dataclass
 import subprocess
 import sys
 import tempfile
+from datetime import datetime
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable, Optional, Protocol
 from PyQt6.QtGui import QBrush, QMouseEvent, QPalette, QStandardItem, QStandardItemModel, QTransform, QWheelEvent
 from PyQt6.QtWidgets import (QApplication, QFrame, QGestureEvent, QGraphicsRectItem, QGraphicsScene, QGraphicsView, QHBoxLayout, QMainWindow, QPinchGesture, QPushButton, QScrollArea, QSizePolicy,
                              QSpacerItem, QStyle, QStyleOptionViewItem, QToolBar, QTreeView, QVBoxLayout, QWidget)
-from PyQt6.QtCore import QEvent, QFileSystemWatcher, QModelIndex, QProcess, pyqtSignal, Qt
+from PyQt6.QtCore import QEvent, QFileSystemWatcher, QModelIndex, QProcess, QTimer, pyqtSignal, Qt
 from PyQt6.QtSvgWidgets import QGraphicsSvgItem, QSvgWidget
 from PyQt6 import QtCore
 from mathnotelib.structure.note import Note
@@ -29,6 +31,9 @@ LOADED_ROLE = Qt.ItemDataRole.UserRole + 3
 COURSE_FILE_ROLE = Qt.ItemDataRole.UserRole + 4
 COURSE_CONTAINER_ROLE = Qt.ItemDataRole.UserRole + 5
 
+class UpdateSvgCallback(Protocol):
+    def __call__(self, path: list[str], tmpdir: Optional[tempfile.TemporaryDirectory]) -> None:...
+
 class ZMultiPageViewer(QGraphicsView):
     def __init__(self):
         super().__init__()
@@ -36,32 +41,61 @@ class ZMultiPageViewer(QGraphicsView):
         self.setScene(self._scene)
         self.setBackgroundBrush(QBrush(Qt.GlobalColor.white))
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self._zoom = 1.0
-        self._zoom_min = 1.0
-        self._zoom_max = 5.0
-        self._last_pinch_scale = 1.0
-
+        self._zoom: float = 1.0
+        self._zoom_min: float = 1.0
+        self._zoom_max: float = 5.0
+        self._last_pinch_scale: float = 1.0
+        self._y_offset: float = 0
+        self._initial_batch_size: int = 5
+        self._pending_items: list = []
+        self._timer: QTimer = QTimer()
         self.target_width = 800
         self.target_height = 1000
+        self.tmpdir: Optional[tempfile.TemporaryDirectory] = None
 
-    def load(self, svg_paths: list[str] | str):
-        scene = self.scene()
-        if scene is None: return
-        scene.clear()
+    def load(self, svg_paths: list[str] | str, tmpdir: tempfile.TemporaryDirectory | None):
+        self._scene.clear()
         self.reset_zoom()
-        y_offset = 0
+        self._y_offset = 0
+        self.tmpdir = tmpdir
         paths = svg_paths if isinstance(svg_paths, list) else [svg_paths]
-        for path in paths:
-            item = QGraphicsSvgItem(path)
-            item.setPos(0, y_offset)
-            bounds = item.boundingRect()
-            scale_x = self.target_width / bounds.width()
-            scale_y = self.target_height / bounds.height()
-            item.setTransform(QTransform().scale(scale_x, scale_y))
-            scene.addItem(item)
-            y_offset += bounds.height()*scale_y + 20
+        load_num = min(len(paths), self._initial_batch_size)
+        for path in paths[:load_num]:
+            self.append_item(path)
 
-        scene.setSceneRect(0, 0, self.target_width, y_offset - 20)
+        if len(paths) > self._initial_batch_size:
+            self._pending_items = paths[self._initial_batch_size:]
+            self._timer.timeout.connect(self._load_pending)
+            self._timer.start(30)
+
+    def _load_pending(self):
+        if len(self._pending_items) == 0:
+            self._timer.stop()
+            if self.tmpdir:
+                self.tmpdir.cleanup()
+                self.tmpdir = None
+            return
+        item = self._pending_items.pop(0)
+        self.append_item(item)
+
+    def append_item(self, path: str):
+        if len(items := self._scene.items()) > 0:
+            prev_item = items[-1]
+            prev_bounds = prev_item.boundingRect()
+            prev_scale_y = self.target_height / prev_bounds.height()
+            self._y_offset += 20 * prev_scale_y
+
+        item = QGraphicsSvgItem(path)
+        item.setPos(0, self._y_offset)
+
+        bounds = item.boundingRect()
+        scale_x = self.target_width / bounds.width()
+        scale_y = self.target_height / bounds.height()
+        item.setTransform(QTransform().scale(scale_x, scale_y))
+        self._y_offset += scale_y * bounds.height()
+
+        self._scene.addItem(item)
+        self._scene.setSceneRect(0, 0, self.target_width, self._y_offset)
 
     def event(self, event: Optional[QtCore.QEvent]) -> bool:
         if event is None: return False
@@ -109,42 +143,10 @@ class ZMultiPageViewer(QGraphicsView):
         self.resetTransform()
         self._zoom = 1
 
-class MultiPageViewer(QScrollArea):
-    def __init__(self):
-        super().__init__()
-        self.container = QWidget()
-        self.main_layout = QVBoxLayout(self.container)
-        self.setWidget(self.container)
-        self.setWidgetResizable(True)
-        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        # Set placeholder
-        svg_widget = QSvgWidget()
-        svg_widget.setStyleSheet(SVG_VIEWER_CSS)
-
-        self.main_layout.addWidget(svg_widget)
-
-    def load(self, svg_paths: list[str] | str):
-        while self.main_layout.count():
-            item = self.main_layout.takeAt(0)
-            if item is None: continue
-            widget = item.widget()
-            if widget is not None:
-                widget.deleteLater()
-
-        paths = svg_paths if isinstance(svg_paths, list) else [svg_paths]
-        for path in paths:
-            svg_widget = QSvgWidget()
-            svg_widget.setFixedSize(800, 1000)
-            svg_widget.setStyleSheet(SVG_VIEWER_CSS)
-            svg_widget.load(path)
-            self.main_layout.addWidget(svg_widget)
-
-
-
 class Navbar(QWidget):
     file_opened = pyqtSignal(str)
 
-    def __init__(self, callback: Callable[[list[str]], None]):
+    def __init__(self, callback: UpdateSvgCallback):
         """
         callback: callable with str argument, should be a valid typst path
         """
@@ -207,6 +209,10 @@ class Navbar(QWidget):
     # TODO add lazy compile - check if pdf exists
     # TODO compile in batches
     def _item_clicked_callback(self, index: QModelIndex):
+        def sorted_key(path: Path):
+            num = int(path.name.split(".")[0].split("-")[1])
+            return num
+
         item = self.model.itemFromIndex(index)
         if item is None:
             return
@@ -215,11 +221,12 @@ class Navbar(QWidget):
         if item.data(NOTE_ROLE) is not None:
             note: Note = item.data(NOTE_ROLE)
 
-            with tempfile.TemporaryDirectory() as tmpdir:
-                tmpdir_path = Path(tmpdir)
-                code = note.compile(OutputFormat.SVG, tmpdir_path, OUTPUT_FILE_NAME_TYPST, multi_page=True)
-                svg_files = sorted(Path(tmpdir).glob("rendered*.svg"))
-                self.update_svg_func([str(f) for f in svg_files])
+            tmpdir = tempfile.TemporaryDirectory()
+            tmpdir_path = Path(tmpdir.name)
+            code = note.compile(OutputFormat.SVG, tmpdir_path, OUTPUT_FILE_NAME_TYPST, multi_page=True)
+            svg_files = sorted(tmpdir_path.glob("rendered*.svg"), key=sorted_key)
+            self.update_svg_func([str(f) for f in svg_files], tmpdir=tmpdir)
+
 
         # For any item with this role we must do 2 things:
         #   1. Check to see if we should expand or collapse tree around item
@@ -231,28 +238,32 @@ class Navbar(QWidget):
                 cat: Category = item.data(DIR_ROLE)
                 self._load_item(item, cat)
 
-            if self.tree.isExpanded(index): self.tree.collapse(index)
-            else: self.tree.expand(index)
+            if self.tree.isExpanded(index):
+                self.tree.collapse(index)
+            else:
+                self.tree.expand(index)
 
         elif item.data(COURSE_CONTAINER_ROLE):
-            if self.tree.isExpanded(index): self.tree.collapse(index)
-            else: self.tree.expand(index)
+            if self.tree.isExpanded(index):
+                self.tree.collapse(index)
+            else:
+                self.tree.expand(index)
 
         # TODO handle compilation failure
         elif item.data(COURSE_FILE_ROLE):
             pdf: str = item.data(COURSE_FILE_ROLE)
             pdf_path = Path(pdf)
             if not pdf_path.is_file():
-                return #TODO raise popup
-            with tempfile.TemporaryDirectory() as tmpdir:
-                output_path = Path(tmpdir) / OUTPUT_FILE_NAME_PDF2SVG
-                cmd = ["pdf2svg", pdf, str(output_path), "all"]
-                result = subprocess.run(cmd)
+                return
+            tmpdir = tempfile.TemporaryDirectory()
+            tmpdir_path = Path(tmpdir.name)
+            output_path = tmpdir_path / OUTPUT_FILE_NAME_PDF2SVG
+            cmd = ["pdf2svg", pdf, str(output_path), "all"]
 
-                svg_files = sorted(Path(tmpdir).glob("rendered*.svg"))
-                print(svg_files)
-                # TODO
-                self.update_svg_func([str(f) for f in svg_files])
+            result = subprocess.run(cmd)
+
+            svg_files = sorted(tmpdir_path.glob("rendered*.svg"), key=sorted_key)
+            self.update_svg_func([str(f) for f in svg_files], tmpdir=tmpdir)
 
 
     def _load_item(self, item: QStandardItem, cat: Category):
@@ -352,10 +363,10 @@ class MainWindow(QMainWindow):
         self.process.start("typst", ["compile", path, "--format", "svg"])
         self.process.finished.connect(lambda : self.update_svg(path))
 
-    def update_svg(self, path: str | list[str]):
+    def update_svg(self, path: str | list[str], tmpdir: Optional[tempfile.TemporaryDirectory] = None):
         paths = path if isinstance(path, list) else [path]
         if all(Path(p).exists() for p in paths):
-            self.viewer.load(path)
+            self.viewer.load(path, tmpdir=tmpdir)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
