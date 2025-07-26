@@ -2,7 +2,8 @@ import json
 import re
 from functools import reduce
 import logging
-from typing import Iterable, SupportsIndex, Union, Generator, List, Callable, Generic, TypeVar, get_args, get_origin
+from typing import Any, Optional, SupportsIndex, Union, Generator, List, Generic, TypeVar, get_args, get_origin
+from collections.abc import Iterable, Iterator, Callable
 from pathlib import Path
 from abc import abstractmethod, ABC
 from dataclasses import dataclass, field
@@ -26,13 +27,13 @@ class TrackedText:
         self.text = text
         self.source = source
 
-    def join(self, iterable: Iterable["TrackedText"]):
+    def join(self, iterable: Iterable["TrackedText"]) -> "TrackedText":
         if not iterable:
             return TrackedText("")
         joined_text = self.text.join([str(tracked_text) for tracked_text in iterable])
         return TrackedText(joined_text, source = self.source)
 
-    def __getitem__(self, __key) -> 'TrackedText':
+    def __getitem__(self, __key: SupportsIndex | slice) -> 'TrackedText':
         return TrackedText(self.text.__getitem__(__key), source=self.source)
 
     def filetype(self) -> FileType:
@@ -41,17 +42,21 @@ class TrackedText:
             return FileType.Unsupported
         return suffix_map.get(self.source.suffix, FileType.Unsupported)
 
-    def apply_func(self, func: Callable[[str], str]): #replace instances of modify text with this
+    def apply_func(self, func: Callable[[str], str]) -> "TrackedText":
         new_text = func(self.text)
         return TrackedText(new_text)
-    def sub(self, pattern: str, repl: str) -> 'TrackedText':
+
+    def sub(self, pattern: str, repl: str) -> "TrackedText":
         new_text = re.sub(pattern, repl, self.text)
         return TrackedText(new_text, source=self.source)
-    def encode(self, encoding: str = 'utf-8', errors: str = 'strict'):
+
+    def encode(self, encoding: str = 'utf-8', errors: str = 'strict') -> bytes:
         return self.text.encode(encoding=encoding, errors=errors)
-    def __bool__(self):
+
+    def __bool__(self) -> bool:
         return len(self.text) != 0
-    def __add__(self, other: 'TrackedText'):
+
+    def __add__(self, other: 'TrackedText') -> "TrackedText":
         """
         Other must be of type TrackedText and be of the same file type
 
@@ -74,16 +79,27 @@ class TrackedText:
 
     def split(self, sep: str | None = None, maxsep: SupportsIndex = -1) -> list['TrackedText']:
         return [TrackedText(e, source=self.source) for e in self.text.split(sep, maxsep)]
-    def __str__(self):
+
+    def __str__(self) -> str:
         return self.text
-    def __iter__(self): # Should this iterate over self.text str chars or TrackedText(char)?
-        return self.text.__iter__()
-    def __len__(self):
+
+    def __iter__(self) -> Iterator["TrackedText"]:
+        return (TrackedText(c, source=self.source) for c in self.text)
+
+    def __len__(self) -> int:
         return len(self.text)
-    def __repr__(self):
+
+    def __repr__(self) -> str:
         return (f"TrackedText({self.text}, self.source={self.source})")
+
+    def __contains__(self, item: Union["TrackedText", str]) -> bool:
+        if isinstance(item, TrackedText):
+            return item.text in self.text
+        return item in self.text
+
     def startswith(self, prefix: str | tuple[str, ...], *args) -> bool:
         return self.text.startswith(prefix, *args)
+
     def isalpha(self) -> bool:
         return self.text.isalpha()
 
@@ -95,86 +111,94 @@ class Flashcard:
     answer: TrackedText
     pdf_answer_path: None | str = None
     pdf_question_path: None | str = None
-    additional_info: dict = field(default_factory=dict)
+    additional_info: dict[str, TrackedText] = field(default_factory=dict)
     seen: bool = False
 
     def filetype(self) -> FileType:
         return self.question.filetype()
 
-    def add_info(self, name: str, info: str):
+    def add_info(self, name: str, info: TrackedText) -> None:
         self.additional_info[name] = info
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         question = "..." if self.question else 'None'
         answer = "..." if self.answer else 'None'
         return f"Flashcard(question={question}, answer={answer}, pdf_answer_path={self.pdf_question_path}, pdf_question_path={self.pdf_answer_path}, file_type={self.filetype()})"
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"Flashcard(question={self.question}, answer={self.answer}, pdf_answer_path={self.pdf_question_path}, pdf_question_path={self.pdf_answer_path})"
+
 
 Input = TypeVar("Input")
 Output = TypeVar("Output")
+
 
 class Stage(ABC, Generic[Input, Output]):
     @abstractmethod
     def process(self, data: Input) -> Output:
         pass
 
+
 class FlashcardCache:
     def __init__(self, cache_dir: Path):
         super().__init__()
         self.cache_dir = cache_dir
-        self._cache = {}
-        self._section_names = None
+        self._cache: dict[str, str] = {}
+        self._section_names: Optional[list[str]] = None
 
     @property
-    def section_names(self):
+    def section_names(self) -> Optional[list[str]]:
         return self._section_names
 
     @section_names.setter
-    def section_names(self, section_names: list[SectionNamesDescriptor]):
+    def section_names(self, section_names: list[SectionNamesDescriptor]) -> None:
         self._section_names = sorted([section_name.value for section_name in section_names])
 
     @property
-    def cache(self):
+    def cache(self) -> dict[str, str]:
         if not self._cache:
             self._cache = self._load_cache()
         return self._cache
 
-    def _load_cache(self):
+    def _load_cache(self) -> dict[str, str]:
         cache = {}
         for file in self.cache_dir.iterdir():
             if file.is_file():
                 cache[file.name] = str(file)
         return cache
 
-    def load_from_cache(self, path: str):
-        with open(path, "r") as f:
-            json.load(f)
+    # ?
+#    def load_from_cache(self, path: str) -> Any:
+#        with open(path, "r") as f:
+#            data = json.load(f)
+#        return data
+#
+#    def cache_key(self, path: Path) -> str | None:
+#        if self.section_names is None:
+#            return None
+#        key = "-".join(self.section_names) + str(path)
+#        return key
+#
+#    def get_cache(self, path: Path) -> :
+#        cache_key = self.cache_key(path)
+#        if cache_key is None:
+#            return None
+#
+#        filename = self.cache.get(cache_key, None)
+#        if filename is not None:
+#            cache_value = self.load_from_cache(filename)
+#            return cache_value
+#
+#        return None
 
-    def cache_key(self, path: Path) -> str | None:
-        if self.section_names is None:
-            return None
-        key = "-".join(self.section_names) + str(path)
-        return key
-
-    def get_cache(self, path: Path):
-        cache_key = self.cache_key(path)
-        filename = self.cache.get(cache_key, None)
-        if filename is not None:
-            cache_value = self.load_from_cache(filename)
-            return cache_value
-        return None
 
 class DataGenerator:
-    """ Generates data in chunks. Each chunk corresponds to the contents of a file... Works well with 'lecture' tex files (small files), could use a re design
-    to inlcude a chunk_size param if we are reading from any tex file
-    """
+    """ Generates data in chunks. Each chunk corresponds to the contents of a file """
     def __init__(self, file_paths: list[Path]) -> None:
         super().__init__()
         self.file_paths = file_paths
 
-    def __iter__(self):
+    def __iter__(self) -> Generator[TrackedText | None]:
         for file_path in self.file_paths:
             try:
                 file_contents = file_path.read_text(encoding='utf-8')
@@ -185,6 +209,7 @@ class DataGenerator:
 
             return_value = TrackedText(file_contents, source=file_path)
             yield return_value
+
 
 class CleanStage(Stage[TrackedText, TrackedText]):
     def __init__(self, macros: dict) -> None:
@@ -197,7 +222,6 @@ class CleanStage(Stage[TrackedText, TrackedText]):
         tracked_string = self.remove_macros(tracked_string)
         logger.debug(f"Finished {self.process}")
         return tracked_string
-
 
     def remove_comments(self, text: TrackedText) -> TrackedText:
         pattern = r'% .*?\n'
@@ -213,8 +237,6 @@ class CleanStage(Stage[TrackedText, TrackedText]):
     @staticmethod
     def _find_arg(text: TrackedText) -> Union[TrackedText, None]:
         """ It is assume the tex string passed starts with curly bracket """
-        print(text.source, "source")
-        print(text.filetype())
         paren = ("{", "}") if text.filetype() == FileType.LaTeX else ("[", "]") # TODO -currently no handling of unsupported
 
         paren_stack = []
@@ -277,7 +299,7 @@ class CleanStage(Stage[TrackedText, TrackedText]):
         return new_text
 
     def add_arg_spaces(self, command: TrackedText, arg: TrackedText) -> TrackedText:
-        if "#1" not in command:
+        if "#1" not in str(command): #TODO, add __contains__ for TrackedText
             return TrackedText("")
         command_split = command.split("#1")
         if command_split[1][0].isalpha():
@@ -421,10 +443,11 @@ class BuilderStage(Stage[TrackedText, List[Flashcard]]):
         :param section_names: gets all data from sections contained in section_names
         :returns list: [(name, section_contents)....] """
         # The issue is data has no source
-        cmd_char = '\\' if data.filetype() == FileType.LaTeX else "#" # TODO - currently not handling unsported
-        flashcards = []
-        counter = 0
-        parent_section = None
+        cmd_char: str = '\\' if data.filetype() == FileType.LaTeX else "#" # TODO - currently not handling unsported
+        flashcards: list[Flashcard] = []
+        counter: int = 0
+        parent_section: Optional[str] = None
+
         while counter < len(data): # check this is what i want
 
             if data[counter] == "%": # TODO: Adjust for typst + old note which I can no longer decifer: Do this everywhere
@@ -466,7 +489,7 @@ class BuilderStage(Stage[TrackedText, List[Flashcard]]):
     def process(self, data: TrackedText) -> list[Flashcard]:
         #check types
 
-        logger.debug(f"Calling {__class__.__name__}.process")
+        logger.debug(f"Calling {self.__class__.__name__}.process")
         chunk_flashcards = self.process_chunk(data)
 #        chunk_flashcards = self.re_format_flashcards(chunk_flashcards)
         logger.debug(f"Returning {repr(chunk_flashcards)}")
@@ -486,7 +509,7 @@ class BuilderStage(Stage[TrackedText, List[Flashcard]]):
 class FlashcardsPipeline:
     def __init__(self, data_iterable: Iterable):
         self.data_iterable = data_iterable
-        self.stages = []
+        self.stages: list[Stage] = []
         self.last_output_type = None
 
     def add_stage(self, stage: Stage):

@@ -1,4 +1,4 @@
-from typing import Union
+from typing import TypedDict, Union
 from math import ceil
 from pathlib import Path
 from datetime import datetime
@@ -7,30 +7,30 @@ import logging
 import shutil
 import subprocess
 from ..utils import config, open_cmd
-from .source_file import FileType
+from .source_file import FileType, OutputFormat, TypsetCompileOptions, TypsetFile
 
 logger = logging.getLogger("mathnote")
 
-def number2filename_tex(n: int):
-    return 'lec_{0:02d}.tex'.format(n)
-
-def number2filename_typ(n: int):
-    return 'lec_{0:02d}.typ'.format(n)
-
-def filename2number(p: Path):
-    return int(p.stem.replace('lec_', '').lstrip("0"))
+def number2filename(num: int, filetype: FileType):
+    if filetype == FileType.LaTeX:
+        return 'lec_{0:02d}.tex'.format(num)
+    else
+        return 'lec_{0:02d}.typ'.format(num)
 
 
-# TODO make TypsetFile
-class Lecture():
-    def __init__(self, file_path: Path) -> None:
-        self.path = file_path
+class Assignment(TypsetFile):
+    pass
+
+class Lecture(TypsetFile):
+    def __post_init__(self):
+        assert self.file_type() != FileType.Unsupported
 
     def number(self) -> int:
         """" returns: lecture number """
-        num = filename2number(self.path)
+        num = int(self.path.stem.replace('lec_', '').lstrip("0"))
         return num
 
+    @property
     def name(self) -> str:
         """ lecture file name. e.g lec_01.tex(typ) """
         return self.path.name
@@ -39,10 +39,11 @@ class Lecture():
         """ Returns most recent edit in seconds """
         return self.path.stat().st_mtime
 
-    def __eq__(self, other):
-        if not isinstance(other, Lecture):
-            return False
-        return other.path == self.path
+
+class CourseTypesetFiles(TypedDict):
+    main: TypsetFile | None
+    assignments: list[Assignment]
+    lectures: list[Lecture]
 
 class Course:
     def __init__(self, path: Path):
@@ -51,13 +52,33 @@ class Course:
         """
         self.path = path
         self.name: str = path.stem
-        self.main_path = path / "main"
-        self.assignment_path = path / "assignments"
-        self.lectures_path = self.main_path / "lectures"
+        self.typset_files: CourseTypesetFiles = self._load_typset_files()
         self._course_info: dict | None = None
-        self._lectures: None | list[Lecture] = None
 
-    def filetype(self) -> str:
+    def _load_typset_files(self) -> CourseTypesetFiles:
+        d: CourseTypesetFiles = {"main": None, "assignments": [], "lectures": []}
+        main_path = self.path / "main"
+        assignment_path = self.path / "assignments"
+        lectures_path = main_path / "lectures"
+
+        if (main_file := main_path / "main.tex").exists():
+            d["main"] = TypsetFile(main_file)
+
+        for p in assignment_path.iterdir():
+            if not p.is_file():
+                continue
+            if p.suffix in {'.typ', ".tex"}:
+                d["assignments"].append(Assignment(p))
+
+        for p in lectures_path.iterdir():
+            if not p.is_file():
+                continue
+            if p.suffix in {'.typ', ".tex"}:
+                d["lectures"].append(Lecture(p))
+        return d
+
+    #TODO: Rename lecture type
+    def lecture_type(self) -> str:
         return self.course_info.get("filetype", "LaTeX")
 
     def last_edit(self):
@@ -67,11 +88,8 @@ class Course:
         return max([lecture.last_edit() for lecture in self.lectures])
 
     def open_main(self):
-        if not (self.main_path / "main.pdf").is_file():
-        #compile everytime?
-            self.compile_main()
-        open = open_cmd()
-        subprocess.run([open, f"{self.main_path / 'main.pdf'}"], stdout=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
+        if (main_file := self.typset_files["main"]) is not None:
+            main_file.open_pdf()
 
     @property
     def course_info(self) -> dict:
@@ -106,15 +124,7 @@ class Course:
 
     @property
     def lectures(self) -> list[Lecture]:
-        if self._lectures is not None:
-            return self._lectures
-
-        file_type = self.filetype()
-
-        ext = ".tex" if file_type.upper() == FileType.LaTeX.value.upper() else ".typ"
-        files = self.lectures_path.glob(f'lec_*{ext}')
-        self._lectures = sorted((Lecture(f) for f in files), key=lambda l: l.number())
-        return self._lectures
+        return self.typset_files["lectures"]
 
     def start_time(self) -> Union[datetime, None]:
         """
@@ -127,7 +137,8 @@ class Course:
 
     def end_time(self) -> Union[datetime, None]:
         """
-        returns: course end time as datetime.datetime object if found, otherwise return None """
+        returns: course end time as datetime.datetime object if found, otherwise return None
+        """
         if (end_time := self.course_info["end-time"]):
             return datetime.strptime(end_time, "%H:%M")
         return None
@@ -194,44 +205,47 @@ class Course:
             return 0
         return ceil(lecture.number() / len(self.days()))
 
-    def update_lectures_in_master(self, lecture_nums: list[int]) -> None:
+    def update_lectures_in_main(self) -> None:
         """ Update main file with new lectures
         lecture_nums: list of all numbers corresponds to a lecture
         """
-        file_type = self.filetype()
-        ext = ".tex" if file_type.upper() == FileType.LaTeX.value.upper() else ".typ"
-        main_file = self.main_path / f"main.{ext}" # TODO
-        logger.debug("Updating main file")
-        header, _, footer = self.get_header_footer(main_file)
+        main_file, lectures = self.typset_files["main"], self.typset_files["lectures"]
+        lectures.sort(key=lambda lec: lec.number())
 
-        if file_type.upper() == FileType.LaTeX.value.upper():
-            body = ''.join([r'\input{lectures/' + number2filename_tex(number) + '}\n' for number in lecture_nums])
-        else:
-            body = ''.join([r'\input{lectures/' + number2filename_typ(number) + '}\n' for number in lecture_nums])
-        main_file.write_text(header + body + footer)
+        if main_file is None:
+            return
+
+        main_file_path = main_file.path
+        header, _, footer = self.get_header_footer(main_file_path)
+        body = ''.join([r'\input{lectures/' + lecture.name + '}\n' for lecture in lectures])
+        main_file_path.write_text(header + body + footer)
 
     def new_lecture(self):
         """ Creates a new lecture """
-        filetype = self.filetype()
-        new_lecture_number = 1 if not self.lectures else self.lectures[-1].number() + 1
-        if filetype.upper() == FileType.LaTeX.value.upper():
-            new_lecture_path = self.lectures_path / number2filename_tex(new_lecture_number)
-        else:
-            new_lecture_path = self.lectures_path / number2filename_typ(new_lecture_number)
+        main_file = self.typset_files["main"]
+        lectures = self.typset_files["lectures"]
+        if main_file is None:
+            return
+        filetype = main_file.file_type()
+
+        new_lecture_number = 1 if not lectures else lectures[-1].number() + 1
+        new_lecture_path = main_file.path / "lectures" / number2filename(new_lecture_number, filetype)
 
         logger.info(f"Creating lecture: {new_lecture_path}")
         new_lecture_path.touch() # Copy file template instead of touch?
 #        new_lecture_path.write_text(f'\\{{lecture{{{new_lecture_number}}}}}\n')
         logger.debug("Updating main file")
-        self.update_lectures_in_master([i for i in range(1, new_lecture_number + 1)]) # TODO test
 
         new_lecture = Lecture(new_lecture_path)
         new_lecture.path.write_text(fr'\section*{{Lecture {new_lecture.number()}}}')
         self.lectures.append(new_lecture)
+
+        self.update_lectures_in_main() # TODO test
         return new_lecture
 
     def new_assignment(self, filetype: FileType = FileType.LaTeX):
         """
+        TODO: Refactor using Assignment to hide logic
         Create new assignment using the naming convention course_course_number_A{assignment number}
         """
         new_num = 0
@@ -256,33 +270,20 @@ class Course:
         shutil.copy(template, assignment_path)
 
 
-    def compile_main(self):
+    def compile_main(self, options: TypsetCompileOptions | None = None):
         """ Compile main file
         lectures_only: If True pdf will only contain lecture notes, otherwise endnotes and prelimanary sections
         will be included
         returns: error code. e.i {}
         """
-        # TODO allow for typst compilation
-        if self.filetype().upper() == FileType.LaTeX.value.upper():
-            mainfile= self.main_path / "main.tex"
-            logger.debug(f"Attempting to compile {mainfile}")
-            result = subprocess.run(
-                    ['latexmk', "-pdf", str(mainfile)],
-                    stdout = subprocess.DEVNULL,
-                    stderr = subprocess.DEVNULL,
-                    cwd=self.path
-                    )
+
+        if (main_file := self.typset_files["main"]) is not None:
+            if options is None:
+                options = TypsetCompileOptions(main_file.path, OutputFormat.PDF)
+            result_code = main_file.compile(options)
         else:
-            # TODO test this
-            mainfile= self.main_path / "main.tex"
-            logger.debug(f"Attempting to compile {mainfile}")
-            result = subprocess.run(
-                    ['tinymist', "compile", str(mainfile)],
-                    stdout = subprocess.DEVNULL,
-                    stderr = subprocess.DEVNULL,
-                    cwd=self.path.parent.parent
-                    )
-        return result.returncode
+            result_code = 1
+        return result_code
 
     def __eq__(self, other):
         if not isinstance(other, Course):
@@ -290,7 +291,7 @@ class Course:
         return self.path == other.path
 
     def __repr__(self) -> str:
-        return f"{__class__}(path={self.path}, lectures={self.lectures})"
+        return f"{self.__class__}(path={self.path}, lectures={self.lectures})"
 
     def __contains__(self, other) -> bool:
         if not isinstance(other, Lecture):
@@ -300,13 +301,13 @@ class Course:
                 return True
         return False
 
-
+""" Needs refactor """
 class Courses():
     """ Container for all Course objects """
     def __init__(self, config: dict[str, str]):
         self.config = config
         self.root = Path(config["root"]) / "Courses"
-        self._courses = {}
+        self._courses: dict[str, Course] = {}
 
     def _find_courses(self, _key = lambda c: c.name) -> list[Course]:
         """

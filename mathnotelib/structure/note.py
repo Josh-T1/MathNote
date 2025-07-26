@@ -19,8 +19,6 @@ def load_from_json(path: Path) -> dict:
         metadata["tags"] = set()
     return metadata
 
-
-
 @dataclass
 class Metadata:
     tags: set = field(default_factory=set)

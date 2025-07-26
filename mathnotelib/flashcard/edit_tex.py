@@ -23,10 +23,10 @@ def typst_template(typ: str) -> str:
 {typ}
 """
 
-def open_file_with_editor(filename):
+def open_file_with_editor(filename: str) -> None:
     import iterm2
 
-    async def _main(connection, filename):
+    async def _main(connection, filename: str):
         app = await iterm2.async_get_app(connection)
         window = app.current_window
         if window is None: return None

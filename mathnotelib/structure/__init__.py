@@ -1,7 +1,6 @@
 from .note import Note, NotesManager, Category, OutputFormat
 from .courses import Course, Courses, Lecture
-from .compile import compile_latex, compile_typst, TypsetCompileOptions
-from .source_file import TypsetFile, FileType
+from .source_file import TypsetFile, FileType, TypsetCompileOptions
 __all__ = [
         "Note",
         "NotesManager",
@@ -13,6 +12,4 @@ __all__ = [
         "Lecture",
         "TypsetCompileOptions",
         "TypsetFile",
-        "compile_latex",
-        "compile_typst"
         ]

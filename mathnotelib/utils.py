@@ -72,6 +72,8 @@ def open_cmd() -> str:
         cmd = "start"
     return cmd
 
+
+# TODO: fix this
 class SectionNamesDescriptor:
     def __init__(self, name: str, value: str):
         self.name = name

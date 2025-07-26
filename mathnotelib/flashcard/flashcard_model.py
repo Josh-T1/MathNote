@@ -1,3 +1,4 @@
+from collections.abc import Iterator
 import random
 import threading
 import tempfile
@@ -6,13 +7,13 @@ import subprocess
 import logging
 import hashlib
 from pathlib import Path
-from typing import OrderedDict, Deque
+from typing import Optional, OrderedDict, Deque
 from collections import deque
 
 from .edit_tex import latex_template, typst_template
 from ..structure import Courses, FileType
 from ..utils import SectionNames, SectionNamesDescriptor, config
-from .. import parse_tex
+from ..parse_tex import BuilderStage, CleanStage, DataGenerator, Flashcard, FlashcardCache, FileType, FlashcardsPipeline, MainSectionFinder, ProofSectionFinder, TrackedText, get_hack_macros, load_macros
 
 logger = logging.getLogger("mathnote")
 
@@ -59,7 +60,7 @@ class StoppableThread(threading.Thread):
         self._stop_event.set()
 
 class Node:
-    def __init__(self, data) -> None:
+    def __init__(self, data: Flashcard) -> None:
         self.data = data
         self.next: Node | None = None
         self.prev: Node | None = None
@@ -67,16 +68,16 @@ class Node:
 class FlashcardDoubleLinkedList:
     """ Container for Flashcards """
     def __init__(self, *args) -> None:
-        self.head = None
-        self.current = None
+        self.head: Optional[Node] = None
+        self.current: Optional[Node] = None
         for arg in args:
             self.append(arg)
 
-    def clear(self):
+    def clear(self) -> None:
         self.head = None
         self.current = None
 
-    def remove(self, index: int):
+    def remove(self, index: int) -> None:
         """ Remove node at index """
         if index > len(self) or index < 0:
             raise IndexError(f"Index {index} is out of range for remove operation")
@@ -104,7 +105,7 @@ class FlashcardDoubleLinkedList:
                 cur = cur.prev
             cur.prev = new_node
 
-    def prepend(self, data) -> None:
+    def prepend(self, data: Flashcard) -> None:
         new_node = Node(data)
         if (old_head := self.head):
             self.head = new_node
@@ -115,7 +116,7 @@ class FlashcardDoubleLinkedList:
             self.current = new_node
             self.head = self.tail = new_node
 
-    def get_next(self) -> parse_tex.Flashcard:
+    def get_next(self) -> Flashcard:
         # Current node exists and has next reference, then return next reference and set current to next
         if self.current and self.current.next:
             self.current = self.current.next
@@ -123,24 +124,24 @@ class FlashcardDoubleLinkedList:
         else:
             raise FlashcardNotFoundException("Already at the end of the flashcards")
 
-    def get_prev(self) -> parse_tex.Flashcard:
+    def get_prev(self) -> Flashcard:
         if self.current and self.current.prev:
             self.current = self.current.prev
             return self.current.data
         else:
             raise FlashcardNotFoundException("Already at the begging of the flashcards")
 
-    def _get_last_node(self):
+    def _get_last_node(self) -> Node | None:
         current = self.head
         while current and current.prev:
             current = current.prev
         return current
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[Node]:
         """ [head -> head.prev -> ... -> head.prev.(...).prev] """
         current = self.head
         while current:
-            yield current.data
+            yield current
             current = current.prev
 
     def __len__(self) -> int:
@@ -149,11 +150,11 @@ class FlashcardDoubleLinkedList:
             counter += 1
         return counter
 
-    def __reversed__(self):
+    def __reversed__(self) -> Iterator[Node]:
         """ [head <- last.next.(...).next <- ... <- last.next <- last] """
         current = self._get_last_node()
         while current:
-            yield current.data
+            yield current
             current = current.next
 
 
@@ -170,7 +171,7 @@ class CompilationManager:
         self.cache_root = Path(__file__).resolve().parent / cache_root
         self.cache_dir = self.cache_root / "pdf"
         self.cache_size = cache_size + len(self._ignore_hashes) # Ignore cached files for default messages
-        self._cache: dict = {}
+        self._cache: dict[str, str] = {}
 
 
         if not self.cache_root.is_dir():
@@ -181,7 +182,7 @@ class CompilationManager:
             self.cache_dir.mkdir()
 
     @property
-    def cache(self):
+    def cache(self) -> dict[str, str]:
         if not self._cache:
             self._cache = self._load_cache()
         return self._cache
@@ -197,7 +198,7 @@ class CompilationManager:
                 cache[file.name] = str(file)
         return cache
 
-    def list_cache_by_oldest(self):
+    def list_cache_by_oldest(self) -> OrderedDict[str, Path]:
         """ List cached files by oldest edit ignoring cached files for default messages """
         cache_paths = {hash: Path(filepath) for hash, filepath in self.cache.items() if hash + ".pdf" not in self._ignore_hashes}
         cache_paths_sorted = OrderedDict(sorted(cache_paths.items(), key=lambda item_pair: item_pair[1].stat().st_mtime, reverse=True))
@@ -216,7 +217,7 @@ class CompilationManager:
         trucated_hash = hash[:hash_length]
         return trucated_hash
 
-    def compile_card(self, card: parse_tex.Flashcard) -> None:
+    def compile_card(self, card: Flashcard) -> None:
         """ Attemps to compile flashcard question/answer latex. If compilation fails """
         compile_func = self.compile_latex if card.question.filetype() == FileType.LaTeX else self.compile_typst # TODO not handling Unsupported note typst. Catch earlier
         card.pdf_question_path = compile_func(card.question)
@@ -230,7 +231,7 @@ class CompilationManager:
 
         self._format_card(card)
 
-    def _format_card(self, card: parse_tex.Flashcard):
+    def _format_card(self, card: Flashcard):
         """ If card has a blank question section or its question is equal to the theorem number
         replace question with 'answer' field (answer in this case is the theorem statement) and
         replace answer with proof """
@@ -258,7 +259,7 @@ class CompilationManager:
         del self.cache[filepath.name]
         filepath.unlink()
 
-    def compile_latex(self, tex: parse_tex.TrackedText) -> str | None:
+    def compile_latex(self, tex: TrackedText) -> str | None:
 
         """ Attempts to compile latex string
         -- Params --
@@ -299,7 +300,7 @@ class CompilationManager:
 
     # TODO use source File for typst_file_path?
     # TODO refactor this and compile latex
-    def compile_typst(self, typst: parse_tex.TrackedText) -> str | None:
+    def compile_typst(self, typst: TrackedText) -> str | None:
         """ Compile typst string
         -- Params --
         tex: string containig latex code
@@ -352,12 +353,12 @@ class FlashcardModel:
         """
         self.cache_dir = Path(__file__).parent.resolve() / "cache_dir"
         self.compiler = compiler
-        self.flashcards: Deque[parse_tex.Flashcard] = deque()
-        self.flashcard_cache = parse_tex.FlashcardCache(self.cache_dir / "flashcards")
+        self.flashcards: Deque[Flashcard] = deque()
+        self.flashcard_cache = FlashcardCache(self.cache_dir / "flashcards")
         self.compiled_flashcards: FlashcardDoubleLinkedList = FlashcardDoubleLinkedList()
         self.flashcard_lock = threading.RLock()
         self.thread_stop_event = threading.Event()
-        self.current_card = None # threadsafe, never accessed by thread
+        self.current_card: Optional[Flashcard] = None # threadsafe, never accessed by thread
         self.compile_thread = StoppableThread(callback=self._compile)
         self._macros = None
         self.courses = Courses(config)
@@ -374,10 +375,10 @@ class FlashcardModel:
 
     def _load_macros(self) -> dict:
         """ Load macros from MACRO_PATH. Note there are limitations on macros that parse_tex can load and MACRO_NAMES are not created dynamically...See parse_tex.py """
-        return parse_tex.load_macros(self.courses.macros_path(), config["macro-names"])
+        return load_macros(self.courses.macros_path(), config["macro-names"])
 
 
-    def _next_compiled_flashcard(self) -> parse_tex.Flashcard:
+    def _next_compiled_flashcard(self) -> Flashcard:
         """ Thread safe retreival of next card
         TODO: Clean this up... """
         with self.flashcard_lock:
@@ -392,7 +393,7 @@ class FlashcardModel:
             self.current_card.seen = True
             return next_card
 
-    def _prev_compiled_flashcard(self) -> parse_tex.Flashcard:
+    def _prev_compiled_flashcard(self) -> Flashcard:
         """ Thread safe retreival of previous card  """
         with self.flashcard_lock:
             prev_card = self.compiled_flashcards.get_prev()
@@ -400,12 +401,12 @@ class FlashcardModel:
             self.current_card.seen = True
             return prev_card
 
-    def _prepend_compiled_flashcard(self, card) -> None:
+    def _prepend_compiled_flashcard(self, card: Flashcard) -> None:
         """ Thread safe prepend to FlashcardDoubleLinkedList """
         with self.flashcard_lock:
             self.compiled_flashcards.prepend(card)
 
-    def _append_compiled_flashcard(self, card) -> None:
+    def _append_compiled_flashcard(self, card: Flashcard) -> None:
         """ Thread safe append to FlashcardDoubleLinkedList """
         with self.flashcard_lock:
             self.compiled_flashcards.append(card)
@@ -427,16 +428,17 @@ class FlashcardModel:
         if shuffle:
             random.shuffle(paths)
 
-        data_iterable = parse_tex.DataGenerator(paths)
+        data_iterable = DataGenerator(paths)
         # TODO fix get_hack_macros
-        clean_data_stage = parse_tex.CleanStage(self.macros | parse_tex.get_hack_macros())
+        clean_data_stage = CleanStage(self.macros | get_hack_macros())
 
-        build_stage = parse_tex.BuilderStage(parse_tex.MainSectionFinder(section_names))
+        build_stage = BuilderStage(MainSectionFinder(section_names))
 
-        build_stage.add_subsection_finder(parse_tex.ProofSectionFinder(
-            SectionNames.PROOF, [SectionNames.THEOREM, SectionNames.PROPOSITION, SectionNames.LEMMA, SectionNames.COROLLARY]) #type: ignore __getattr__ returns SectionNamesDescriptor not str
-                                                              )
-        pipeline = parse_tex.FlashcardsPipeline(data_iterable)
+        build_stage.add_subsection_finder(ProofSectionFinder(
+            SectionNames.PROOF, [SectionNames.THEOREM, SectionNames.PROPOSITION, SectionNames.LEMMA, SectionNames.COROLLARY]
+            )
+            )
+        pipeline = FlashcardsPipeline(data_iterable)
         pipeline.add_stage(clean_data_stage)
         pipeline.add_stage(build_stage)
         for flash_cards in pipeline:
@@ -447,7 +449,7 @@ class FlashcardModel:
                     self.flashcards.append(flashcard)
             logger.debug(f"Loaded flashcards: {flash_cards}")
 
-    def next_flashcard(self) -> parse_tex.Flashcard:
+    def next_flashcard(self) -> Flashcard:
         """ Retreive next flashcard, implements blocking behaviour when there are no compiled cards however one is currently being compiled """
         # If there is a flash card with compiled latex return that card
         while len(self.flashcards) != 0 and (not self.compiled_flashcards.current or not self.compiled_flashcards.current.next):
@@ -455,7 +457,7 @@ class FlashcardModel:
             time.sleep(1)
         return self._next_compiled_flashcard()
 
-    def prev_flashcard(self) -> parse_tex.Flashcard:
+    def prev_flashcard(self) -> Flashcard:
         """ Returns previous compiled flashcard """
         return self._prev_compiled_flashcard()
 

@@ -2,10 +2,14 @@ from pathlib import Path
 import subprocess
 import logging
 from typing import Protocol
+import argparse
+import sys
+
+from PyQt6.QtWidgets import QApplication
 
 from .utils import load_json, dump_json
 from .structure import Courses, Course, NotesManager, Note, FileType
-from .noteviewer import app
+from .noteviewer import MainWindow
 
 logger = logging.getLogger("mathnote")
 
@@ -14,11 +18,15 @@ class Command(Protocol):
 
 
 class NoteViewer(Command):
-    def __init__(self, project_config: dict):
+    def __init__(self, project_config: dict[str, str]):
         self.config = project_config
 
-    def cmd(self, namespace):
-        app.run()
+    def cmd(self, namespace: argparse.Namespace) -> None:
+        app = QApplication(sys.argv)
+        window = MainWindow()
+        window.resize(800, 600)
+        window.show()
+        sys.exit(app.exec())
 
 
 class FlashcardCommand(Command):
@@ -37,7 +45,8 @@ class FlashcardCommand(Command):
 
 
     @staticmethod
-    def _has_dependecies():
+    def _has_dependecies() -> None:
+        # TODO
         # ensure dependencies exist for typst or latex but not necessairly both
         dependencies = [
                 (None, "latexmk"),
@@ -68,9 +77,11 @@ class FlashcardCommand(Command):
             cls._compilation_manager = CompilationManager
             cls._controller = FlashcardController
 
-    def cmd(self, namespace):
-        compilation_manager = self._compilation_manager() #type: ignore - self._ensure_import is always called first
-        flashcard_model = self._model(compilation_manager) #type: ignore - self._ensure_import is always called first
+    def cmd(self, namespace: argparse.Namespace):
+        assert self._compilation_manager is not None
+        assert self._model is not None
+        compilation_manager = self._compilation_manager()
+        flashcard_model = self._model(compilation_manager)
         window = self._window() #type: ignore
         controller = self._controller(window, flashcard_model, self.config) #type: ignore
         if (file := self.build_file(namespace)) is not None:
@@ -81,7 +92,7 @@ class FlashcardCommand(Command):
         if not flashcard_model.compile_thread.stopped(): # Cant remember if I actually need this
             flashcard_model.compile_thread.wait_for_stop()
 
-    def build_file(self, namespace) -> None | Path:
+    def build_file(self, namespace: argparse.Namespace) -> Path | None:
         if namespace.file is None:
             return None
         file = Path(namespace.file[0])
@@ -98,11 +109,11 @@ class FlashcardCommand(Command):
 class CourseCommand(Command):
     """ Class command """
 
-    def __init__(self, project_config):
+    def __init__(self, project_config: dict[str, str]):
         self.project_config = project_config
         self.courses_obj = Courses(self.project_config)
 
-    def create_course(self, namespace):
+    def create_course(self, namespace: argparse.Namespace):
         logger.info(f"Creating course with name: {namespace.name[0]}")
         self.courses_obj.create_course(namespace.name[0])
         if namespace.user_input is not None:
@@ -124,7 +135,7 @@ class CourseCommand(Command):
         else:
             print("No active courses")
 
-    def cmd(self, namespace):
+    def cmd(self, namespace: argparse.Namespace):
         if (course:= namespace.name[0]) is None:
             return
 
@@ -191,7 +202,7 @@ class NoteCommand(Command):
         self.config = project_config
         self.note_dir = Path(project_config['root']) / "Notes"
 
-    def cmd(self, namespace):
+    def cmd(self, namespace: argparse.Namespace):
         notes = NotesManager(self.note_dir)
 
         if namespace.new_note:
@@ -323,13 +334,13 @@ class NoteCommand(Command):
 #            else:
 #                print("1")
 
-        elif namespace.plot_network:
-            from PyQt6.QtWidgets import QApplication
-            import sys
+#        elif namespace.plot_network:
+#            from PyQt6.QtWidgets import QApplication
+#            import sys
             # Consider the error when file has never been compiled
 #            matrix = notes.build_adj_matrix()
-            app = QApplication(sys.argv)
-            window = MainWindow()
-            window.show()
-            sys.exit(app.exec())
+#            app = QApplication(sys.argv)
+#            window = MainWindow()
+#            window.show()
+#            sys.exit(app.exec())
 
