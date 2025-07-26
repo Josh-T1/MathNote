@@ -2,8 +2,9 @@ from pathlib import Path
 import subprocess
 import logging
 from typing import Protocol
+
 from .utils import load_json, dump_json
-from .structure import Courses, Course, NotesManager, Note, NoteType
+from .structure import Courses, Course, NotesManager, Note, FileType
 from .noteviewer import app
 
 logger = logging.getLogger("mathnote")
@@ -195,7 +196,7 @@ class NoteCommand(Command):
 
         if namespace.new_note:
             name, item_type, parent_path = namespace.new_note[0], namespace.note_type[0], namespace.parent[0]
-            new_type = {"tex": NoteType.LaTeX, "typ": NoteType.Typst}.get(item_type)
+            new_type = {"tex": FileType.LaTeX, "typ": FileType.Typst}.get(item_type)
 
             if parent_path is None:
                 parent_cat = notes.root_category

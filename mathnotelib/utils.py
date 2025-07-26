@@ -3,14 +3,8 @@ import json
 import platform
 import os
 import shutil
-from enum import Enum
 
 templates_path= Path(__file__).parent / "templates"
-
-class NoteType(Enum):
-    LaTeX = "LaTeX"
-    Typst = "Typst"
-    Unsupported = "Unsupported"
 
 def config_dir():
     if os.name == "nt":
@@ -161,3 +155,7 @@ def load_json(file: str):
 def dump_json(file: str, contents: str):
     with open(file, "w") as f:
         json.dump(contents, f)
+
+def rendered_sorted_key(path: Path):
+    num = int(path.name.split(".")[0].split("-")[1])
+    return num

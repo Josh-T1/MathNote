@@ -4,10 +4,10 @@ import shutil
 import subprocess
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import List, Optional
-from ..utils import NoteType
-from .source_file import OutputFormat
-from mathnotelib.utils import open_cmd, config
+from typing import Optional
+
+from .source_file import OutputFormat, TypsetFile, FileType
+from ..utils import open_cmd, config, rendered_sorted_key
 
 ROOT_DIR = Path(config['root'])
 
@@ -19,9 +19,7 @@ def load_from_json(path: Path) -> dict:
         metadata["tags"] = set()
     return metadata
 
-@dataclass
-class TypsetFile:
-    pass
+
 
 @dataclass
 class Metadata:
@@ -58,13 +56,12 @@ class Category:
                 d = load_from_json(meta_file)
                 localmetadata = Metadata(d["tags"])
 
-                if any(file.suffix == ".typ" for file in dir.iterdir() if file.is_file()):
-                    note = TypNote(dir,localmetadata, self)
-                    notes.append(note)
-                else:
-                    note = TeXNote(dir,localmetadata, self)
-                    notes.append(note)
-        return notes
+                for file in dir.iterdir():
+                    if file.is_file() and file.suffix in {".typ", ".tex"}:
+                        note = Note(file, localmetadata, self)
+                        notes.append(note)
+        self._notes = notes
+        return self._notes
 
     def children(self, force: bool = False) -> list['Category']:
         """
@@ -83,8 +80,8 @@ class Category:
                 cat = Category(metadata, dir, parent=self)
                 children.append(cat)
                 cat.parent = self
-
-        return children
+        self._children = children
+        return self._children
 
 
     @property
@@ -115,12 +112,8 @@ class Category:
         return res
 
 @dataclass
-class Note(ABC):
-    """
-    Container for .tex/.typ file and all auxilary files and metadata, e.g tags
-    path: Full path to note (file)
-    """
-    path: Path
+class Note(TypsetFile):
+    """ TODO """
     local_metadata: Metadata
     category: Category
 
@@ -153,176 +146,22 @@ class Note(ABC):
         with (self.path.parent / "metadata.json").open("w") as f:
             json.dump(d, f, indent=2)
 
-    @abstractmethod
-    def compile(self,
-                output_format: OutputFormat = OutputFormat.PDF,
-                output_dir: Optional[Path] = None,
-                output_filename: Optional[str] = None,
-                multi_page: bool = False,
-                ) -> int:...
-
-    @staticmethod
-    @abstractmethod
-    def get_type() -> str:...
-
     def open(self):
         """
         Opens note as pdf
         """
-        name = self.name
-        pdf = f"{name}.pdf"
-        if not (self.path / pdf).is_file():
-            print(f"{pdf} not found, attempting to compile note {name}")
-            self.compile()
-
-        if not (self.path / pdf).is_file():
+        pdf_path = self.path.with_suffix(".pdf")
+        if not pdf_path.is_file():
+            print(f"{pdf_path} not found, attempting to compile note {self.path.stem}")
+            # TODO
+#            self.compile()
+        # remove this-use return code
+        if not pdf_path.is_file():
             print("Failed to compile")
             return
 
         open = open_cmd()
-        subprocess.run([open, f"{self.path / pdf}"], stdout=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
-
-
-@dataclass
-class TeXNote(Note):
-
-    def compile(self,
-                output_format: OutputFormat = OutputFormat.PDF,
-                output_dir: Optional[Path] = None,
-                output_filename: Optional[str] = None,
-                multi_page: bool = False
-                ) -> int:
-        """
-        TODO: Test
-        TODO: multi page appears to work but idk...
-
-        output_format: Target output type
-        output_dir: Should be where compilation occurs, however TypNote implements a workaround by compiling in self.path then
-                    moving the files to output_dir / output_filename(self.path/self.name .ext). Typst compile does not have output dir flag
-        output_filename: Set to specify output file name. Defaults to {self.name}.{ext}
-        multi_page: If set to True, pages will be compiled with names {output_filename(self.name)}-{#}.ext
-
-        returns: return code of final compilation command
-        """
-        output_filename_without_ext = output_filename.split(".")[0] if output_filename else self.name
-        filepath = str(self.path / self.path.name) + ".tex"
-        cmd = ["pdflatex", "-interaction=nonstopmode"]
-        if output_dir:
-            cmd.append(f"-output-dir={output_dir}")
-        if output_filename: #Untested
-            cmd.append(f"-jobname={output_filename_without_ext}")
-        cmd.append(filepath)
-        result = subprocess.run(
-            cmd,
-            stdout = subprocess.PIPE,
-            stderr = subprocess.PIPE,
-            cwd = self.path
-            )
-        # TODO
-        if output_format == OutputFormat.PDF or result.returncode !=0:
-            return result.returncode
-
-
-        out_dir = output_dir if output_dir else self.path
-        pdf_path = out_dir / f"{output_filename_without_ext}.pdf"
-
-        cmd_2 = ["pdf2svg", str(pdf_path)]
-        pdf_path = (out_dir / f"{output_filename_without_ext}.pdf")
-        output_path = out_dir / f"{output_filename_without_ext}-%d.svg"
-        cmd_2.append(str(output_path))
-        if multi_page:
-            cmd_2.append("all")
-        cwd = self.path if not output_dir else output_dir
-        result_2 = subprocess.run(
-              cmd_2,
-              stdout=subprocess.DEVNULL,
-              stderr=subprocess.DEVNULL,
-              cwd=cwd
-                )
-        return result_2.returncode
-
-    @staticmethod
-    def get_type():
-        return NoteType.LaTeX.value
-
-    def __post_init__(self):
-        if not Path.is_dir(self.path):
-            raise ValueError(f"Directory {self.path} does not exist")
-
-
-@dataclass
-class TypNote(Note):
-
-    #add format option
-    #add clean resources
-    def compile(self,
-                output_format: OutputFormat = OutputFormat.PDF,
-                output_dir: Optional[Path] = None,
-                output_filename: Optional[str] = None,
-                multi_page: bool = False
-                ) -> int:
-        """
-        TODO: Has not been properly tested
-
-        output_format: Target output type
-        output_dir: Should be where compilation occurs, however TypNote implements a workaround by compiling in self.path then
-                    moving the files to output_dir / output_filename(self.path/self.name .ext). Typst compile does not have output dir flag
-        output_filename: Set to specify output file name. Defaults to {self.name}.{ext}
-        multi_page: If set to True, pages will be compiled with names {output_filename(self.name)}-{#}.ext
-
-        returns: return code of final compilation command
-        """
-        # Set default output_filename if not specified
-        output_filename = output_filename if output_filename is not None else self.name + ".svg"
-        # Set pattern for output_filename if there are multipile pages
-        if multi_page and output_filename:
-            output_filename = output_filename.replace(".svg", "") + "-{p}.svg"
-        elif multi_page and output_filename is None:
-            output_filename = self.name + "-{p}.svg"
-
-        # Build compilation cmd
-        filepath = str(self.path / self.path.name) + ".typ"
-        cmd = ["typst", "compile", "--format"]
-        cmd.append(output_format.value)
-        cmd.append(filepath)
-
-        if multi_page and output_filename: # verbose, lsp is dumb
-            cmd.append(output_filename)
-
-        result = subprocess.run(
-            cmd,
-            stdout = subprocess.PIPE,
-            stderr = subprocess.PIPE,
-            cwd = self.path
-            )
-        if result.returncode != 0:
-            return 1
-
-        # Move files as a workaround for lack of output directory flag
-        if output_dir:
-            if multi_page and output_filename: # verbose, lsp is dumb
-                files = sorted(self.path.glob(f"{output_filename.split("-")[0]}*.svg"))
-            else:
-                files = [filepath.replace(".typ", ".svg")]
-            partial_out_name = output_filename.split(".")[0]
-            for i, file in enumerate(files, start=1):
-                try:
-
-                    shutil.move(file, output_dir / f"{partial_out_name}-{i}.svg")
-                except Exception as e:
-                    return 1
-        return result.returncode
-
-
-    @staticmethod
-    def get_type():
-        return NoteType.Typst.value
-
-    def __post_init__(self):
-        if not Path.is_dir(self.path):
-            raise ValueError(f"Directory {self.path} does not exist")
-
-
+        subprocess.run([open, pdf_path], stdout=subprocess.DEVNULL, stdin=subprocess.DEVNULL, cwd=self.path.parent)
 
 class NotesManager:
 
@@ -359,7 +198,7 @@ class NotesManager:
                 self._generate_tree(parent=cat)
         return
 
-    def new_note(self, name: str, parent: Category, note_type: NoteType) -> None:
+    def new_note(self, name: str, parent: Category, note_type: FileType) -> None:
         """
         name: note name, stem of .tex/typ file path (no suffix)
         """
@@ -371,7 +210,7 @@ class NotesManager:
             raise ValueError("Failed to create note, the name 'resources' is resereved")
 
         # TODO clean this up. + fix cat-metadata vs metadata
-        if note_type == NoteType.LaTeX:
+        if note_type == FileType.LaTeX:
             note_dir_path = parent.path / name
             note_path = note_dir_path / f"{name}.tex"
             metadata_path = note_dir_path / "metadata.json"
@@ -393,9 +232,7 @@ class NotesManager:
 
             parent.notes(force=True) # reload category notes
 
-
-
-        elif note_type == NoteType.Typst:
+        elif note_type == FileType.Typst:
             note_dir_path = parent.path / name
             note_path = note_dir_path / f"{name}.typ"
             metadata_path = note_dir_path / "metadata.json"
@@ -431,7 +268,6 @@ class NotesManager:
     def _init_metadata(path: Path):
         with open(path, "w") as f:
             json.dump({}, f, indent=2)
-
 
     def rename(self, note: Note, new_name):
         # TODO

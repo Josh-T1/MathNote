@@ -8,9 +8,10 @@ import hashlib
 from pathlib import Path
 from typing import OrderedDict, Deque
 from collections import deque
+
 from .edit_tex import latex_template, typst_template
-from ..structure import Courses
-from ..utils import NoteType, SectionNames, SectionNamesDescriptor, config
+from ..structure import Courses, FileType
+from ..utils import SectionNames, SectionNamesDescriptor, config
 from .. import parse_tex
 
 logger = logging.getLogger("mathnote")
@@ -120,7 +121,7 @@ class FlashcardDoubleLinkedList:
             self.current = self.current.next
             return self.current.data
         else:
-            raise FlashcardNotFoundException("Already at the end of the flashcards") # TODO - dont have a fucking clue why I wrote TODO... better exception message? maybe...
+            raise FlashcardNotFoundException("Already at the end of the flashcards")
 
     def get_prev(self) -> parse_tex.Flashcard:
         if self.current and self.current.prev:
@@ -217,7 +218,7 @@ class CompilationManager:
 
     def compile_card(self, card: parse_tex.Flashcard) -> None:
         """ Attemps to compile flashcard question/answer latex. If compilation fails """
-        compile_func = self.compile_latex if card.question.filetype() == NoteType.LaTeX else self.compile_typst # TODO not handling Unsupported note typst. Catch earlier
+        compile_func = self.compile_latex if card.question.filetype() == FileType.LaTeX else self.compile_typst # TODO not handling Unsupported note typst. Catch earlier
         card.pdf_question_path = compile_func(card.question)
         card.pdf_answer_path = compile_func(card.answer)
 
@@ -296,6 +297,7 @@ class CompilationManager:
 
         return str(new_path)
 
+    # TODO use source File for typst_file_path?
     # TODO refactor this and compile latex
     def compile_typst(self, typst: parse_tex.TrackedText) -> str | None:
         """ Compile typst string
@@ -305,9 +307,12 @@ class CompilationManager:
         """
         # TODO: I dont think cache is working properly
         source = typst.source
-        if source is None: return #TODO fix this
+        if source is None:
+            return #TODO fix this
+
         typst_str = str(typst)
         typst_hash = "empty" if not typst_str else self.get_hash(typst_str)
+
         if typst_hash in self.cache.keys():
             logger.debug(f"Getting file {typst_hash} from cache")
             return self.cache[typst_hash]
@@ -515,7 +520,7 @@ class FlashcardModel:
             flashcard_hash = (set(self.compiler.get_hash(str(flashcard.question)) for flashcard in self.flashcards)
                               | set(self.compiler.get_hash(value) for _card in self.flashcards for value in _card.additional_info.values()))
 
-            # delete cached file starting from oldest if hash(flashcards.question) != hash(cached file)
+            # Delete cached file starting from oldest if hash(flashcards.question) != hash(cached file)
             while delete_num > 0 and len(cached_paths) > 0:
                 hash, filepath = cached_paths.popitem(last=True)
                 if hash not in flashcard_hash:

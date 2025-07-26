@@ -1,31 +1,30 @@
-from dataclasses import dataclass
 import subprocess
 import sys
 import tempfile
-from datetime import datetime
 from pathlib import Path
 from typing import Callable, Optional, Protocol
+
 from PyQt6.QtGui import QBrush, QMouseEvent, QPalette, QStandardItem, QStandardItemModel, QTransform, QWheelEvent
 from PyQt6.QtWidgets import (QApplication, QFrame, QGestureEvent, QGraphicsRectItem, QGraphicsScene, QGraphicsView, QHBoxLayout, QMainWindow, QPinchGesture, QPushButton, QScrollArea, QSizePolicy,
                              QSpacerItem, QStyle, QStyleOptionViewItem, QToolBar, QTreeView, QVBoxLayout, QWidget)
 from PyQt6.QtCore import QEvent, QFileSystemWatcher, QModelIndex, QProcess, QTimer, pyqtSignal, Qt
 from PyQt6.QtSvgWidgets import QGraphicsSvgItem, QSvgWidget
 from PyQt6 import QtCore
-from mathnotelib.structure.note import Note
+
+from ..structure import TypsetCompileOptions, compile_latex, compile_typst, Note, FileType, TypsetFile
 from .style import MAIN_WINDOW_CSS, SVG_VIEWER_CSS, TOGGLE_BUTTON_CSS, TREE_VIEW_CSS
-from ..utils import  config
+from ..utils import  config, rendered_sorted_key
 from ..structure import NotesManager, Courses, Category, OutputFormat
 
 
 ROOT_DIR = Path(config["root"])
 VIEWER_SIZE = (800, 1000)
 
-OUTPUT_FILE_NAME_TYPST = "rendered.svg"
-OUTPUT_FILE_NAME_PDF2SVG = "rendered-%d.svg"
+OUTPUT_FILE_STEM = "rendered"
 TYP_FILE_LIVE = "/tmp/live.typ"
 SVG_FILE_LIVE = "/tmp/live.svg"
 
-NOTE_ROLE = Qt.ItemDataRole.UserRole + 1
+FILE_ROLE = Qt.ItemDataRole.UserRole + 1
 DIR_ROLE = Qt.ItemDataRole.UserRole + 2
 LOADED_ROLE = Qt.ItemDataRole.UserRole + 3
 COURSE_FILE_ROLE = Qt.ItemDataRole.UserRole + 4
@@ -209,22 +208,29 @@ class Navbar(QWidget):
     # TODO add lazy compile - check if pdf exists
     # TODO compile in batches
     def _item_clicked_callback(self, index: QModelIndex):
-        def sorted_key(path: Path):
-            num = int(path.name.split(".")[0].split("-")[1])
-            return num
 
         item = self.model.itemFromIndex(index)
         if item is None:
             return
 
         # TODO: handle failed compilation
-        if item.data(NOTE_ROLE) is not None:
-            note: Note = item.data(NOTE_ROLE)
+        if item.data(FILE_ROLE) is not None:
+
+            file: TypsetFile = item.data(FILE_ROLE)
 
             tmpdir = tempfile.TemporaryDirectory()
             tmpdir_path = Path(tmpdir.name)
-            code = note.compile(OutputFormat.SVG, tmpdir_path, OUTPUT_FILE_NAME_TYPST, multi_page=True)
-            svg_files = sorted(tmpdir_path.glob("rendered*.svg"), key=sorted_key)
+
+            options = TypsetCompileOptions(file, OutputFormat.SVG, multi_page=True)
+            options.set_output_dir(tmpdir_path)
+            options.set_output_file_stem(OUTPUT_FILE_STEM)
+
+            if file.file_type() == FileType.Typst:
+                compile_typst(file, options)
+
+            elif file.file_type() == FileType.LaTeX:
+                compile_latex(file, options)
+            svg_files = sorted(tmpdir_path.glob(f"{OUTPUT_FILE_STEM}*.svg"), key=rendered_sorted_key)
             self.update_svg_func([str(f) for f in svg_files], tmpdir=tmpdir)
 
 
@@ -251,18 +257,19 @@ class Navbar(QWidget):
 
         # TODO handle compilation failure
         elif item.data(COURSE_FILE_ROLE):
+            # TODO handle svg vs tex
             pdf: str = item.data(COURSE_FILE_ROLE)
             pdf_path = Path(pdf)
             if not pdf_path.is_file():
                 return
             tmpdir = tempfile.TemporaryDirectory()
             tmpdir_path = Path(tmpdir.name)
-            output_path = tmpdir_path / OUTPUT_FILE_NAME_PDF2SVG
+            output_path = tmpdir_path / f"{OUTPUT_FILE_STEM}-%d.pdf"
             cmd = ["pdf2svg", pdf, str(output_path), "all"]
 
             result = subprocess.run(cmd)
 
-            svg_files = sorted(tmpdir_path.glob("rendered*.svg"), key=sorted_key)
+            svg_files = sorted(tmpdir_path.glob(f"{OUTPUT_FILE_STEM}*.svg"), key=rendered_sorted_key)
             self.update_svg_func([str(f) for f in svg_files], tmpdir=tmpdir)
 
 
@@ -282,7 +289,7 @@ class Navbar(QWidget):
 
         for note in cat.notes():
             note_item = QStandardItem(note.name)
-            note_item.setData(note, NOTE_ROLE)
+            note_item.setData(note, FILE_ROLE)
             item.appendRow(note_item)
 
         item.setData(True, LOADED_ROLE)
@@ -311,7 +318,7 @@ class Navbar(QWidget):
             root_course_item.appendRow(course_item)
 
             main_item = QStandardItem("main")
-            main_item.setData(course.main_path / "main.pdf", COURSE_FILE_ROLE)
+            main_item.setData(course.main_path / "main.pdf", FILE_ROLE)
             course_item.appendRow(main_item)
 
     def toggle_tree(self):

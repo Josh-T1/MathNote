@@ -1,12 +1,14 @@
-from pathlib import Path
 import json
-from typing import Iterable, SupportsIndex, Union, Generator, List, Callable, Generic, TypeVar, get_args, get_origin
 import re
 from functools import reduce
 import logging
+from typing import Iterable, SupportsIndex, Union, Generator, List, Callable, Generic, TypeVar, get_args, get_origin
+from pathlib import Path
 from abc import abstractmethod, ABC
 from dataclasses import dataclass, field
-from .utils import NoteType, SectionNamesDescriptor, config
+
+from .utils import SectionNamesDescriptor, config
+from .structure import FileType
 
 logger = logging.getLogger("mathnote")
 
@@ -33,11 +35,11 @@ class TrackedText:
     def __getitem__(self, __key) -> 'TrackedText':
         return TrackedText(self.text.__getitem__(__key), source=self.source)
 
-    def filetype(self) -> NoteType:
-        suffix_map = {".typ": NoteType.Typst, ".tex": NoteType.LaTeX}
+    def filetype(self) -> FileType:
+        suffix_map = {".typ": FileType.Typst, ".tex": FileType.LaTeX}
         if self.source is None:
-            return NoteType.Unsupported
-        return suffix_map.get(self.source.suffix, NoteType.Unsupported)
+            return FileType.Unsupported
+        return suffix_map.get(self.source.suffix, FileType.Unsupported)
 
     def apply_func(self, func: Callable[[str], str]): #replace instances of modify text with this
         new_text = func(self.text)
@@ -96,7 +98,7 @@ class Flashcard:
     additional_info: dict = field(default_factory=dict)
     seen: bool = False
 
-    def filetype(self) -> NoteType:
+    def filetype(self) -> FileType:
         return self.question.filetype()
 
     def add_info(self, name: str, info: str):
@@ -213,7 +215,7 @@ class CleanStage(Stage[TrackedText, TrackedText]):
         """ It is assume the tex string passed starts with curly bracket """
         print(text.source, "source")
         print(text.filetype())
-        paren = ("{", "}") if text.filetype() == NoteType.LaTeX else ("[", "]") # TODO -currently no handling of unsupported
+        paren = ("{", "}") if text.filetype() == FileType.LaTeX else ("[", "]") # TODO -currently no handling of unsupported
 
         paren_stack = []
 
@@ -325,8 +327,8 @@ class ProofSectionFinder(SubSectionFinder):
         self.section_name_members = names if isinstance(names, list) else [names]
 
     def find_section(self, text: TrackedText) -> Section | None:
-        title_paren = ("{", "}") if text.filetype() == NoteType.LaTeX else ("(", ")") # TODO -currently no handling of unsupported
-        body_paren = ("{", "}") if text.filetype() == NoteType.LaTeX else ("[", "]") # TODO -currently no handling of unsupported
+        title_paren = ("{", "}") if text.filetype() == FileType.LaTeX else ("(", ")") # TODO -currently no handling of unsupported
+        body_paren = ("{", "}") if text.filetype() == FileType.LaTeX else ("[", "]") # TODO -currently no handling of unsupported
 
         section, member = self.is_section(text)
         if not section or not member:
@@ -371,8 +373,8 @@ class MainSectionFinder(SectionFinder):
         self.possible_names = names if isinstance(names, list) else [names]
 
     def find_section(self, text: TrackedText) -> None | Section:
-        title_paren = ("{", "}") if text.filetype() == NoteType.LaTeX else ("(", ")") # TODO -currently no handling of unsupported
-        body_paren = ("{", "}") if text.filetype() == NoteType.LaTeX else ("[", "]") # TODO -currently no handling of unsupported
+        title_paren = ("{", "}") if text.filetype() == FileType.LaTeX else ("(", ")") # TODO -currently no handling of unsupported
+        body_paren = ("{", "}") if text.filetype() == FileType.LaTeX else ("[", "]") # TODO -currently no handling of unsupported
 
         is_section, member = self.is_section(text)
         if not is_section or member is None:
@@ -419,7 +421,7 @@ class BuilderStage(Stage[TrackedText, List[Flashcard]]):
         :param section_names: gets all data from sections contained in section_names
         :returns list: [(name, section_contents)....] """
         # The issue is data has no source
-        cmd_char = '\\' if data.filetype() == NoteType.LaTeX else "#" # TODO - currently not handling unsported
+        cmd_char = '\\' if data.filetype() == FileType.LaTeX else "#" # TODO - currently not handling unsported
         flashcards = []
         counter = 0
         parent_section = None
@@ -453,7 +455,7 @@ class BuilderStage(Stage[TrackedText, List[Flashcard]]):
                 counter += 1
                 continue
             parent_section = section.name # the command title. e.g \defin{...}{...}
-            if data.filetype() == NoteType.Typst: # TODO clean this up
+            if data.filetype() == FileType.Typst: # TODO clean this up
                 section.header = TrackedText(str(section.header).replace("name: ", "").replace('"', ""), source=data.source)
             flashcards.append(
                     Flashcard(section.name, section.header, section.content)

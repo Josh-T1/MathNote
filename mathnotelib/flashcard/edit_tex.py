@@ -1,4 +1,5 @@
 from functools import partial
+
 from ..utils import config
 
 def latex_template(tex: str) -> str:

@@ -1,12 +1,12 @@
 import argparse
 import shutil
 import sys
-from .controller import CourseCommand, FlashcardCommand, NoteCommand, NoteViewer
-from .utils import config, config_dir, update_config
 import logging
 import logging.config
 from pathlib import Path
-import logging
+
+from .controller import CourseCommand, FlashcardCommand, NoteCommand, NoteViewer
+from .utils import config, config_dir, update_config
 
 
 user_config_dir = config_dir()

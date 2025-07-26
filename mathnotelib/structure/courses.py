@@ -6,7 +6,8 @@ import json
 import logging
 import shutil
 import subprocess
-from ..utils import config, open_cmd, NoteType
+from ..utils import config, open_cmd
+from .source_file import FileType
 
 logger = logging.getLogger("mathnote")
 
@@ -19,6 +20,8 @@ def number2filename_typ(n: int):
 def filename2number(p: Path):
     return int(p.stem.replace('lec_', '').lstrip("0"))
 
+
+# TODO make TypsetFile
 class Lecture():
     def __init__(self, file_path: Path) -> None:
         self.path = file_path
@@ -108,7 +111,7 @@ class Course:
 
         file_type = self.filetype()
 
-        ext = ".tex" if file_type.upper() == NoteType.LaTeX.value.upper() else ".typ"
+        ext = ".tex" if file_type.upper() == FileType.LaTeX.value.upper() else ".typ"
         files = self.lectures_path.glob(f'lec_*{ext}')
         self._lectures = sorted((Lecture(f) for f in files), key=lambda l: l.number())
         return self._lectures
@@ -196,12 +199,12 @@ class Course:
         lecture_nums: list of all numbers corresponds to a lecture
         """
         file_type = self.filetype()
-        ext = ".tex" if file_type.upper() == NoteType.LaTeX.value.upper() else ".typ"
+        ext = ".tex" if file_type.upper() == FileType.LaTeX.value.upper() else ".typ"
         main_file = self.main_path / f"main.{ext}" # TODO
         logger.debug("Updating main file")
         header, _, footer = self.get_header_footer(main_file)
 
-        if file_type.upper() == NoteType.LaTeX.value.upper():
+        if file_type.upper() == FileType.LaTeX.value.upper():
             body = ''.join([r'\input{lectures/' + number2filename_tex(number) + '}\n' for number in lecture_nums])
         else:
             body = ''.join([r'\input{lectures/' + number2filename_typ(number) + '}\n' for number in lecture_nums])
@@ -211,7 +214,7 @@ class Course:
         """ Creates a new lecture """
         filetype = self.filetype()
         new_lecture_number = 1 if not self.lectures else self.lectures[-1].number() + 1
-        if filetype.upper() == NoteType.LaTeX.value.upper():
+        if filetype.upper() == FileType.LaTeX.value.upper():
             new_lecture_path = self.lectures_path / number2filename_tex(new_lecture_number)
         else:
             new_lecture_path = self.lectures_path / number2filename_typ(new_lecture_number)
@@ -227,7 +230,7 @@ class Course:
         self.lectures.append(new_lecture)
         return new_lecture
 
-    def new_assignment(self, filetype: NoteType = NoteType.LaTeX):
+    def new_assignment(self, filetype: FileType = FileType.LaTeX):
         """
         Create new assignment using the naming convention course_course_number_A{assignment number}
         """
@@ -240,7 +243,7 @@ class Course:
                     new_num = max(new_num, match)
 
         new_num += 1
-        if filetype == NoteType.LaTeX:
+        if filetype == FileType.LaTeX:
             filename = f"{self.name.replace("-", "_")}_A{new_num}.tex"
             template = config["assignment-template-tex"]
         else:
@@ -260,7 +263,7 @@ class Course:
         returns: error code. e.i {}
         """
         # TODO allow for typst compilation
-        if self.filetype().upper() == NoteType.LaTeX.value.upper():
+        if self.filetype().upper() == FileType.LaTeX.value.upper():
             mainfile= self.main_path / "main.tex"
             logger.debug(f"Attempting to compile {mainfile}")
             result = subprocess.run(
@@ -314,13 +317,13 @@ class Courses():
         courses = [Course(course) for course in course_directories]
         return list(sorted(courses, key=_key))
 
-    def macros_path(self, note_type: NoteType = NoteType.LaTeX):
+    def macros_path(self, note_type: FileType = FileType.LaTeX):
         if note_type.value.upper() == "LATEX":
             return self.root / "Preambles" / "macros.tex"
         else:
             return self.root / "Preambles" / "macros.typ"
 
-    def preamble_path(self, note_type: NoteType = NoteType.Typst):
+    def preamble_path(self, note_type: FileType = FileType.Typst):
         if note_type.value.upper() == "LATEX":
             return self.root / "Preambles" / "preamble.tex"
         else:

@@ -2,9 +2,11 @@ from pathlib import Path
 import sys
 import logging
 import threading
+
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QStandardItemModel
 from PyQt6.QtWidgets import QListView
+
 from .flashcard_model import FlashcardModel, FlashcardNotFoundException
 from .edit_tex import open_file_with_editor
 from ..structure import Courses
@@ -48,7 +50,7 @@ class FlashcardController:
         """ Flashcards must have a question and answer, however they may have other optional fields such as a proof or note
         This methods handles behaviour associated with the optional fields
         """
-        if hasattr(self.model.current_card, SectionNames.PROOF.name): #type: ignore SectionNames built from dict with PROOF
+        if hasattr(self.model.current_card, SectionNames.PROOF.name): #type: ignore (fix?)
             self.view.show_proof_button().setHidden(False)
         else:
             self.view.show_proof_button().setHidden(True)
@@ -83,8 +85,8 @@ class FlashcardController:
             self.model.next_flashcard()
             self.handle_dynamic_data()
             self.view.flashcard_type_label().setText(f"Section: {self.model.current_card.section_name.lower()}")
-            # create some general method for handling additional info
-        except FlashcardNotFoundException as e: # Implment logging and gui message properties
+            #  TODO create some general method for handling additional info
+        except FlashcardNotFoundException as e:
             logger.error(f"Failed to show next flashcard question, {e}")
             self.view.set_error_message(str(e))
         except LatexCompilationError as e:
@@ -124,9 +126,6 @@ class FlashcardController:
         load_thread.start()
 
     def create_flashcards(self):
-        """ TODO : Using a thread to load flashcards is essentailly pointless as we dealing with cpu bound task not IO
-        If we implement multiprocessing we have to avoid lock objects as there is some issues with serializing the object...
-        We an use Queue but then we have no __len__() or clear() methods... have fun"""
         course_name, section_names, weeks, random = self.get_flashcard_pipeline_config()
         course = self.courses.get_course(course_name)
 
