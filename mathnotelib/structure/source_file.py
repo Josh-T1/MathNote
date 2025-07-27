@@ -4,17 +4,28 @@ from enum import Enum
 from typing import Optional
 import subprocess
 import shutil
+import platform
 
-from ..utils import open_cmd, rendered_sorted_key
+from ..utils import FileType
+
+def open_cmd() -> str:
+    """
+    Returns the open command for the respective operating system
+    """
+    system_name = platform.system().lower()
+    if system_name == "darwin":
+        cmd = "open"
+    elif system_name == "linux":
+        cmd = "xdg-open"
+    else:
+        cmd = "start"
+    return cmd
 
 class OutputFormat(Enum):
     PDF = "pdf"
     SVG = "svg"
 
-class FileType(Enum):
-    Typst = "Typst"
-    LaTeX = "LaTeX"
-    Unsupported = "Unsupported"
+
 
 @dataclass
 class TypsetFile:
@@ -107,7 +118,7 @@ def compile_typst(filepath: Path, options: TypsetCompileOptions):
         return result.returncode
 
     # Move files as a workaround for lack of output directory flag
-    files = sorted(filepath.glob(f"{options.resolved_output_file_stem()}*.svg"), key=rendered_sorted_key)
+    files = filepath.glob(f"{options.resolved_output_file_stem()}*.svg")
     #partial_out_name = output_filename.split(".")[0]
     for f in files:
         try:
@@ -131,7 +142,9 @@ def compile_latex_to_pdf(filepath: Path, options: TypsetCompileOptions):
         stderr = subprocess.PIPE,
         cwd = options.resolved_cwd()
         )
-
+    print(pdf_cmd)
+    print(result.stderr)
+    print(result.stdout)
     return result.returncode
 
 def compile_latex(filepath: Path, options: TypsetCompileOptions):
@@ -145,9 +158,10 @@ def compile_latex(filepath: Path, options: TypsetCompileOptions):
         svg_cmd.append(f"{options.resolved_output_dir() / options.resolved_output_file_stem()}.svg")
 
     return_code = compile_latex_to_pdf(filepath, options)
-
+    print(return_code, "return code ")
     if options.output_format == OutputFormat.PDF or return_code !=0:
         return return_code
+    print(svg_cmd)
     result_2 = subprocess.run(
           svg_cmd,
           stdout=subprocess.DEVNULL,

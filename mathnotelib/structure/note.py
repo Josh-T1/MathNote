@@ -2,12 +2,11 @@ from pathlib import Path
 import json
 import shutil
 import subprocess
-from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Optional
 
-from .source_file import OutputFormat, TypsetFile, FileType
-from ..utils import open_cmd, config, rendered_sorted_key
+from .source_file import TypsetFile, FileType, open_cmd
+from ..utils import config
 
 ROOT_DIR = Path(config['root'])
 
@@ -161,6 +160,8 @@ class Note(TypsetFile):
         open = open_cmd()
         subprocess.run([open, pdf_path], stdout=subprocess.DEVNULL, stdin=subprocess.DEVNULL, cwd=self.path.parent)
 
+
+""" TODO: unfinished """
 class NotesManager:
 
     def __init__(self, root: Path):

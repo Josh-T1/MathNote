@@ -1,10 +1,15 @@
 from pathlib import Path
 import json
-import platform
 import os
 import shutil
+from enum import Enum
 
-templates_path= Path(__file__).parent / "templates"
+templates_path = Path(__file__).parent / "templates"
+
+class FileType(Enum):
+    Typst = "Typst"
+    LaTeX = "LaTeX"
+    Unsupported = "Unsupported"
 
 def config_dir():
     if os.name == "nt":
@@ -15,7 +20,7 @@ def config_dir():
         raise OSError("Unsupported operating system")
     return config_dir
 
-def get_config() -> dict:
+def get_config() -> dict[str, str]:
     """ Checks for user defined config, otherwise sets some default settings """
     config = {
             "root": str(Path.home() / "MathNote"),
@@ -59,18 +64,6 @@ class LatexCompilationError(Exception):
 class TypstCompilationError(Exception):
     pass
 
-def open_cmd() -> str:
-    """
-    Returns the open command for the respective operating system
-    """
-    system_name = platform.system().lower()
-    if system_name == "darwin":
-        cmd = "open"
-    elif system_name == "linux":
-        cmd = "xdg-open"
-    else:
-        cmd = "start"
-    return cmd
 
 
 # TODO: fix this
@@ -135,7 +128,7 @@ class SectionNames(metaclass=ImmutableMeta):
     PROPOSITION = "proposition"
 
 # TODO update to support typst
-def update_config():
+def update_config() -> None:
     """
     Users may specify latex templates in config directory. These templates are copied into the required directories when
     cli.py is ran for the first time. If a user changes a template, this function must be called, otherwise nothing changes.
@@ -148,16 +141,15 @@ def update_config():
     shutil.copy(note_macros, root / "Notes/resources/macros.tex")
     shutil.copy(note_preamble, root / "Notes/resources/preamble.tex")
 
-
 def load_json(file: str):
     with open(file, "r") as f:
         contents = json.load(f)
     return contents
 
-def dump_json(file: str, contents: str):
+def dump_json(file: str, contents: str) -> None:
     with open(file, "w") as f:
         json.dump(contents, f)
 
-def rendered_sorted_key(path: Path):
+def rendered_sorted_key(path: Path) -> int:
     num = int(path.name.split(".")[0].split("-")[1])
     return num

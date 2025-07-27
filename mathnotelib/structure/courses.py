@@ -1,3 +1,4 @@
+import re
 from typing import TypedDict, Union
 from math import ceil
 from pathlib import Path
@@ -5,8 +6,7 @@ from datetime import datetime
 import json
 import logging
 import shutil
-import subprocess
-from ..utils import config, open_cmd
+
 from .source_file import FileType, OutputFormat, TypsetCompileOptions, TypsetFile
 
 logger = logging.getLogger("mathnote")
@@ -14,12 +14,18 @@ logger = logging.getLogger("mathnote")
 def number2filename(num: int, filetype: FileType):
     if filetype == FileType.LaTeX:
         return 'lec_{0:02d}.tex'.format(num)
-    else
+    else:
         return 'lec_{0:02d}.typ'.format(num)
 
 
 class Assignment(TypsetFile):
-    pass
+    def number(self) -> int:
+        pattern = r"-A(\d+)"
+        matches = re.findall(pattern, self.path.name)
+        if len(matches) == 0:
+            return 0
+        else:
+            return int(matches[-1])
 
 class Lecture(TypsetFile):
     def __post_init__(self):
@@ -63,18 +69,18 @@ class Course:
 
         if (main_file := main_path / "main.tex").exists():
             d["main"] = TypsetFile(main_file)
-
-        for p in assignment_path.iterdir():
-            if not p.is_file():
-                continue
-            if p.suffix in {'.typ', ".tex"}:
-                d["assignments"].append(Assignment(p))
-
-        for p in lectures_path.iterdir():
-            if not p.is_file():
-                continue
-            if p.suffix in {'.typ', ".tex"}:
-                d["lectures"].append(Lecture(p))
+        if assignment_path.exists() and assignment_path.is_dir():
+            for p in assignment_path.iterdir():
+                if not p.is_file():
+                    continue
+                if p.suffix in {'.typ', ".tex"}:
+                    d["assignments"].append(Assignment(p))
+        if lectures_path.exists() and lectures_path.is_dir():
+            for p in lectures_path.iterdir():
+                if not p.is_file():
+                    continue
+                if p.suffix in {'.typ', ".tex"}:
+                    d["lectures"].append(Lecture(p))
         return d
 
     #TODO: Rename lecture type
@@ -248,23 +254,12 @@ class Course:
         TODO: Refactor using Assignment to hide logic
         Create new assignment using the naming convention course_course_number_A{assignment number}
         """
-        new_num = 0
-        stems: list[list] = [file.stem.split("_") for file in self.assignment_path.iterdir() if file.is_file() and file.suffix == ".tex" or file.suffix == ".typ"]
-        for e in stems:
-            if len(e) == 3:
-                match = e[2].replace("A", "")
-                if match.isdigit():
-                    new_num = max(new_num, match)
+        new_num = max([lec.number() for lec in self.typset_files["lectures"]]) + 1
+        ext = "tex" if filetype == FileType.LaTeX else "typ"
+        filename = f"{self.name}-A{new_num}{ext}"
+        template = config[f"assignment-template-{ext}"]
 
-        new_num += 1
-        if filetype == FileType.LaTeX:
-            filename = f"{self.name.replace("-", "_")}_A{new_num}.tex"
-            template = config["assignment-template-tex"]
-        else:
-            filename = f"{self.name.replace("-", "_")}_A{new_num}.typ"
-            template = config["assignment-template-typ"]
-
-        assignment_path = self.assignment_path / filename
+        assignment_path = self.path / "assignments" / filename
         if assignment_path.is_file():
             raise ValueError
         shutil.copy(template, assignment_path)

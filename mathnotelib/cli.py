@@ -9,6 +9,11 @@ from .controller import CourseCommand, FlashcardCommand, NoteCommand, NoteViewer
 from .utils import config, config_dir, update_config
 
 
+"""
+TODO: deal with typst files aswel
+"""
+
+
 user_config_dir = config_dir()
 root_dir = Path(config["root"])
 note_dir = root_dir / "Notes"

@@ -8,8 +8,7 @@ from pathlib import Path
 from abc import abstractmethod, ABC
 from dataclasses import dataclass, field
 
-from .utils import SectionNamesDescriptor, config
-from .structure import FileType
+from .utils import SectionNamesDescriptor, config, FileType
 
 logger = logging.getLogger("mathnote")
 

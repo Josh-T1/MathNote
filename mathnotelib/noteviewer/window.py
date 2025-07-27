@@ -11,11 +11,10 @@ from PyQt6.QtCore import QEvent, QFileSystemWatcher, QModelIndex, QProcess, QTim
 from PyQt6.QtSvgWidgets import QGraphicsSvgItem, QSvgWidget
 from PyQt6 import QtCore
 
-from ..structure import TypsetCompileOptions, compile_latex, compile_typst, Note, FileType, TypsetFile
-from .style import MAIN_WINDOW_CSS, SVG_VIEWER_CSS, TOGGLE_BUTTON_CSS, TREE_VIEW_CSS
-from ..utils import  config, rendered_sorted_key
-from ..structure import NotesManager, Courses, Category, OutputFormat
 
+from .style import MAIN_WINDOW_CSS, SVG_VIEWER_CSS, TOGGLE_BUTTON_CSS, TREE_VIEW_CSS
+from ..utils import config, rendered_sorted_key
+from ..structure import NotesManager, Courses, Category, OutputFormat, TypsetCompileOptions, TypsetFile
 
 ROOT_DIR = Path(config["root"])
 VIEWER_SIZE = (800, 1000)
@@ -217,19 +216,14 @@ class Navbar(QWidget):
         if item.data(FILE_ROLE) is not None:
 
             file: TypsetFile = item.data(FILE_ROLE)
-
             tmpdir = tempfile.TemporaryDirectory()
             tmpdir_path = Path(tmpdir.name)
 
-            options = TypsetCompileOptions(file, OutputFormat.SVG, multi_page=True)
+            options = TypsetCompileOptions(file.path, OutputFormat.SVG, multi_page=True)
             options.set_output_dir(tmpdir_path)
             options.set_output_file_stem(OUTPUT_FILE_STEM)
 
-            if file.file_type() == FileType.Typst:
-                compile_typst(file, options)
-
-            elif file.file_type() == FileType.LaTeX:
-                compile_latex(file, options)
+            return_code = file.compile(options)
             svg_files = sorted(tmpdir_path.glob(f"{OUTPUT_FILE_STEM}*.svg"), key=rendered_sorted_key)
             self.update_svg_func([str(f) for f in svg_files], tmpdir=tmpdir)
 
@@ -254,23 +248,6 @@ class Navbar(QWidget):
                 self.tree.collapse(index)
             else:
                 self.tree.expand(index)
-
-        # TODO handle compilation failure
-        elif item.data(COURSE_FILE_ROLE):
-            # TODO handle svg vs tex
-            pdf: str = item.data(COURSE_FILE_ROLE)
-            pdf_path = Path(pdf)
-            if not pdf_path.is_file():
-                return
-            tmpdir = tempfile.TemporaryDirectory()
-            tmpdir_path = Path(tmpdir.name)
-            output_path = tmpdir_path / f"{OUTPUT_FILE_STEM}-%d.pdf"
-            cmd = ["pdf2svg", pdf, str(output_path), "all"]
-
-            result = subprocess.run(cmd)
-
-            svg_files = sorted(tmpdir_path.glob(f"{OUTPUT_FILE_STEM}*.svg"), key=rendered_sorted_key)
-            self.update_svg_func([str(f) for f in svg_files], tmpdir=tmpdir)
 
 
     def _load_item(self, item: QStandardItem, cat: Category):
@@ -316,10 +293,10 @@ class Navbar(QWidget):
             course_item = QStandardItem(name)
             course_item.setData(True, COURSE_CONTAINER_ROLE)
             root_course_item.appendRow(course_item)
-
-            main_item = QStandardItem("main")
-            main_item.setData(course.main_path / "main.pdf", FILE_ROLE)
-            course_item.appendRow(main_item)
+            if (main_file := course.typset_files["main"]) is not None:
+                main_item = QStandardItem("main")
+                main_item.setData(main_file, FILE_ROLE)
+                course_item.appendRow(main_item)
 
     def toggle_tree(self):
         self.tree_visible = not self.tree_visible
