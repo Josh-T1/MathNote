@@ -8,6 +8,11 @@ import platform
 
 from ..utils import FileType
 
+"""
+TODO: we get errors from latexmk, but output is still produced. Look into different error code meanings.
+Currently we can just check for output file to validate compilation
+"""
+
 def open_cmd() -> str:
     """
     Returns the open command for the respective operating system
@@ -130,9 +135,10 @@ def compile_typst(filepath: Path, options: TypsetCompileOptions):
 
 
 def compile_latex_to_pdf(filepath: Path, options: TypsetCompileOptions):
-    pdf_cmd = ["pdflatex",
-               "-interaction=nonstopmode",
-               f"-output-dir={options.resolved_output_dir()}",
+    pdf_cmd = ["latexmk",
+               "-pdf",
+               "-silent",
+               f"-outdir={options.resolved_output_dir()}",
                f"-jobname={options.resolved_output_file_stem()}",
                str(filepath)
                ]
@@ -142,9 +148,6 @@ def compile_latex_to_pdf(filepath: Path, options: TypsetCompileOptions):
         stderr = subprocess.PIPE,
         cwd = options.resolved_cwd()
         )
-    print(pdf_cmd)
-    print(result.stderr)
-    print(result.stdout)
     return result.returncode
 
 def compile_latex(filepath: Path, options: TypsetCompileOptions):
@@ -158,10 +161,11 @@ def compile_latex(filepath: Path, options: TypsetCompileOptions):
         svg_cmd.append(f"{options.resolved_output_dir() / options.resolved_output_file_stem()}.svg")
 
     return_code = compile_latex_to_pdf(filepath, options)
-    print(return_code, "return code ")
-    if options.output_format == OutputFormat.PDF or return_code !=0:
+
+    output_file = options.resolved_output_dir() / f"{options.resolved_output_file_stem()}.pdf"
+    if options.output_format == OutputFormat.PDF or not output_file.exists():
         return return_code
-    print(svg_cmd)
+
     result_2 = subprocess.run(
           svg_cmd,
           stdout=subprocess.DEVNULL,

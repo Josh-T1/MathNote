@@ -26,8 +26,7 @@ SVG_FILE_LIVE = "/tmp/live.svg"
 FILE_ROLE = Qt.ItemDataRole.UserRole + 1
 DIR_ROLE = Qt.ItemDataRole.UserRole + 2
 LOADED_ROLE = Qt.ItemDataRole.UserRole + 3
-COURSE_FILE_ROLE = Qt.ItemDataRole.UserRole + 4
-COURSE_CONTAINER_ROLE = Qt.ItemDataRole.UserRole + 5
+COURSE_CONTAINER_ROLE = Qt.ItemDataRole.UserRole + 4
 
 class UpdateSvgCallback(Protocol):
     def __call__(self, path: list[str], tmpdir: Optional[tempfile.TemporaryDirectory]) -> None:...
@@ -203,11 +202,7 @@ class Navbar(QWidget):
             if loaded is False:
                 self._load_item(item, cat)
 
-    # How do I deal with courses?
-    # TODO add lazy compile - check if pdf exists
-    # TODO compile in batches
     def _item_clicked_callback(self, index: QModelIndex):
-
         item = self.model.itemFromIndex(index)
         if item is None:
             return
