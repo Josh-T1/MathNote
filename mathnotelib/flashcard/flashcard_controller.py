@@ -5,7 +5,7 @@ import threading
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QStandardItemModel
-from PyQt6.QtWidgets import QListView
+from PyQt6.QtWidgets import QApplication, QListView
 
 from .flashcard_model import FlashcardModel, FlashcardNotFoundException
 from .edit_tex import open_file_with_editor
@@ -40,11 +40,15 @@ class FlashcardController:
         courses = self.courses.courses.keys()
         self.view.course_combo().addItems(courses)
 
-    def run(self, app):
+    def run(self, app: QApplication | None):
         logger.debug(f"Calling {self.run}")
-        self.view.show()
-        self.model.compile_thread.start()
-        sys.exit(app.exec())
+        if app is not None:
+            self.view.show()
+            self.model.compile_thread.start()
+            sys.exit(app.exec())
+        else:
+            self.model.compile_thread.start()
+            self.view.show()
 
     def handle_dynamic_data(self):
         """ Flashcards must have a question and answer, however they may have other optional fields such as a proof or note

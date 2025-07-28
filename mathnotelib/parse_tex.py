@@ -49,6 +49,9 @@ class TrackedText:
         new_text = re.sub(pattern, repl, self.text)
         return TrackedText(new_text, source=self.source)
 
+    def replace(self, old: str, new: str):
+        return TrackedText(self.text.replace(old, new), source=self.source)
+
     def encode(self, encoding: str = 'utf-8', errors: str = 'strict') -> bytes:
         return self.text.encode(encoding=encoding, errors=errors)
 
@@ -217,7 +220,9 @@ class CleanStage(Stage[TrackedText, TrackedText]):
 
     def process(self, data: TrackedText) -> TrackedText:
         logger.debug(f"Starting {self.process}")
+        print("YES 1")
         tracked_string = self.remove_comments(data)
+        print("YES")
         tracked_string = self.remove_macros(tracked_string)
         logger.debug(f"Finished {self.process}")
         return tracked_string
@@ -257,13 +262,15 @@ class CleanStage(Stage[TrackedText, TrackedText]):
         ** Limited to replacing macros of the form: \\macro_name{title}{tex}. This can not handle more complex macros
         :param tex: latex code as string
         :param macros: dictionary with key values of the form; macro_name: macro_dict_info. ie {defin: {command_in_tex: tex, ....},...}
+
+        TODO: Currently we perform operation on TrackedText and the string representation. Change so that we only deal with one type...
         """
         text_pcs: list[TrackedText] = []
         counter: int = 0
 
         while counter < len(text):
 
-            if text[counter] != '\\':
+            if str(text[counter]) != '\\':
                 text_pcs.append(text[counter])
                 counter += 1
                 continue
@@ -277,34 +284,33 @@ class CleanStage(Stage[TrackedText, TrackedText]):
 
             end_cmd_index = counter + len(cmd)  # -1 to accound for backslash character being in command, we want all end_*_index variables to be inclusive
             arg = self._find_arg(text[end_cmd_index +1:])
-
             if arg is None:
                 logging.warn("Something went wrong while calling clean_self.tex")
                 break
 
             cmd_template = self.macros[cmd]["command"]
             cleaned_arg = self.remove_macros(arg)
-            cleaned_arg = self.add_arg_spaces(cmd_template, cleaned_arg)
+            cleaned_arg = self.add_arg_spaces(cmd_template, str(cleaned_arg))
 
-            new_cmd = cmd_template.replace("#1", cleaned_arg)
+            new_cmd = cmd_template.replace("#1", str(cleaned_arg))
             num_brackets_ignored = 2
 
             if str(text[counter-1]).isalpha(): # Add space character to prevent joining text, however ensure previous charcater is
-                new_cmd = " " + new_cmd
+                new_cmd = " " + str(new_cmd)
             new_cmd += " "
-            text_pcs.append(TrackedText(new_cmd, source=cleaned_arg.source))
+            text_pcs.append(TrackedText(new_cmd, source=text.source))
             counter = len(arg) + end_cmd_index + num_brackets_ignored +1 #This sets counter equal to last character in command, +1 to move to character after command
         new_text = reduce(lambda x, y: x + y, text_pcs)
         return new_text
 
-    def add_arg_spaces(self, command: TrackedText, arg: TrackedText) -> TrackedText:
-        if "#1" not in str(command): #TODO, add __contains__ for TrackedText
-            return TrackedText("")
+    def add_arg_spaces(self, command: str, arg: str) -> str:
+        if "#1" not in command: #TODO, add __contains__ for TrackedText
+            return ""
         command_split = command.split("#1")
         if command_split[1][0].isalpha():
-            arg += TrackedText(" ")
+            arg += " "
         if command_split[0][-1].isalpha():
-            arg = reduce(lambda x, y: x + y, command_split)
+            arg = " " + arg
         return arg
 
 @dataclass
@@ -528,6 +534,7 @@ class FlashcardsPipeline:
         self.last_output_type = output_type
 
     def __iter__(self) -> Generator[List[Flashcard], None, None]:
+        print(self.stages)
         valid = get_origin(self.last_output_type) == list and get_args(self.last_output_type) == (Flashcard,)
         if not valid:
             raise TypeError(f"Invalid pipeline: expected last stage output type to be List[Flashcard], got {self.last_output_type}")

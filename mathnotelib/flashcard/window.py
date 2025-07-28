@@ -292,7 +292,7 @@ class PdfWindow(QWidget):
             self.document = None
             raise LatexCompilationError(f"Failed to compile card: {pdf_path}. Load status: {load_status}")
 
-class MainWindow(QMainWindow):
+class FlashcardMainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.resize(1000, 600)

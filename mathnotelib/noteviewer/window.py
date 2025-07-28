@@ -1,4 +1,3 @@
-import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -11,10 +10,10 @@ from PyQt6.QtCore import QEvent, QFileSystemWatcher, QModelIndex, QProcess, QTim
 from PyQt6.QtSvgWidgets import QGraphicsSvgItem, QSvgWidget
 from PyQt6 import QtCore
 
-
 from .style import MAIN_WINDOW_CSS, SVG_VIEWER_CSS, TOGGLE_BUTTON_CSS, TREE_VIEW_CSS
 from ..utils import config, rendered_sorted_key
 from ..structure import NotesManager, Courses, Category, OutputFormat, TypsetCompileOptions, TypsetFile
+from ..flashcard import FlashcardMainWindow, CompilationManager, FlashcardModel, FlashcardController
 
 ROOT_DIR = Path(config["root"])
 VIEWER_SIZE = (800, 1000)
@@ -31,6 +30,39 @@ COURSE_CONTAINER_ROLE = Qt.ItemDataRole.UserRole + 4
 class UpdateSvgCallback(Protocol):
     def __call__(self, path: list[str], tmpdir: Optional[tempfile.TemporaryDirectory]) -> None:...
 
+
+class LauncherWidget(QWidget):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.main_layout = QHBoxLayout()
+        self.setLayout(self.main_layout)
+        self.setContentsMargins(0, 0, 0, 0)
+        self.initUI()
+
+    def initUI(self):
+        self._create_widgets()
+        self._configure_widgets()
+        self._add_widgets()
+
+    def _create_widgets(self):
+        self.flashcard_button = QPushButton("Flashcards")
+
+    def _add_widgets(self):
+        self.main_layout.addWidget(self.flashcard_button)
+
+    def _configure_widgets(self):
+        self.flashcard_button.clicked.connect(self.launch_flashcards)
+
+    # TODO ensure that we wait for flashcards to terminate properly
+    def launch_flashcards(self):
+        self.compilation_manager = CompilationManager()
+        self.flashcard_model = FlashcardModel(self.compilation_manager)
+        self._window = FlashcardMainWindow()
+        self.controller = FlashcardController(self._window, self.flashcard_model, config) #type: ignore
+        self._window.setCloseCallback(self.controller.close)
+        self.controller.run(None)
+
+
 class ZMultiPageViewer(QGraphicsView):
     def __init__(self):
         super().__init__()
@@ -38,6 +70,7 @@ class ZMultiPageViewer(QGraphicsView):
         self.setScene(self._scene)
         self.setBackgroundBrush(QBrush(Qt.GlobalColor.white))
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.setContentsMargins(0, 0, 0, 0)
         self._zoom: float = 1.0
         self._zoom_min: float = 1.0
         self._zoom_max: float = 5.0
@@ -140,6 +173,42 @@ class ZMultiPageViewer(QGraphicsView):
         self.resetTransform()
         self._zoom = 1
 
+
+class CollapsedNavBar(QWidget):
+    def __init__(self) -> None:
+        super().__init__()
+        self.main_layout = QVBoxLayout()
+        self.main_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.setFixedWidth(50)
+        self.setLayout(self.main_layout)
+        self.initUI()
+
+    def initUI(self):
+        self._create_widgets()
+        self._configure_widgets()
+        self._add_widgets()
+
+    def _create_widgets(self):
+        self.toggle_button = QPushButton('\u25B6')
+
+    def _add_widgets(self):
+        self.main_layout.addWidget(self.toggle_button, alignment=Qt.AlignmentFlag.AlignLeft)
+        spacer = QSpacerItem(0, 0, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
+        self.main_layout.addSpacerItem(spacer)
+
+    def _configure_widgets(self):
+        self.toggle_button.setStyleSheet(TOGGLE_BUTTON_CSS)
+
+    def connect_toggle_button(self, callback: Callable[[], None]):
+        self.toggle_button.clicked.connect(callback)
+
+    def connect_new_note(self, callback: Callable[[], None]):
+        pass
+    def connect_new_cat(self, callback: Callable[[], None]):
+        pass
+
+
 class Navbar(QWidget):
     file_opened = pyqtSignal(str)
 
@@ -153,6 +222,7 @@ class Navbar(QWidget):
 
         self.main_layout = QVBoxLayout()
         self.main_layout.setContentsMargins(0, 0, 0, 0)
+
         self.setLayout(self.main_layout)
         self.setFixedWidth(200)
 
@@ -165,16 +235,18 @@ class Navbar(QWidget):
         self.populate_tree()
 
     def _create_widgets(self):
-        self.toggle_button = QPushButton("x")
+        self.toggle_button = QPushButton("x") # TODO rename to minimze
         self.menu_bar_layout = QHBoxLayout()
         self.model = QStandardItemModel()
         self.tree = QTreeView()
         self.root_item = self.model.invisibleRootItem()
+        self.launcher_widget = LauncherWidget()
 
     def _configure_widgets(self):
+        # Main layout
         self.toggle_button.setStyleSheet(TOGGLE_BUTTON_CSS)
         self.toggle_button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-        self.toggle_button.clicked.connect(self.toggle_tree)
+#        self.toggle_button.clicked.connect(self.toggle_tree)
 
         self.tree.setModel(self.model)
         self.tree.setFrameShape(QFrame.Shape.NoFrame)
@@ -189,6 +261,7 @@ class Navbar(QWidget):
         self.menu_bar_layout.addSpacerItem(QSpacerItem(15, 15, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed))
         self.main_layout.addLayout(self.menu_bar_layout)
         self.main_layout.addWidget(self.tree)
+        self.main_layout.addWidget(self.launcher_widget)
 
     def _expand_callback(self, index: QModelIndex):
         # Remark: the item will originally expand with the placeholder element. Once this occurs
@@ -221,7 +294,6 @@ class Navbar(QWidget):
             return_code = file.compile(options)
             svg_files = sorted(tmpdir_path.glob(f"{OUTPUT_FILE_STEM}*.svg"), key=rendered_sorted_key)
             self.update_svg_func([str(f) for f in svg_files], tmpdir=tmpdir)
-
 
         # For any item with this role we must do 2 things:
         #   1. Check to see if we should expand or collapse tree around item
@@ -293,9 +365,18 @@ class Navbar(QWidget):
                 main_item.setData(main_file, FILE_ROLE)
                 course_item.appendRow(main_item)
 
-    def toggle_tree(self):
-        self.tree_visible = not self.tree_visible
-#        self.tree.setVisible(self.tree_visible)
+    def toggle_callback(self):
+        pass
+
+    def connect_toggle_button(self, callback: Callable[[], None]):
+        self.toggle_button.clicked.connect(callback)
+
+    def connect_new_note(self, callback: Callable[[], None]):
+        pass
+
+    def connect_new_cat(self, callback: Callable[[], None]):
+        pass
+
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -306,10 +387,12 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(self.widget)
         self.setContentsMargins(0, 0, 0, 0)
         self.initUi()
-
+        self.main_layout.setSpacing(0)
         # TODO
 #        self.compile_typst(TYP_FILE_LIVE)
         self.watcher.addPath(TYP_FILE_LIVE)
+
+        self._nav_minimal: bool = False
 
     def initUi(self):
         self._create_widgets()
@@ -321,15 +404,20 @@ class MainWindow(QMainWindow):
         self.viewer = ZMultiPageViewer()
         self.watcher = QFileSystemWatcher()
         self.nav_bar = Navbar(self.update_svg)
+        self.minimal_nav_bar = CollapsedNavBar()
+
 
     def _configure_widgets(self):
         self.setStyleSheet(MAIN_WINDOW_CSS)
         self.viewer.setFixedSize(800, 1000)
         self.watcher.fileChanged.connect(self.on_typ_changed)
+        self.minimal_nav_bar.connect_toggle_button(self._toggle_nav_callback)
+        self.nav_bar.connect_toggle_button(self._toggle_nav_callback)
 
     def _add_widgets(self):
         self.addToolBar(self.toolbar)
         self.main_layout.addWidget(self.nav_bar, alignment=Qt.AlignmentFlag.AlignLeft)
+#        self.main_layout.addWidget(self.minimal_nav_bar, alignment=Qt.AlignmentFlag.AlignLeft)
         self.main_layout.addWidget(self.viewer, alignment=Qt.AlignmentFlag.AlignCenter)
 
     def on_typ_changed(self):
@@ -346,6 +434,17 @@ class MainWindow(QMainWindow):
         paths = path if isinstance(path, list) else [path]
         if all(Path(p).exists() for p in paths):
             self.viewer.load(path, tmpdir=tmpdir)
+
+    def _toggle_nav_callback(self):
+        self._nav_minimal = not self._nav_minimal
+        if self._nav_minimal:
+            self.main_layout.removeWidget(self.nav_bar)
+            self.nav_bar.setParent(None)
+            self.main_layout.insertWidget(0, self.minimal_nav_bar)
+        else:
+            self.main_layout.removeWidget(self.minimal_nav_bar)
+            self.minimal_nav_bar.setParent(None)
+            self.main_layout.insertWidget(0, self.nav_bar)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

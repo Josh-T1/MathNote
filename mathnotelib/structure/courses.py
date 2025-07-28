@@ -301,7 +301,8 @@ class Courses():
     """ Container for all Course objects """
     def __init__(self, config: dict[str, str]):
         self.config = config
-        self.root = Path(config["root"]) / "Courses"
+        self.root = Path(config["root"])
+        self.course_root = self.root / "Courses"
         self._courses: dict[str, Course] = {}
 
     def _find_courses(self, _key = lambda c: c.name) -> list[Course]:
@@ -309,7 +310,7 @@ class Courses():
         _key: key for sorting course objects. Default key is sort by name
         returns: list of courses sorted by _key
         """
-        course_directories = [x for x in self.root.iterdir() if x.is_dir() and (x / "course_info.json").is_file()]
+        course_directories = [x for x in self.course_root.iterdir() if x.is_dir() and (x / "course_info.json").is_file()]
         courses = [Course(course) for course in course_directories]
         return list(sorted(courses, key=_key))
 
@@ -371,7 +372,7 @@ class Courses():
             logger.info(f"Failed to create, course with name={name} already exists")
             raise ValueError(f"Attempting to create course with existing name: {name}")
 
-        course_path = self.root / name
+        course_path = self.course_root / name
         course_path.mkdir()
 
         main_dir = course_path / "main"

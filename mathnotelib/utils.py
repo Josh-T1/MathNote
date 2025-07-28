@@ -20,7 +20,7 @@ def config_dir():
         raise OSError("Unsupported operating system")
     return config_dir
 
-def get_config() -> dict[str, str]:
+def get_config(): # TODO Type hint
     """ Checks for user defined config, otherwise sets some default settings """
     config = {
             "root": str(Path.home() / "MathNote"),

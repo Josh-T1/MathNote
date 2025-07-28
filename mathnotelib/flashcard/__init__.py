@@ -1,9 +1,9 @@
-from .window import MainWindow
+from .window import FlashcardMainWindow
 from .flashcard_model import FlashcardModel, CompilationManager
 from .flashcard_controller import FlashcardController
 
 __all__ = [
-        "MainWindow",
+        "FlashcardMainWindow",
         "FlashcardController",
         "CompilationManager",
         "FlashcardController",

@@ -11,8 +11,8 @@ from typing import Optional, OrderedDict, Deque
 from collections import deque
 
 from .edit_tex import latex_template, typst_template
-from ..structure import Courses, FileType
-from ..utils import SectionNames, SectionNamesDescriptor, config
+from ..structure import Courses
+from ..utils import SectionNames, SectionNamesDescriptor, config, FileType
 from ..parse_tex import BuilderStage, CleanStage, DataGenerator, Flashcard, FlashcardCache, FileType, FlashcardsPipeline, MainSectionFinder, ProofSectionFinder, TrackedText, get_hack_macros, load_macros
 
 logger = logging.getLogger("mathnote")

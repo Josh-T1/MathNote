@@ -31,7 +31,6 @@ class OutputFormat(Enum):
     SVG = "svg"
 
 
-
 @dataclass
 class TypsetFile:
     path: Path

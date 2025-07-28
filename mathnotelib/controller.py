@@ -8,8 +8,8 @@ import sys
 from PyQt6.QtWidgets import QApplication
 
 # from .noteviewer import MainWindow
-from .utils import load_json, dump_json
-from .structure import Courses, Course, NotesManager, Note, FileType
+from .utils import load_json, dump_json, FileType
+from .structure import Courses, Course, NotesManager, Note
 
 logger = logging.getLogger("mathnote")
 
@@ -22,6 +22,7 @@ class NoteViewer(Command):
         self.config = project_config
 
     def cmd(self, namespace: argparse.Namespace) -> None:
+        pass
 #        app = QApplication(sys.argv)
 #        window = MainWindow()
 #        window.resize(800, 600)
@@ -70,9 +71,9 @@ class FlashcardCommand(Command):
     def _ensure_import(cls):
         if cls._app is None or cls._window is None or cls._model is None or cls._compilation_manager is None or cls._controller is None:
             from PyQt6.QtWidgets import QApplication
-            from .flashcard import FlashcardModel, CompilationManager, MainWindow, FlashcardController
+            from .flashcard import FlashcardModel, CompilationManager, FlashcardMainWindow, FlashcardController
             cls._app = QApplication([])
-            cls._window = MainWindow
+            cls._window = FlashcardMainWindow
             cls._model = FlashcardModel
             cls._compilation_manager = CompilationManager
             cls._controller = FlashcardController
