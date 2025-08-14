@@ -30,48 +30,8 @@ class OutputFormat(Enum):
     PDF = "pdf"
     SVG = "svg"
 
-
 @dataclass
-class TypsetFile:
-    path: Path
-
-    def file_type(self) -> FileType:
-        map = {".tex": FileType.LaTeX, ".typ": FileType.Typst}
-        return map.get(self.path.suffix, FileType.Unsupported)
-
-    # TODO: improve error msg, return code 1 vs 0 is not ideal
-    def compile(self, options: "TypsetCompileOptions") -> int:
-        if self.file_type() == FileType.LaTeX:
-            code = compile_latex(self.path, options)
-        elif self.file_type() == FileType.Typst:
-            code = compile_typst(self.path, options)
-        else:
-            code = 1
-        return code
-
-    def pdf_path(self) -> Path | None:
-        pdf_path = self.path.parent / self.path.with_suffix(".pdf").name
-        if pdf_path.exists():
-            return pdf_path
-        return None
-
-    def open_pdf(self, lazy: bool=True) -> int:
-        pdf_path = self.pdf_path()
-        if pdf_path is None or lazy is False:
-            options = TypsetCompileOptions(self.path, output_format=OutputFormat.PDF)
-            self.compile(options)
-
-            pdf_path = self.pdf_path()
-            if pdf_path is None:
-                return False
-
-        open = open_cmd()
-        result = subprocess.run([open, pdf_path], stdout=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
-        return result.returncode
-
-
-@dataclass
-class TypsetCompileOptions:
+class CompileOptions:
     filepath: Path
     output_format: OutputFormat
     multi_page: bool = True
@@ -103,7 +63,46 @@ class TypsetCompileOptions:
             return self._output_dir
         return self.filepath.parent
 
-def compile_typst(filepath: Path, options: TypsetCompileOptions):
+@dataclass
+class SourceFile:
+    path: Path
+
+    def file_type(self) -> FileType:
+        map = {".tex": FileType.LaTeX, ".typ": FileType.Typst}
+        return map.get(self.path.suffix, FileType.Unsupported)
+
+    # TODO: improve error msg, return code 1 vs 0 is not ideal
+    def compile(self, options: CompileOptions) -> int:
+        if self.file_type() == FileType.LaTeX:
+            code = compile_latex(self.path, options)
+        elif self.file_type() == FileType.Typst:
+            code = compile_typst(self.path, options)
+        else:
+            code = 1
+        return code
+
+    def pdf_path(self) -> Path | None:
+        pdf_path = self.path.parent / self.path.with_suffix(".pdf").name
+        if pdf_path.exists():
+            return pdf_path
+        return None
+
+    def open_pdf(self, lazy: bool=True) -> int:
+        pdf_path = self.pdf_path()
+        if pdf_path is None or lazy is False:
+            options = CompileOptions(self.path, output_format=OutputFormat.PDF)
+            self.compile(options)
+
+            pdf_path = self.pdf_path()
+            if pdf_path is None:
+                return False
+
+        open = open_cmd()
+        result = subprocess.run([open, pdf_path], stdout=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
+        return result.returncode
+
+
+def compile_typst(filepath: Path, options: CompileOptions):
     cmd = ["typst", "compile", "--format", options.output_format.value, str(filepath)]
     if options.output_format == OutputFormat.SVG and options.multi_page:
         cmd.append(f"{options.resolved_output_dir() / options.resolved_output_file_stem()}-{{p}}.svg")
@@ -133,7 +132,7 @@ def compile_typst(filepath: Path, options: TypsetCompileOptions):
 
 
 
-def compile_latex_to_pdf(filepath: Path, options: TypsetCompileOptions):
+def compile_latex_to_pdf(filepath: Path, options: CompileOptions):
     pdf_cmd = ["latexmk",
                "-pdf",
                "-silent",
@@ -149,7 +148,7 @@ def compile_latex_to_pdf(filepath: Path, options: TypsetCompileOptions):
         )
     return result.returncode
 
-def compile_latex(filepath: Path, options: TypsetCompileOptions):
+def compile_latex(filepath: Path, options: CompileOptions):
     svg_cmd = ["pdf2svg",
                f"{options.resolved_output_dir() / options.resolved_output_file_stem()}.pdf",
                ]

@@ -10,6 +10,7 @@ from PyQt6.QtWidgets import QApplication
 # from .noteviewer import MainWindow
 from .utils import load_json, dump_json, FileType
 from .structure import Courses, Course, NotesManager, Note
+from .noteviewer import MainWindow
 
 logger = logging.getLogger("mathnote")
 
@@ -22,12 +23,11 @@ class NoteViewer(Command):
         self.config = project_config
 
     def cmd(self, namespace: argparse.Namespace) -> None:
-        pass
-#        app = QApplication(sys.argv)
-#        window = MainWindow()
-#        window.resize(800, 600)
-#        window.show()
-#        sys.exit(app.exec())
+        app = QApplication(sys.argv)
+        window = MainWindow()
+        window.resize(800, 600)
+        window.show()
+        sys.exit(app.exec())
 
 
 class FlashcardCommand(Command):

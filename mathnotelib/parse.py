@@ -220,9 +220,7 @@ class CleanStage(Stage[TrackedText, TrackedText]):
 
     def process(self, data: TrackedText) -> TrackedText:
         logger.debug(f"Starting {self.process}")
-        print("YES 1")
         tracked_string = self.remove_comments(data)
-        print("YES")
         tracked_string = self.remove_macros(tracked_string)
         logger.debug(f"Finished {self.process}")
         return tracked_string

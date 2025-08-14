@@ -1,5 +1,5 @@
 import re
-from typing import TypedDict, Union
+from typing import Literal, TypedDict, Union
 from math import ceil
 from pathlib import Path
 from datetime import datetime
@@ -7,7 +7,7 @@ import json
 import logging
 import shutil
 
-from .source_file import FileType, OutputFormat, TypsetCompileOptions, TypsetFile
+from .source_file import FileType, OutputFormat, CompileOptions, SourceFile
 
 logger = logging.getLogger("mathnote")
 
@@ -18,7 +18,7 @@ def number2filename(num: int, filetype: FileType):
         return 'lec_{0:02d}.typ'.format(num)
 
 
-class Assignment(TypsetFile):
+class Assignment(SourceFile):
     def number(self) -> int:
         pattern = r"-A(\d+)"
         matches = re.findall(pattern, self.path.name)
@@ -27,7 +27,7 @@ class Assignment(TypsetFile):
         else:
             return int(matches[-1])
 
-class Lecture(TypsetFile):
+class Lecture(SourceFile):
     def __post_init__(self):
         assert self.file_type() != FileType.Unsupported
 
@@ -47,7 +47,7 @@ class Lecture(TypsetFile):
 
 
 class CourseTypesetFiles(TypedDict):
-    main: TypsetFile | None
+    main: SourceFile | None
     assignments: list[Assignment]
     lectures: list[Lecture]
 
@@ -68,7 +68,7 @@ class Course:
         lectures_path = main_path / "lectures"
 
         if (main_file := main_path / "main.tex").exists():
-            d["main"] = TypsetFile(main_file)
+            d["main"] = SourceFile(main_file)
         if assignment_path.exists() and assignment_path.is_dir():
             for p in assignment_path.iterdir():
                 if not p.is_file():
@@ -84,8 +84,16 @@ class Course:
         return d
 
     #TODO: Rename lecture type
-    def lecture_type(self) -> str:
-        return self.course_info.get("filetype", "LaTeX")
+    def lecture_type(self, fallback: FileType=FileType.LaTeX) -> FileType:
+        """
+        fallback: If filetype key is missing from course_info dict then we default to returning LaTeX
+        """
+        # Add log message for missing key in .json file
+        raw_filetype_str = self.course_info.get("filetype", fallback.value)
+        filetype_normalized = raw_filetype_str.upper()
+        filetype_map: dict[str, FileType] = {"LATEX": FileType.LaTeX, "TYPST": FileType.Typst, "UNSUPPORTED": FileType.Unsupported}
+        filetype = filetype_map.get(filetype_normalized, fallback)
+        return filetype
 
     def last_edit(self):
         """ Returns time in secods since a lecture file has been edited """
@@ -265,7 +273,7 @@ class Course:
         shutil.copy(template, assignment_path)
 
 
-    def compile_main(self, options: TypsetCompileOptions | None = None):
+    def compile_main(self, options: CompileOptions | None = None):
         """ Compile main file
         lectures_only: If True pdf will only contain lecture notes, otherwise endnotes and prelimanary sections
         will be included
@@ -274,7 +282,7 @@ class Course:
 
         if (main_file := self.typset_files["main"]) is not None:
             if options is None:
-                options = TypsetCompileOptions(main_file.path, OutputFormat.PDF)
+                options = CompileOptions(main_file.path, OutputFormat.PDF)
             result_code = main_file.compile(options)
         else:
             result_code = 1

@@ -5,7 +5,7 @@ import subprocess
 from dataclasses import dataclass, field
 from typing import Optional
 
-from .source_file import TypsetFile, FileType, open_cmd
+from .source_file import SourceFile, FileType, open_cmd
 from ..utils import config
 
 ROOT_DIR = Path(config['root'])
@@ -30,7 +30,6 @@ class Category:
     """
     Category continaing a 'Tree' of child notes and child categories
     """
-
     def __init__(self, metadata: Metadata, path: Path, children: Optional[list['Category']]  = None, parent: Optional['Category'] = None):
         self.metadata = metadata
         self.path = path
@@ -80,7 +79,6 @@ class Category:
         self._children = children
         return self._children
 
-
     @property
     def name(self) -> str:
         return self.path.stem
@@ -109,7 +107,7 @@ class Category:
         return res
 
 @dataclass
-class Note(TypsetFile):
+class Note(SourceFile):
     """ TODO """
     local_metadata: Metadata
     category: Category

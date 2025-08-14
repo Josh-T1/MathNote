@@ -12,6 +12,22 @@ QPushButton {
 }
 """
 
+BUILDER_LIST_CSS = """
+QListView {
+    background-color: #2E2E2E;
+    color: #d3d3d3;
+    border: 1px solid #444;
+    }
+QListView::item:selected {
+    background-color: #444;
+    color: white;
+    }
+QListView::item:hover {
+    background-color: #555;
+    color: white;
+}
+"""
+
 TREE_VIEW_CSS = """
 QTreeView {
     background-color: #2E2E2E;
