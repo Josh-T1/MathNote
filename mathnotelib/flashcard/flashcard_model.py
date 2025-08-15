@@ -1,4 +1,5 @@
 from collections.abc import Iterator
+from io import SEEK_CUR
 import random
 import threading
 import tempfile
@@ -13,10 +14,61 @@ from collections import deque
 from .edit_tex import latex_template, typst_template
 from ..structure import Courses
 from ..utils import SectionNames, SectionNamesDescriptor, config, FileType
-from ..parse_tex import BuilderStage, CleanStage, DataGenerator, Flashcard, FlashcardCache, FileType, FlashcardsPipeline, MainSectionFinder, ProofSectionFinder, TrackedText, get_hack_macros, load_macros
+from ..pipeline import FlashcardBuilderStage, CleanStage, DataGenerator, Flashcard, FileType, ProcessingPipeline, MainSectionFinder, ProofSectionFinder, TrackedText, get_hack_macros, load_macros
 
 logger = logging.getLogger("mathnote")
 
+class FlashcardCache:
+    def __init__(self, cache_dir: Path):
+        super().__init__()
+        self.cache_dir = cache_dir
+        self._cache: dict[str, str] = {}
+        self._section_names: Optional[list[str]] = None
+
+    @property
+    def section_names(self) -> Optional[list[str]]:
+        return self._section_names
+
+    @section_names.setter
+    def section_names(self, section_names: list[SectionNamesDescriptor]) -> None:
+        self._section_names = sorted([section_name.value for section_name in section_names])
+
+    @property
+    def cache(self) -> dict[str, str]:
+        if not self._cache:
+            self._cache = self._load_cache()
+        return self._cache
+
+    def _load_cache(self) -> dict[str, str]:
+        cache = {}
+        for file in self.cache_dir.iterdir():
+            if file.is_file():
+                cache[file.name] = str(file)
+        return cache
+
+    # ?
+#    def load_from_cache(self, path: str) -> Any:
+#        with open(path, "r") as f:
+#            data = json.load(f)
+#        return data
+#
+#    def cache_key(self, path: Path) -> str | None:
+#        if self.section_names is None:
+#            return None
+#        key = "-".join(self.section_names) + str(path)
+#        return key
+#
+#    def get_cache(self, path: Path) -> :
+#        cache_key = self.cache_key(path)
+#        if cache_key is None:
+#            return None
+#
+#        filename = self.cache.get(cache_key, None)
+#        if filename is not None:
+#            cache_value = self.load_from_cache(filename)
+#            return cache_value
+#
+#        return None
 
 class FlashcardNotFoundException(Exception):
     pass
@@ -432,13 +484,13 @@ class FlashcardModel:
         # TODO fix get_hack_macros
         clean_data_stage = CleanStage(self.macros | get_hack_macros())
 
-        build_stage = BuilderStage(MainSectionFinder(section_names))
+        build_stage = FlashcardBuilderStage(MainSectionFinder(section_names))
 
         build_stage.add_subsection_finder(ProofSectionFinder(
             SectionNames.PROOF, [SectionNames.THEOREM, SectionNames.PROPOSITION, SectionNames.LEMMA, SectionNames.COROLLARY]
             )
             )
-        pipeline = FlashcardsPipeline(data_iterable)
+        pipeline = ProcessingPipeline(data_iterable)
         pipeline.add_stage(clean_data_stage)
         pipeline.add_stage(build_stage)
         for flash_cards in pipeline:
@@ -474,7 +526,8 @@ class FlashcardModel:
 
     def _get_all_flashcard_paths(self):
         paths = []
-        for card in self.compiled_flashcards:
+        for node in self.compiled_flashcards:
+            card = node.data
             if card.pdf_answer_path:
                 paths.append(card.pdf_answer_path)
             if card.pdf_question_path:

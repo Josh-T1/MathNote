@@ -57,7 +57,7 @@ def get_config(): # TODO Type hint
 config = get_config()
 
 
-# TODO should be 'LaTeX'
+# TODO: change spelling to 'LaTeX'
 class LatexCompilationError(Exception):
     pass
 
@@ -118,14 +118,18 @@ class ImmutableMeta(type):
         else:
             return False
 
+# TODO: This solution sucks
+# Warning: we dynamically set attr 'proof' using the value of SectionNames.PROOF
 class SectionNames(metaclass=ImmutableMeta):
     DEFINITION = "defin"
     THEOREM = "theo"
     DERIVATION = "der"
-    PROOF = "pf"
+    PROOF = "proof"
     COROLLARY = "corollary"
     LEMMA = "lemma"
     PROPOSITION = "proposition"
+    UNNAMED = "unnamed"
+    PREAMBLE = "preamble"
 
 # TODO update to support typst
 def update_config() -> None:
