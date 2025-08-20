@@ -10,6 +10,7 @@ class DocumentBuilder(QWidget):
     def __init__(self):
         super().__init__()
         self.main_layout = QHBoxLayout()
+        self.main_layout.setContentsMargins(0, 0, 0, 0)
         self.setLayout(self.main_layout)
         self.initUI()
 

@@ -2,12 +2,12 @@ import tempfile
 from pathlib import Path
 from typing import Protocol, Callable, Optional
 
-from PyQt6.QtGui import QBrush, QMouseEvent, QPalette, QStandardItem, QStandardItemModel, QTransform
+from PyQt6.QtGui import QBrush, QIcon, QMouseEvent, QPalette, QStandardItem, QStandardItemModel, QTransform
 from PyQt6.QtWidgets import (QApplication, QButtonGroup, QFrame, QGestureEvent, QGraphicsRectItem, QGraphicsScene, QGraphicsView, QHBoxLayout, QLabel, QListWidget, QMainWindow, QPinchGesture, QPushButton, QScrollArea, QSizePolicy,
                              QSpacerItem, QStyle, QStyleOptionViewItem, QToolBar, QTreeView, QVBoxLayout, QWidget)
-from PyQt6.QtCore import QEvent, QFileSystemWatcher, QModelIndex, QProcess, QTimer, pyqtSignal, Qt
+from PyQt6.QtCore import QEvent, QFileSystemWatcher, QModelIndex, QProcess, QSize, QTimer, pyqtSignal, Qt
 
-from .style import MAIN_WINDOW_CSS, SVG_VIEWER_CSS, TOGGLE_BUTTON_CSS, TREE_VIEW_CSS
+from .style import ICON_CSS, TREE_VIEW_CSS
 from . import constants
 from ..utils import FileType, config, rendered_sorted_key
 from ..structure import NotesManager, Courses, Category, OutputFormat, CompileOptions, SourceFile,Note
@@ -69,7 +69,7 @@ class Navbar(QWidget):
         self.update_svg_func = callback
 
         self.main_layout = QVBoxLayout()
-        self.main_layout.setContentsMargins(5, 5, 5, 5)
+        self.main_layout.setContentsMargins(5, 8, 5, 8)
 
         self.setLayout(self.main_layout)
         self.setFixedWidth(200)
@@ -83,12 +83,13 @@ class Navbar(QWidget):
         self._add_widgets()
         self.populate_tree()
 
-    def _create_widgets(self):
-        self.toggle_button = QPushButton("x")
-        self.new_note_button = QPushButton("new note")
-        self.new_cat_button = QPushButton("new cat")
-        self.mode_selector = ModeSelector()
 
+    def _create_widgets(self):
+        self.minimize_button = QPushButton()
+        self.new_note_button = QPushButton()
+        self.new_cat_button = QPushButton()
+
+        self.mode_selector = ModeSelector()
         self.menu_bar_layout = QHBoxLayout()
         self.model = QStandardItemModel()
         self.tree = QTreeView()
@@ -96,10 +97,19 @@ class Navbar(QWidget):
         self.launcher_widget = LauncherWidget()
 
     def _configure_widgets(self):
+#        self.main_layout.setContentsMargins(0, 6, 0, 0)
+        self.main_layout.setSpacing(4)
         # Main layout
-        self.toggle_button.setStyleSheet(TOGGLE_BUTTON_CSS)
-        self.toggle_button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-#        self.toggle_button.clicked.connect(self.toggle_tree)
+        self.minimize_button.setIcon(QIcon(str(constants.ICON_PATH / "minimize.png")))
+        self.minimize_button.setFixedSize(constants.ICON_SIZE)
+        self.minimize_button.setStyleSheet(ICON_CSS)
+        self.new_cat_button.setFixedSize(constants.ICON_SIZE)
+        self.new_cat_button.setIcon(QIcon(str(constants.ICON_PATH / "new_note.png")))
+        self.new_cat_button.setStyleSheet(ICON_CSS)
+        self.new_note_button.setIcon(QIcon(str(constants.ICON_PATH / "add_folder.png")))
+        self.new_note_button.setFixedSize(constants.ICON_SIZE)
+        self.new_note_button.setStyleSheet(ICON_CSS)
+
 
         self.tree.setModel(self.model)
         self.tree.setFrameShape(QFrame.Shape.NoFrame)
@@ -109,7 +119,7 @@ class Navbar(QWidget):
         self.tree.clicked.connect(self._item_clicked_callback)
 
     def _add_widgets(self):
-        self.menu_bar_layout.addWidget(self.toggle_button)
+        self.menu_bar_layout.addWidget(self.minimize_button)
         self.menu_bar_layout.addWidget(self.new_note_button)
         self.menu_bar_layout.addWidget(self.new_cat_button)
 #        self.hidden_layout.setFixedWidth(40)
@@ -224,7 +234,7 @@ class Navbar(QWidget):
         pass
 
     def connect_toggle_button(self, callback: Callable[[], None]):
-        self.toggle_button.clicked.connect(callback)
+        self.minimize_button.clicked.connect(callback)
 
     # TODO how do I get note name?
     def connect_new_note(self, callback: Callable[[str, Category, FileType], None]):
@@ -262,31 +272,24 @@ class CollapsedNavBar(QWidget):
     def __init__(self) -> None:
         super().__init__()
         self.main_layout = QVBoxLayout()
-        self.main_layout.setContentsMargins(0, 0, 0, 0)
+        self.main_layout.setContentsMargins(5, 8, 5, 8)
 
-        self.setFixedWidth(30)
+        self.setFixedWidth(35)
         self.setLayout(self.main_layout)
         self.initUI()
 
     def initUI(self):
-        self._create_widgets()
-        self._configure_widgets()
-        self._add_widgets()
+        self.expand_btn = QPushButton()
+        self.expand_btn.setStyleSheet(ICON_CSS)
+        self.expand_btn.setIcon(QIcon(str(constants.ICON_PATH / "expand.png")))
+        self.expand_btn.setFixedSize(constants.ICON_SIZE)
 
-    def _create_widgets(self):
-        self.toggle_button = QPushButton('\u25B6')
-
-    def _add_widgets(self):
-        self.main_layout.addWidget(self.toggle_button, alignment=Qt.AlignmentFlag.AlignLeft)
+        self.main_layout.addWidget(self.expand_btn, alignment=Qt.AlignmentFlag.AlignLeft)
         spacer = QSpacerItem(0, 0, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
         self.main_layout.addSpacerItem(spacer)
 
-    def _configure_widgets(self):
-        self.toggle_button.setStyleSheet(TOGGLE_BUTTON_CSS)
-
     def connect_toggle_button(self, callback: Callable[[], None]):
-        self.toggle_button.clicked.connect(callback)
-
+        self.expand_btn.clicked.connect(callback)
 
 
 class ModeSelector(QWidget):

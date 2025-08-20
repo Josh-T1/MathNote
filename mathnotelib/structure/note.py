@@ -28,7 +28,7 @@ class Metadata:
 
 class Category:
     """
-    Category continaing a 'Tree' of child notes and child categories
+    Acts as node with child Categories and notes
     """
     def __init__(self, metadata: Metadata, path: Path, children: Optional[list['Category']]  = None, parent: Optional['Category'] = None):
         self.metadata = metadata
@@ -174,7 +174,9 @@ class NotesManager:
 
     @classmethod
     def build_root_category(cls, root: Path) -> Category:
-        meta = Metadata(set(load_from_json(root / "cat-metadata.json")["tags"]))
+        meta = Metadata(
+                set(load_from_json(root / "cat-metadata.json")["tags"])
+                )
         root_cat = Category(meta, root)
         return root_cat
 

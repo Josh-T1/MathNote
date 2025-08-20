@@ -29,12 +29,13 @@ class LanguageChars:
 
 
 #TODO: should I really have a fallback for FileType.Unsupported?
+# rename opt_arg
 langauage_char_registry: dict[FileType, LanguageChars] = {
         FileType.LaTeX: LanguageChars(
-            cmd_prefix="\\", comment="%", arg_open_delim="{", arg_close_delim="}", opt_arg_open_delim="[", opt_arg_close_delim="]", newline="\n"
+            cmd_prefix="\\", comment="%", arg_open_delim="{", arg_close_delim="}", opt_arg_open_delim="{", opt_arg_close_delim="}", newline="\n"
             ),
         FileType.Typst: LanguageChars(
-            cmd_prefix="#", comment="//", arg_open_delim="(", arg_close_delim=")", opt_arg_open_delim="{", opt_arg_close_delim="}", newline="\n"
+            cmd_prefix="#", comment="//", arg_open_delim="(", arg_close_delim=")", opt_arg_open_delim="[", opt_arg_close_delim="]", newline="\n"
             ),
         FileType.Unsupported: LanguageChars(
             cmd_prefix="", comment="#", arg_open_delim="", arg_close_delim="", opt_arg_open_delim="", opt_arg_close_delim="", newline="\n"

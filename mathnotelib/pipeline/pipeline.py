@@ -163,7 +163,7 @@ class SectionFinder(ABC):
         paren_stack = []
 
         if str(text[0]) != paren[0]:
-            raise ValueError(f"String passed does not begin with '{paren[0]}': {text[:50]}, {text.source}") # }}} <= keep lsp happy
+            raise ValueError(f"String passed does not begin with '{paren[0]}'. Text: {text[:50]}, {text.source}") # }}} <= keep lsp happy
 
         for index, char in enumerate(str(text)):
             if char == paren[0]:

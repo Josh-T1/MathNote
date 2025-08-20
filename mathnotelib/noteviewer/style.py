@@ -2,16 +2,6 @@
 # #d3d3d3 is a light grey
 # #444 and #555 are very light grey's. #555 is lighter
 
-TOGGLE_BUTTON_CSS = """
-QPushButton {
-    border-radius: 2px;
-    background-color: #2E2E2E;
-    width: 20px;
-    height: 20px;
-    font-size: 16pt;
-}
-"""
-
 BUILDER_LIST_CSS = """
 QListView {
     background-color: #2E2E2E;
@@ -50,9 +40,46 @@ QSvgWidget {
         }
 """
 
-
 MAIN_WINDOW_CSS = """
 QMainWindow {
         background-color: #2E2E2E;
         }
+"""
+
+TAB_BTN_CSS = """
+QPushButton {
+    border: none;
+    background: transparent;
+    border-radius: 4px;
+}
+QPushButton:hover {
+    background: transparent;
+    border-radius: 4px;
+}
+"""
+
+CLOSE_TAB_BTN_CSS = """
+QPushButton {
+    border: none;
+    background: transparent;
+}
+QPushButton:hover {
+    background: rgba(0,0,0,0.1);
+}
+"""
+
+TAB_WIDGET_CSS = """
+QWidget:hover {
+    background-color: #555;
+}
+"""
+
+ICON_CSS = """
+QPushButton {
+    border: none;
+    background: transparent;
+}
+QPushButton:hover {
+    background: #555;
+}
 """

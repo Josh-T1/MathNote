@@ -8,6 +8,7 @@ import logging
 import shutil
 
 from .source_file import FileType, OutputFormat, CompileOptions, SourceFile
+from ..utils import config
 
 logger = logging.getLogger("mathnote")
 
@@ -46,10 +47,11 @@ class Lecture(SourceFile):
         return self.path.stat().st_mtime
 
 
-class CourseTypesetFiles(TypedDict):
+class CompilableCourseFiles(TypedDict):
     main: SourceFile | None
     assignments: list[Assignment]
     lectures: list[Lecture]
+
 
 class Course:
     def __init__(self, path: Path):
@@ -58,11 +60,11 @@ class Course:
         """
         self.path = path
         self.name: str = path.stem
-        self.typset_files: CourseTypesetFiles = self._load_typset_files()
+        self.typset_files: CompilableCourseFiles = self._load_typset_files()
         self._course_info: dict | None = None
 
-    def _load_typset_files(self) -> CourseTypesetFiles:
-        d: CourseTypesetFiles = {"main": None, "assignments": [], "lectures": []}
+    def _load_typset_files(self) -> CompilableCourseFiles:
+        d: CompilableCourseFiles = {"main": None, "assignments": [], "lectures": []}
         main_path = self.path / "main"
         assignment_path = self.path / "assignments"
         lectures_path = main_path / "lectures"
