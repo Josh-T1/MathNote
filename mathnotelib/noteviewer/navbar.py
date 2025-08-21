@@ -70,6 +70,7 @@ class Navbar(QWidget):
 
         self.main_layout = QVBoxLayout()
         self.main_layout.setContentsMargins(5, 8, 5, 8)
+        self.main_layout.setSpacing(4)
 
         self.setLayout(self.main_layout)
         self.setFixedWidth(200)
@@ -86,29 +87,30 @@ class Navbar(QWidget):
 
     def _create_widgets(self):
         self.minimize_button = QPushButton()
-        self.new_note_button = QPushButton()
-        self.new_cat_button = QPushButton()
-
+        self.new_note_btn = QPushButton()
+        self.new_folder_btn = QPushButton()
+        self.search_btn = QPushButton()
         self.mode_selector = ModeSelector()
-        self.menu_bar_layout = QHBoxLayout()
         self.model = QStandardItemModel()
         self.tree = QTreeView()
+
         self.root_item = self.model.invisibleRootItem()
         self.launcher_widget = LauncherWidget()
+        self.menu_bar_layout = QHBoxLayout()
 
     def _configure_widgets(self):
-#        self.main_layout.setContentsMargins(0, 6, 0, 0)
-        self.main_layout.setSpacing(4)
-        # Main layout
-        self.minimize_button.setIcon(QIcon(str(constants.ICON_PATH / "minimize.png")))
+        self.minimize_button.setIcon(QIcon(str(constants.ICON_PATH / "sidebar_left.png")))
         self.minimize_button.setFixedSize(constants.ICON_SIZE)
         self.minimize_button.setStyleSheet(ICON_CSS)
-        self.new_cat_button.setFixedSize(constants.ICON_SIZE)
-        self.new_cat_button.setIcon(QIcon(str(constants.ICON_PATH / "new_note.png")))
-        self.new_cat_button.setStyleSheet(ICON_CSS)
-        self.new_note_button.setIcon(QIcon(str(constants.ICON_PATH / "add_folder.png")))
-        self.new_note_button.setFixedSize(constants.ICON_SIZE)
-        self.new_note_button.setStyleSheet(ICON_CSS)
+        self.new_folder_btn.setFixedSize(constants.ICON_SIZE)
+        self.new_folder_btn.setIcon(QIcon(str(constants.ICON_PATH / "new_note.png")))
+        self.new_folder_btn.setStyleSheet(ICON_CSS)
+        self.new_note_btn.setIcon(QIcon(str(constants.ICON_PATH / "add_folder.png")))
+        self.new_note_btn.setFixedSize(constants.ICON_SIZE)
+        self.new_note_btn.setStyleSheet(ICON_CSS)
+        self.search_btn.setIcon(QIcon(str(constants.ICON_PATH / "search.png")))
+        self.search_btn.setFixedSize(constants.ICON_SIZE)
+        self.search_btn.setStyleSheet(ICON_CSS)
 
 
         self.tree.setModel(self.model)
@@ -120,8 +122,9 @@ class Navbar(QWidget):
 
     def _add_widgets(self):
         self.menu_bar_layout.addWidget(self.minimize_button)
-        self.menu_bar_layout.addWidget(self.new_note_button)
-        self.menu_bar_layout.addWidget(self.new_cat_button)
+        self.menu_bar_layout.addWidget(self.new_note_btn)
+        self.menu_bar_layout.addWidget(self.new_folder_btn)
+        self.menu_bar_layout.addWidget(self.search_btn)
 #        self.hidden_layout.setFixedWidth(40)
         self.menu_bar_layout.addSpacerItem(QSpacerItem(15, 15, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed))
         self.main_layout.addLayout(self.menu_bar_layout)
@@ -250,14 +253,14 @@ class Navbar(QWidget):
                     parent_cat = note.category
             text = index.data()
 #            callback(parent_cat)
-        self.new_note_button.clicked.connect(wrapper)
+        self.new_note_btn.clicked.connect(wrapper)
 
     def connect_new_cat(self, callback: Callable[[str, Optional[Category]], None]):
         def wrapper():
             index = self.tree.currentIndex()
             text = index.data()
             print(text)
-        self.new_cat_button.clicked.connect(wrapper)
+        self.new_folder_btn.clicked.connect(wrapper)
 
     def connect_doc_builder(self, builder_widget: QWidget):
         def callback(mode: str) -> None:
@@ -281,7 +284,7 @@ class CollapsedNavBar(QWidget):
     def initUI(self):
         self.expand_btn = QPushButton()
         self.expand_btn.setStyleSheet(ICON_CSS)
-        self.expand_btn.setIcon(QIcon(str(constants.ICON_PATH / "expand.png")))
+        self.expand_btn.setIcon(QIcon(str(constants.ICON_PATH / "sidebar_right.png")))
         self.expand_btn.setFixedSize(constants.ICON_SIZE)
 
         self.main_layout.addWidget(self.expand_btn, alignment=Qt.AlignmentFlag.AlignLeft)

@@ -22,18 +22,15 @@ from ..structure import NotesManager, Courses, Category
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.notes_manager = NotesManager(Path(config["root"]) / "Notes")
+        self.notes_manager = NotesManager(constants.ROOT_DIR / "Notes")
         self.widget = QWidget()
         self.main_layout = QHBoxLayout(self.widget)
         self.setCentralWidget(self.widget)
-#        self.setContentsMargins(0, 0, 0, 0)
         self.initUi()
         self.main_layout.setSpacing(0)
         self.main_layout.setContentsMargins(4, 0, 4, 0)
-        # TODO
 #        self.compile_typst(TYP_FILE_LIVE)
         self.watcher.addPath(constants.TYP_FILE_LIVE)
-
         self._nav_minimal: bool = False
 
     def initUi(self):

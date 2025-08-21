@@ -23,6 +23,7 @@ QTreeView {
     background-color: #2E2E2E;
     color: #d3d3d3;
     border: 1px solid #444;
+    border-radius: 4px;
     }
 QTreeView::item:selected {
     background-color: #444;
@@ -65,6 +66,7 @@ QPushButton {
 }
 QPushButton:hover {
     background: rgba(0,0,0,0.1);
+    border-radius: 4px;
 }
 """
 
@@ -81,5 +83,6 @@ QPushButton {
 }
 QPushButton:hover {
     background: #555;
+    border-radius: 4px;
 }
 """
