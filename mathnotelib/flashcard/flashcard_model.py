@@ -13,7 +13,7 @@ from collections import deque
 
 from .edit_tex import latex_template, typst_template
 from ..structure import Courses
-from ..utils import SectionNames, SectionNamesDescriptor, config, FileType
+from ..utils import SectionNames, SectionNamesDescriptor, CONFIG, FileType
 from ..pipeline import FlashcardBuilderStage, CleanStage, DataGenerator, Flashcard, FileType, ProcessingPipeline, MainSectionFinder, ProofSectionFinder, TrackedText, get_hack_macros, load_macros
 
 logger = logging.getLogger("mathnote")
@@ -413,7 +413,7 @@ class FlashcardModel:
         self.current_card: Optional[Flashcard] = None # threadsafe, never accessed by thread
         self.compile_thread = StoppableThread(callback=self._compile)
         self._macros = None
-        self.courses = Courses(config)
+        self.courses = Courses(CONFIG)
 
     @property
     def macros(self) -> dict:
@@ -427,7 +427,7 @@ class FlashcardModel:
 
     def _load_macros(self) -> dict:
         """ Load macros from MACRO_PATH. Note there are limitations on macros that parse_tex can load and MACRO_NAMES are not created dynamically...See parse_tex.py """
-        return load_macros(self.courses.macros_path(), config["macro-names"])
+        return load_macros(self.courses.macros_path(), CONFIG.macro_names)
 
 
     def _next_compiled_flashcard(self) -> Flashcard:

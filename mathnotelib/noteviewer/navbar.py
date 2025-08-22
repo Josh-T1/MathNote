@@ -9,13 +9,13 @@ from PyQt6.QtCore import QEvent, QFileSystemWatcher, QModelIndex, QProcess, QSiz
 
 from .style import ICON_CSS, TREE_VIEW_CSS
 from . import constants
-from ..utils import FileType, config, rendered_sorted_key
+from ..utils import FileType, CONFIG, rendered_sorted_key
 from ..structure import NotesManager, Courses, Category, OutputFormat, CompileOptions, SourceFile,Note
 from ..flashcard import FlashcardMainWindow, CompilationManager, FlashcardModel, FlashcardController
 
 
 class UpdateSvgCallback(Protocol):
-    def __call__(self, path: list[str], tmpdir: Optional[tempfile.TemporaryDirectory]) -> None:...
+    def __call__(self, path: list[str], tmpdir: tempfile.TemporaryDirectory | None=None, name: str | None=None) -> None:...
 
 
 class LauncherWidget(QWidget):
@@ -52,7 +52,7 @@ class LauncherWidget(QWidget):
         self.compilation_manager = CompilationManager()
         self.flashcard_model = FlashcardModel(self.compilation_manager)
         self._window = FlashcardMainWindow()
-        self.controller = FlashcardController(self._window, self.flashcard_model, config) #type: ignore
+        self.controller = FlashcardController(self._window, self.flashcard_model, CONFIG) #type: ignore
         self._window.setCloseCallback(self.controller.close)
         self.controller.run(None)
 
@@ -75,7 +75,9 @@ class Navbar(QWidget):
         self.setLayout(self.main_layout)
         self.setFixedWidth(200)
 
-        self.root_course_cat = NotesManager.build_root_category(constants.NOTES_DIR)
+        self.root_course_cat = NotesManager.build_root_category(CONFIG.root_path / "Notes")
+        self.root_notes_item = QStandardItem(self.root_course_cat.name)
+        self.root_course_item = QStandardItem("Courses")
         self.initUI()
 
     def initUI(self):
@@ -84,12 +86,15 @@ class Navbar(QWidget):
         self._add_widgets()
         self.populate_tree()
 
-
     def _create_widgets(self):
         self.minimize_button = QPushButton()
+        self.minimize_button.setToolTip("Close Sidebar")
         self.new_note_btn = QPushButton()
+        self.new_note_btn.setToolTip("New Note")
         self.new_folder_btn = QPushButton()
+        self.new_folder_btn.setToolTip("New Note Folder")
         self.search_btn = QPushButton()
+        self.search_btn.setToolTip("Search")
         self.mode_selector = ModeSelector()
         self.model = QStandardItemModel()
         self.tree = QTreeView()
@@ -99,33 +104,29 @@ class Navbar(QWidget):
         self.menu_bar_layout = QHBoxLayout()
 
     def _configure_widgets(self):
-        self.minimize_button.setIcon(QIcon(str(constants.ICON_PATH / "sidebar_left.png")))
-        self.minimize_button.setFixedSize(constants.ICON_SIZE)
-        self.minimize_button.setStyleSheet(ICON_CSS)
-        self.new_folder_btn.setFixedSize(constants.ICON_SIZE)
-        self.new_folder_btn.setIcon(QIcon(str(constants.ICON_PATH / "new_note.png")))
-        self.new_folder_btn.setStyleSheet(ICON_CSS)
-        self.new_note_btn.setIcon(QIcon(str(constants.ICON_PATH / "add_folder.png")))
-        self.new_note_btn.setFixedSize(constants.ICON_SIZE)
-        self.new_note_btn.setStyleSheet(ICON_CSS)
-        self.search_btn.setIcon(QIcon(str(constants.ICON_PATH / "search.png")))
-        self.search_btn.setFixedSize(constants.ICON_SIZE)
-        self.search_btn.setStyleSheet(ICON_CSS)
-
+        icons = [(self.minimize_button, "sidebar_left.png"),
+                 (self.new_folder_btn, "add_folder.png"),
+                 (self.new_note_btn, "new_note.png"),
+                 (self.search_btn, "search.png")
+                 ]
+        for icon, icon_name in icons:
+            icon.setIcon(QIcon(str(constants.ICON_PATH / icon_name)))
+            icon.setFixedSize(constants.ICON_SIZE)
+            icon.setStyleSheet(ICON_CSS)
 
         self.tree.setModel(self.model)
         self.tree.setFrameShape(QFrame.Shape.NoFrame)
-        self.tree.header().hide() #TODO: don't think header() every returns None..
         self.tree.expanded.connect(self._expand_callback)
         self.tree.setStyleSheet(TREE_VIEW_CSS)
         self.tree.clicked.connect(self._item_clicked_callback)
+        if (header := self.tree.header()) is not None:
+            header.hide()
 
     def _add_widgets(self):
         self.menu_bar_layout.addWidget(self.minimize_button)
         self.menu_bar_layout.addWidget(self.new_note_btn)
         self.menu_bar_layout.addWidget(self.new_folder_btn)
         self.menu_bar_layout.addWidget(self.search_btn)
-#        self.hidden_layout.setFixedWidth(40)
         self.menu_bar_layout.addSpacerItem(QSpacerItem(15, 15, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed))
         self.main_layout.addLayout(self.menu_bar_layout)
         self.main_layout.addWidget(self.tree)
@@ -153,6 +154,7 @@ class Navbar(QWidget):
         if item.data(constants.FILE_ROLE) is not None:
 
             file: SourceFile = item.data(constants.FILE_ROLE)
+            name = item.data(constants.FILE_ROLE)
             tmpdir = tempfile.TemporaryDirectory()
             tmpdir_path = Path(tmpdir.name)
 
@@ -160,9 +162,13 @@ class Navbar(QWidget):
             options.set_output_dir(tmpdir_path)
             options.set_output_file_stem(constants.OUTPUT_FILE_STEM)
 
+            if isinstance(file, Note):
+                file_name = file.name
+            else:
+                file_name = file.path.parent.parent.stem
             return_code = file.compile(options)
             svg_files = sorted(tmpdir_path.glob(f"{constants.OUTPUT_FILE_STEM}*.svg"), key=rendered_sorted_key)
-            self.update_svg_func([str(f) for f in svg_files], tmpdir=tmpdir)
+            self.update_svg_func([str(f) for f in svg_files], tmpdir=tmpdir, name=file_name)
 
         # For any item with this role we must do 2 things:
         #   1. Check to see if we should expand or collapse tree around item
@@ -194,6 +200,7 @@ class Navbar(QWidget):
 
         for sub_cat in cat.children():
             sub_cat_item = QStandardItem(sub_cat.name)
+            sub_cat_item.setFlags(sub_cat_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             sub_cat_item.setData(sub_cat, constants.DIR_ROLE)
             sub_cat_item.setData(False, constants.LOADED_ROLE)
             sub_cat_item.appendRow(QStandardItem("placeholder"))
@@ -202,6 +209,7 @@ class Navbar(QWidget):
 
         for note in cat.notes():
             note_item = QStandardItem(note.name)
+            note_item.setFlags(note_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             note_item.setData(note, constants.FILE_ROLE)
             item.appendRow(note_item)
 
@@ -211,30 +219,28 @@ class Navbar(QWidget):
         if self.root_item is None:
             return
 
-        courses = Courses(config)
-        root_notes_item = QStandardItem(self.root_course_cat.name)
-        root_course_item = QStandardItem("Courses")
+        self.root_notes_item.setFlags(self.root_notes_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+        self.root_notes_item.setData(self.root_course_cat, constants.DIR_ROLE)
+        self.root_notes_item.setData(False, constants.LOADED_ROLE)
+        self.root_notes_item.appendRow(QStandardItem("placeholder"))
 
-        root_notes_item.setData(self.root_course_cat, constants.DIR_ROLE)
-        root_notes_item.setData(False, constants.LOADED_ROLE)
-        root_notes_item.appendRow(QStandardItem("placeholder"))
+        self.root_course_item.setFlags(self.root_course_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+        self.root_course_item.setData(True, constants.COURSE_CONTAINER_ROLE)
 
-        root_course_item.setData(True, constants.COURSE_CONTAINER_ROLE)
+        self.root_item.appendRow(self.root_notes_item)
+        self.root_item.appendRow(self.root_course_item)
 
-        self.root_item.appendRow(root_notes_item)
-        self.root_item.appendRow(root_course_item)
-
+        courses = Courses(CONFIG)
         for name, course in courses.courses.items():
             course_item = QStandardItem(name)
+            course_item.setFlags(course_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             course_item.setData(True, constants.COURSE_CONTAINER_ROLE)
-            root_course_item.appendRow(course_item)
+            self.root_course_item.appendRow(course_item)
             if (main_file := course.typset_files["main"]) is not None:
                 main_item = QStandardItem("main")
+                main_item.setFlags(main_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
                 main_item.setData(main_file, constants.FILE_ROLE)
                 course_item.appendRow(main_item)
-
-    def toggle_callback(self):
-        pass
 
     def connect_toggle_button(self, callback: Callable[[], None]):
         self.minimize_button.clicked.connect(callback)
@@ -246,8 +252,7 @@ class Navbar(QWidget):
             item = self.model.itemFromIndex(index)
             if item is None:
                 return
-            if item.data(constants.FILE_ROLE) is not None:
-                note = item.data(constants.FILE_ROLE)
+            if (note := item.data(constants.FILE_ROLE)) is not None:
                 parent_cat = self.root_course_cat
                 if isinstance(note, Note):
                     parent_cat = note.category
@@ -255,12 +260,32 @@ class Navbar(QWidget):
 #            callback(parent_cat)
         self.new_note_btn.clicked.connect(wrapper)
 
-    def connect_new_cat(self, callback: Callable[[str, Optional[Category]], None]):
+    def _is_note_child(self, item: QStandardItem) -> bool:
+        current = item
+        while current is not None:
+            if current is self.root_notes_item:
+                return True
+            current = current.parent()
+        return False
+
+    def connect_new_folder(self, callback: Callable[[str, Optional[Category]], None]):
         def wrapper():
-            index = self.tree.currentIndex()
-            text = index.data()
-            print(text)
+            idx = self.tree.currentIndex()
+            item = self.model.itemFromIndex(idx)
+            if item is None:
+                return
+            is_note = self._is_note_child(item)
+            if not is_note:
+                return
+            if item.data(constants.FILE_ROLE) is not None:
+                note: Note = item.data(constants.FILE_ROLE)
+                parent_cat = note.category
+
+
         self.new_folder_btn.clicked.connect(wrapper)
+
+    def connect_search(self, callback):
+        pass
 
     def connect_doc_builder(self, builder_widget: QWidget):
         def callback(mode: str) -> None:
@@ -286,6 +311,7 @@ class CollapsedNavBar(QWidget):
         self.expand_btn.setStyleSheet(ICON_CSS)
         self.expand_btn.setIcon(QIcon(str(constants.ICON_PATH / "sidebar_right.png")))
         self.expand_btn.setFixedSize(constants.ICON_SIZE)
+        self.expand_btn.setToolTip("Open Sidebar")
 
         self.main_layout.addWidget(self.expand_btn, alignment=Qt.AlignmentFlag.AlignLeft)
         spacer = QSpacerItem(0, 0, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)

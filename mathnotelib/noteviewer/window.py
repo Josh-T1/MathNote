@@ -1,28 +1,27 @@
 import sys
 import tempfile
 from pathlib import Path
-from typing import Callable, Optional, Protocol
+from typing import Optional
 
-from PyQt6.QtGui import QBrush, QTransform
 from PyQt6.QtWidgets import (QApplication, QFrame, QGestureEvent, QGraphicsScene, QGraphicsView, QHBoxLayout,
                              QLabel, QListWidget, QMainWindow, QPinchGesture, QToolBar, QTreeView, QVBoxLayout, QWidget)
 from PyQt6.QtCore import QEvent, QFileSystemWatcher, QModelIndex, QProcess, QTimer, pyqtSignal, Qt
 from PyQt6.QtSvgWidgets import QGraphicsSvgItem, QSvgWidget
-from PyQt6 import QtCore
 
+from . import constants
 from .navbar import Navbar, CollapsedNavBar, ModeSelector
 from .builder_widget import DocumentBuilder
 from .viewer import TabbedSvgViewer
-from . import constants
 from .style import MAIN_WINDOW_CSS
-from ..utils import FileType, config, rendered_sorted_key
+
+from ..utils import FileType, CONFIG
 from ..structure import NotesManager, Courses, Category
 
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.notes_manager = NotesManager(constants.ROOT_DIR / "Notes")
+        self.notes_manager = NotesManager(CONFIG.root_path / "Notes")
         self.widget = QWidget()
         self.main_layout = QHBoxLayout(self.widget)
         self.setCentralWidget(self.widget)
@@ -55,7 +54,7 @@ class MainWindow(QMainWindow):
 
         self.nav_bar.connect_toggle_button(self._toggle_nav_callback)
         self.nav_bar.connect_new_note(self._new_note_callback)
-        self.nav_bar.connect_new_cat(self._new_cat_callback)
+        self.nav_bar.connect_new_folder(self._new_cat_callback)
         self.nav_bar.connect_doc_builder(self.doc_builder_widget)
 
         self.doc_builder_widget.setFixedWidth(200)
@@ -78,10 +77,10 @@ class MainWindow(QMainWindow):
         self.process.start("typst", ["compile", path, "--format", "svg"])
         self.process.finished.connect(lambda : self.update_svg(path))
 
-    def update_svg(self, path: str | list[str], tmpdir: Optional[tempfile.TemporaryDirectory] = None):
+    def update_svg(self, path: str | list[str], tmpdir: Optional[tempfile.TemporaryDirectory] = None, name: str | None = None):
         paths = path if isinstance(path, list) else [path]
         if all(Path(p).exists() for p in paths):
-            self.viewer.load_current_viewer(path, tmpdir=tmpdir)
+            self.viewer.load_current_viewer(path, tmpdir=tmpdir, name=name)
 
     def _toggle_nav_callback(self):
         self._nav_minimal = not self._nav_minimal

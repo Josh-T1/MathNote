@@ -1,70 +1,95 @@
+from dataclasses import dataclass, field
 from pathlib import Path
 import json
 import os
 import shutil
 from enum import Enum
 
-templates_path = Path(__file__).parent / "templates"
-
 class FileType(Enum):
     Typst = "Typst"
     LaTeX = "LaTeX"
     Unsupported = "Unsupported"
 
-def config_dir():
-    if os.name == "nt":
-        config_dir = Path(os.getenv("APPDATA")) / "MathNote"
-    elif os.name == "posix":
-        config_dir = Path.home() / ".config" / "MathNote"
-    else:
-        raise OSError("Unsupported operating system")
-    return config_dir
+@dataclass
+class Config:
+    root_path: Path = Path.home() / "MathNote"
+    templates_path: Path = Path(__file__).parent / "templates"
+    latex_templates_path: Path = field(init=False)
+    typst_templates_path: Path = field(init=False)
+    macro_names: list[str] = field(default_factory=list)
+    section_names: dict[str, str] = field(default_factory=dict)
+    log_level: str = "INFO"
+    iterm2_enabled: bool = False
+    set_note_title: bool = True
+    template_files: dict[FileType, dict[str, Path]] = field(default_factory=dict)
+    editor: str = "vim"
 
-def get_config(): # TODO Type hint
-    """ Checks for user defined config, otherwise sets some default settings """
-    config = {
-            "root": str(Path.home() / "MathNote"),
-            "preamble-path": "" ,
-            "course-info-template": str(templates_path/ "course_info_template.json"),
-            "macro-names": [],
-            "section-names": {},
-            "iterm2-enabled": False,
-            "set-note-title": True
-            }
-    files = [
-            ("main-template", "main_template.tex"),
-            ("assignment-template","assignment_template.tex"),
-            ("problems-template","problems_template.tex"),
-            ("note-template", "note_template.tex"),
-            ("macros","macros.tex"),
-            ("preamble","preamble.tex"),
-            ("note-macros","note_macros.tex"),
-            ("note-preamble","note_preamble.tex")
-            ]
-    cf_path = config_dir()
-    if cf_path.is_dir():
-        with open(cf_path / "config.json", 'r') as f:
-            config.update(json.load(f))
+    def __post_init__(self):
+        self.latex_templates_path = self.templates_path / "LaTeX"
+        self.typst_templates_path = self.templates_path / "Typst"
+        config_dir = self.config_dir()
+        if not config_dir.is_dir():
+            return
+        config_path = config_dir / "config.json"
+        if not config_path.is_file():
+            return
 
-        for key, file_name in files:
-            if (cf_path / file_name).is_file():
-                config[key] = str(cf_path / file_name)
-            else:
-                config[key] = str(templates_path / file_name)
+        with open(config_path, 'r') as f:
+            data = json.load(f)
+            for k, v in data.items():
+                if hasattr(self, k):
+                    setattr(self, k, v)
+        files = ["main_template",
+                "assignment_template",
+                "problems_template",
+                "note_template",
+                "macros",
+                "preamble",
+                "note_macros",
+                "note_preamble"
+                ]
 
-    return config
+        for file_type, ext in {FileType.LaTeX: "tex", FileType.Typst: "typ"}.items():
+            self.template_files[file_type] = {}
+            for file_stem in files:
+                file_path = config_dir / file_type.value / f"{file_stem}.{ext}"
+                if file_path.is_file():
+                    self.template_files[file_type][file_stem] = file_path
+                else:
+                    template_path = self.templates_path / file_type.value / f"{file_stem}.{ext}"
+                    self.template_files[file_type][file_stem] = template_path
 
-config = get_config()
+    @classmethod
+    def config_dir(cls):
+        if os.name == "nt":
+            config_dir = Path(os.getenv("APPDATA")) / "MathNote"
+        elif os.name == "posix":
+            config_dir = Path.home() / ".config" / "MathNote"
+        else:
+            raise OSError("Unsupported operating system")
+        return config_dir
+
+    def update_templates(self):
+        # TODO test
+        for file_type, ext in [(FileType.LaTeX, "tex"), (FileType.Typst, "typ")]:
+            macros_path = self.template_files[file_type]["macros"]
+            preamble_path = self.template_files[file_type]["preamble"]
+            note_macros_path = self.template_files[file_type]["note_macros"]
+            note_preamble_path = self.template_files[file_type]["note_preamble"]
+
+            shutil.copy(macros_path, self.templates_path / file_type.value / f"macros.{ext}")
+            shutil.copy(preamble_path, self.templates_path / file_type.value / f"preamble.{ext}")
+            shutil.copy(note_macros_path, self.templates_path / file_type.value / f"note_macros.{ext}")
+            shutil.copy(note_preamble_path, self.templates_path / file_type.value / f"note_preamble.{ext}")
 
 
+CONFIG = Config()
 # TODO: change spelling to 'LaTeX'
 class LatexCompilationError(Exception):
     pass
 
 class TypstCompilationError(Exception):
     pass
-
-
 
 # TODO: fix this
 class SectionNamesDescriptor:
@@ -81,7 +106,7 @@ class ImmutableMeta(type):
     _is_initialized = False
 
     def __new__(mcs, name, bases, class_dict):
-        user_enum_key_values = {key.upper(): value for key, value in config['section-names'].items()}
+        user_enum_key_values = {key.upper(): value for key, value in CONFIG.section_names.items()}
         class_dict.update(user_enum_key_values)
         for key, value in class_dict.items():
             if not key.startswith("__"):
@@ -131,19 +156,7 @@ class SectionNames(metaclass=ImmutableMeta):
     UNNAMED = "unnamed"
     PREAMBLE = "preamble"
 
-# TODO update to support typst
-def update_config() -> None:
-    """
-    Users may specify latex templates in config directory. These templates are copied into the required directories when
-    cli.py is ran for the first time. If a user changes a template, this function must be called, otherwise nothing changes.
-    """
-    root = Path(config["root"])
-    macros, preamble = Path(config["macros"]), Path(config["preamble"])
-    note_macros, note_preamble = Path(config["note-macros"]), Path(config["note-preamble"])
-    shutil.copy(macros, root / "macros.tex")
-    shutil.copy(preamble, root / "preambles.tex")
-    shutil.copy(note_macros, root / "Notes/resources/macros.tex")
-    shutil.copy(note_preamble, root / "Notes/resources/preamble.tex")
+
 
 def load_json(file: str):
     with open(file, "r") as f:

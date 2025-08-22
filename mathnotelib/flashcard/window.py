@@ -9,7 +9,7 @@ from PyQt6.QtPdf import QPdfDocument
 from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtGui import QColor, QPalette, QStandardItem, QStandardItemModel
 
-from ..utils import LatexCompilationError, config
+from ..utils import LatexCompilationError, CONFIG
 from ..structure import Courses, Course
 
 logger = logging.getLogger("mathnote")
@@ -63,7 +63,7 @@ class VConfigBar(QWidget):
         self.initUi()
         self.setFixedWidth(160)
         self.setLayout(self.config_layout)
-        self.courses = Courses(config)
+        self.courses = Courses(CONFIG)
 
     def initUi(self):
         self._create_widgets()
@@ -73,7 +73,7 @@ class VConfigBar(QWidget):
 
     def _init_optional_widgets(self):
         """ Dynamically add widgets if enabled """
-        if config["iterm2-enabled"]:
+        if CONFIG.iterm2_enabled:
             self.launch_iterm_button = QPushButton("Launch iterm")
             self.config_layout.addWidget(self.launch_iterm_button)
 
@@ -377,7 +377,7 @@ class FlashcardMainWindow(QMainWindow):
         self.show_proof_button().clicked.connect(callback)
 
     def bind_launch_iterm_button(self, callback):
-        if config["iterm2-enabled"]:
+        if CONFIG.iterm2_enabled:
             self.config_bar.launch_iterm_button.clicked.connect(callback)
 
     def bind_open_main_button(self, callback):

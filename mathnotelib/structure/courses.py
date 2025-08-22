@@ -1,3 +1,4 @@
+from enum import Enum, auto
 import re
 from typing import Literal, TypedDict, Union
 from math import ceil
@@ -8,7 +9,7 @@ import logging
 import shutil
 
 from .source_file import FileType, OutputFormat, CompileOptions, SourceFile
-from ..utils import config
+from ..utils import Config
 
 logger = logging.getLogger("mathnote")
 
@@ -18,6 +19,9 @@ def number2filename(num: int, filetype: FileType):
     else:
         return 'lec_{0:02d}.typ'.format(num)
 
+class CourseSubdir(Enum):
+    Assignment = auto()
+    Lectures = auto()
 
 class Assignment(SourceFile):
     def number(self) -> int:
@@ -233,7 +237,11 @@ class Course:
 
         main_file_path = main_file.path
         header, _, footer = self.get_header_footer(main_file_path)
-        body = ''.join([r'\input{lectures/' + lecture.name + '}\n' for lecture in lectures])
+        if main_file.file_type() == FileType.LaTeX:
+            template_func = lambda name: r'\input{lectures/' + name + "}\n"
+        else:
+            template_func = lambda name: f'#include "{name}"'
+        body = ''.join([template_func(lecture.name) for lecture in lectures])
         main_file_path.write_text(header + body + footer)
 
     def new_lecture(self):
@@ -259,20 +267,21 @@ class Course:
         self.update_lectures_in_main() # TODO test
         return new_lecture
 
-    def new_assignment(self, filetype: FileType = FileType.LaTeX):
+    def new_assignment(self, template_path: Path, filetype: FileType = FileType.LaTeX):
         """
         TODO: Refactor using Assignment to hide logic
         Create new assignment using the naming convention course_course_number_A{assignment number}
         """
+        assert template_path.is_file()
         new_num = max([lec.number() for lec in self.typset_files["lectures"]]) + 1
         ext = "tex" if filetype == FileType.LaTeX else "typ"
         filename = f"{self.name}-A{new_num}{ext}"
-        template = config[f"assignment-template-{ext}"]
+#        template = self.config[filetype][f"assignment_template"]
 
         assignment_path = self.path / "assignments" / filename
         if assignment_path.is_file():
             raise ValueError
-        shutil.copy(template, assignment_path)
+        shutil.copy(template_path, assignment_path)
 
 
     def compile_main(self, options: CompileOptions | None = None):
@@ -309,9 +318,9 @@ class Course:
 """ Needs refactor """
 class Courses():
     """ Container for all Course objects """
-    def __init__(self, config: dict[str, str]):
+    def __init__(self, config: Config):
         self.config = config
-        self.root = Path(config["root"])
+        self.root = config.root_path
         self.course_root = self.root / "Courses"
         self._courses: dict[str, Course] = {}
 
@@ -324,17 +333,17 @@ class Courses():
         courses = [Course(course) for course in course_directories]
         return list(sorted(courses, key=_key))
 
-    def macros_path(self, note_type: FileType = FileType.LaTeX):
-        if note_type.value.upper() == "LATEX":
+    def macros_path(self, note_type: FileType = FileType.Typst):
+        if note_type == FileType.LaTeX:
             return self.root / "Preambles" / "macros.tex"
         else:
             return self.root / "Preambles" / "macros.typ"
 
     def preamble_path(self, note_type: FileType = FileType.Typst):
-        if note_type.value.upper() == "LATEX":
+        if note_type == FileType.LaTeX:
             return self.root / "Preambles" / "preamble.tex"
         else:
-            return self.root / "Preambles" / "preabmle.typ"
+            return self.root / "Preambles" / "preamble.typ"
 
     def get_course(self, name: str) -> Course | None:
         return self.courses.get(name, None)
@@ -371,7 +380,7 @@ class Courses():
                 return course
         return None
 
-    def create_course(self, name: str) -> None:
+    def create_course(self, name: str, file_type: FileType = FileType.Typst) -> None:
         """ Creates directory structure for course, and creates all required files
         -- Params --
         name: name of new course
@@ -397,10 +406,13 @@ class Courses():
 
         lectures_dir = main_dir / "lectures"
         lectures_dir.mkdir()
-
-        shutil.copy(self.config["main-template"], main_dir / "main.tex")
-        template_path = self.config["course-info-template"]
-        shutil.copy(template_path, course_path / "course_info.json")
+        # TODO
+        shutil.copy(self.config.template_files[file_type]["main_template"], main_dir / "main.tex")
+        template_path = self.config.templates_path / "course_info_template.json"
+        if template_path.is_file():
+            shutil.copy(template_path, course_path / "course_info.json")
+        else:
+            logger.warning("TODO")
 
     def __contains__(self, course_name: str):
         if not isinstance(course_name, str):

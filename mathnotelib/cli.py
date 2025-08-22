@@ -6,46 +6,38 @@ import logging.config
 from pathlib import Path
 
 from .controller import CourseCommand, FlashcardCommand, NoteCommand, NoteViewer
-from .utils import config, config_dir, update_config
-
+from .utils import CONFIG
 
 """
-TODO: deal with typst files aswel
+TODO: refs?
+ensure notes reference note_macros.tex not macros.tex
+we copy all files for both notes and courses...
 """
-
-
-user_config_dir = config_dir()
-root_dir = Path(config["root"])
-note_dir = root_dir / "Notes"
+user_config_dir = CONFIG.config_dir()
 
 def _initialize_config_tree():
-    """ Create .config/mathnote directory with required subdirectories and files """
+    """ Initialize .config/MathNote directory with required subdirectories and files """
     user_config_dir.mkdir()
     (user_config_dir / "logs").mkdir()
-    template_path = Path(__file__) / "templates/config_template.json"
+    template_path = CONFIG.templates_path / "config_template.json"
     dest = user_config_dir / "config.json"
     shutil.copy(template_path, dest)
 
-def _initialize_note_tree():
-    """ Create MathNote/Notes directory with required subdirectories and files """
-    note_macros, note_preamble = Path(config["note-macros"]), Path(config["note-preamble"])
-    note_dir.mkdir()
-    resourses_dir = note_dir / "resources"
-    resourses_dir.mkdir()
-    refs = resourses_dir / "refs.tex"
-    refs.touch()
-    shutil.copy(note_macros, resourses_dir / "macros.tex")
-    shutil.copy(note_preamble, resourses_dir / "preamble.tex")
-
-def _initialize_root_tree():
+def _initialize_project_tree():
     """ Create MathNote directory with required subdirectories and files """
-    macros, preamble = Path(config["macros"]), Path(config["preamble"])
-    root_dir.mkdir()
-    preambles_path = root_dir / "Preambles"
+    if not CONFIG.root_path.is_dir():
+        CONFIG.root_path.mkdir()
+    preambles_path = CONFIG.root_path / "Preambles"
     preambles_path.mkdir()
-    shutil.copy(macros, preambles_path / "macros.tex")
-    shutil.copy(preamble, preambles_path / "preamble")
-    _initialize_note_tree()
+    shutil.copytree(CONFIG.templates_path, preambles_path, dirs_exist_ok=True)
+
+    note_dir = CONFIG.root_path / "Notes"
+    note_dir.mkdir()
+    preambles_path = note_dir / "Preambles"
+    preambles_path.mkdir()
+    shutil.copytree(CONFIG.templates_path, preambles_path, dirs_exist_ok=True)
+#    refs = resourses_dir / "refs.tex"
+#    refs.touch()
 
 
 if not user_config_dir.is_dir():
@@ -57,11 +49,11 @@ if not user_config_dir.is_dir():
         print("Command aborted. Directory must be created before proceeding")
         sys.exit()
 
-if not (root := Path(config["root"])).is_dir():
-    build = input(f"Mathnote directory {root} does not exist\nWould you like to create? (yn): ")
+if not CONFIG.root_path.is_dir():
+    build = input(f"Mathnote directory {CONFIG.root_path} does not exist\nWould you like to create? (yn): ")
     if build == "y":
         print("Creating directory...")
-        _initialize_root_tree()
+        _initialize_project_tree()
     else:
         print("Command aborted. Directory must be created before proceeding")
         sys.exit()
@@ -81,7 +73,7 @@ logging_config = {
     "handlers": {
         "file": {
             "class": "logging.handlers.RotatingFileHandler",
-            "level": config["log-level"],
+            "level": CONFIG.log_level,
             "formatter": "simple",
             "filename": str(user_config_dir / "logs/mathnote.log"),
             "maxBytes": 1000000,
@@ -169,13 +161,13 @@ command_mapping = {
 
 def main():
     if args.update_config:
-        update_config()
+        CONFIG.update_templates()
 
     elif args.command is None:
         global_parser.print_help()
         return
     else:
-        instance = command_mapping[args.command](config)
+        instance = command_mapping[args.command](CONFIG)
         logger.info(f"Calling command {type(instance)}")
         instance.cmd(args)
 

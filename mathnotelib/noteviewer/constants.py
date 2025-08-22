@@ -1,11 +1,6 @@
 from pathlib import Path
-
 from PyQt6.QtCore import Qt, QSize
 
-from ..utils import config
-
-
-ROOT_DIR = Path(config["root"])
 ICON_PATH = Path(__file__).parent / "icons"
 
 ICON_SIZE = QSize(30, 30)
@@ -19,6 +14,4 @@ FILE_ROLE = Qt.ItemDataRole.UserRole + 1
 DIR_ROLE = Qt.ItemDataRole.UserRole + 2
 LOADED_ROLE = Qt.ItemDataRole.UserRole + 3
 COURSE_CONTAINER_ROLE = Qt.ItemDataRole.UserRole + 4
-
-NOTES_DIR = ROOT_DIR / "Notes"
 

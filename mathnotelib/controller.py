@@ -8,7 +8,7 @@ import sys
 from PyQt6.QtWidgets import QApplication
 
 # from .noteviewer import MainWindow
-from .utils import load_json, dump_json, FileType
+from .utils import load_json, dump_json, FileType, Config
 from .structure import Courses, Course, NotesManager, Note
 from .noteviewer import MainWindow
 
@@ -19,7 +19,7 @@ class Command(Protocol):
 
 
 class NoteViewer(Command):
-    def __init__(self, project_config: dict[str, str]):
+    def __init__(self, project_config: Config):
         self.config = project_config
 
     def cmd(self, namespace: argparse.Namespace) -> None:
@@ -39,12 +39,12 @@ class FlashcardCommand(Command):
     _controller = None
     _config = None
 
-    def __init__(self, project_config: dict):
+    def __init__(self, project_config: Config):
         self.config = project_config
         self._ensure_import()
         self._has_dependecies()
 
-
+    #TODO
     @staticmethod
     def _has_dependecies() -> None:
         # TODO
@@ -110,7 +110,7 @@ class FlashcardCommand(Command):
 class CourseCommand(Command):
     """ Class command """
 
-    def __init__(self, project_config: dict[str, str]):
+    def __init__(self, project_config: Config):
         self.project_config = project_config
         self.courses_obj = Courses(self.project_config)
 
@@ -157,12 +157,13 @@ class CourseCommand(Command):
             else:
                 course_obj.new_lecture()
 
+        # TODO determine file type
         if namespace.new_assignment:
             course_obj = self.courses_obj.get_course(course)
             if course_obj is None:
                 print(f"Failed to create new assignment, no course with name: {course}")
             else:
-                course_obj.new_assignment()
+                course_obj.new_assignment(self.project_config.template_files[FileType.Typst]["assignment_template"], FileType.Typst)
 
     def _get_user_input(self, course: Course):
         path = course.path / "course_info.json"
@@ -199,9 +200,9 @@ class CourseCommand(Command):
 
 class NoteCommand(Command):
     """ Command for the creation, management, and visualization of notes """
-    def __init__(self, project_config: dict):
+    def __init__(self, project_config: Config):
         self.config = project_config
-        self.note_dir = Path(project_config['root']) / "Notes"
+        self.note_dir = Path(project_config.root_path) / "Notes"
 
     def cmd(self, namespace: argparse.Namespace):
         notes = NotesManager(self.note_dir)

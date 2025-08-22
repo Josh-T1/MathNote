@@ -47,10 +47,23 @@ QMainWindow {
         }
 """
 
+TAB_BTN_EMPTY_CSS = """
+QPushButton {
+    border: none;
+    background: transparent;
+    border-radius: 4px;
+}
+QPushButton:hover {
+    background: transparent;
+    border-radius: 4px;
+}
+"""
+
 TAB_BTN_CSS = """
 QPushButton {
     border: none;
     background: transparent;
+    text-align: left;
     border-radius: 4px;
 }
 QPushButton:hover {
@@ -84,5 +97,14 @@ QPushButton {
 QPushButton:hover {
     background: #555;
     border-radius: 4px;
+}
+"""
+
+PAGE_INPUT_CSS = """
+QLineEdit {
+    background-color: rgba(211, 211, 211, 128);
+    color: #2E2E2E;
+    border-radius: 4px;
+    padding: 2px;
 }
 """

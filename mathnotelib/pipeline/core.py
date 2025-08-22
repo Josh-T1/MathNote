@@ -5,7 +5,7 @@ from collections.abc import Iterable, Iterator, Callable
 from pathlib import Path
 from dataclasses import dataclass, field
 
-from ..utils import config, FileType
+from ..utils import FileType
 
 """
 TODO
@@ -13,8 +13,6 @@ TODO
 """
 
 logger = logging.getLogger("mathnote")
-
-MACRO_PATH = config["macros"]
 
 # There is an issue with this. In typst optional args can be sarrounded by '()' or '[]' (inline vs block), we will assume users always use '[]'
 @dataclass(frozen=True)

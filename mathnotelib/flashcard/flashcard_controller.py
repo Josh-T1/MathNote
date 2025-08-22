@@ -10,13 +10,13 @@ from PyQt6.QtWidgets import QApplication, QListView
 from .flashcard_model import FlashcardModel, FlashcardNotFoundException
 from .edit_tex import open_file_with_editor
 from ..structure import Courses
-from ..utils import SectionNames, SectionNamesDescriptor, LatexCompilationError
+from ..utils import SectionNames, SectionNamesDescriptor, LatexCompilationError, Config
 
 logger = logging.getLogger("mathnote")
 
 
 class FlashcardController:
-    def __init__(self, view, model: FlashcardModel, config: dict) -> None:
+    def __init__(self, view, model: FlashcardModel, config: Config) -> None:
         self.model = model
         self.view = view
         self.courses = Courses(config)

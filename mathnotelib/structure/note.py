@@ -6,9 +6,9 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from .source_file import SourceFile, FileType, open_cmd
-from ..utils import config
+from ..utils import CONFIG
 
-ROOT_DIR = Path(config['root'])
+ROOT_DIR = Path(CONFIG.root_path)
 
 def load_from_json(path: Path) -> dict:
     #TODO this is god awful and needs to be rethought
@@ -197,12 +197,12 @@ class NotesManager:
                 self._generate_tree(parent=cat)
         return
 
-    def new_note(self, name: str, parent: Category, note_type: FileType) -> None:
+    def new_note(self, name: str, parent: Category, note_type: FileType) -> Note | None:
         """
         name: note name, stem of .tex/typ file path (no suffix)
         """
         if name.upper() in set(note.name.upper() for note in parent.notes()):
-            print(f"Failed to create '{name}'. Its equal (up to capatilization) to existing note")
+            print(f"Failed to create '{name}'. It's equal (up to capatilization) to existing note")
             return
 
         if name == "resources":
@@ -217,7 +217,7 @@ class NotesManager:
             note_dir_path.mkdir()
             self._init_metadata(metadata_path)
 
-            note_template = Path(config["note-template"])
+            note_template = CONFIG.template_files[note_type]["note_template"]
             dest = note_dir_path / f"{name}.tex"
             shutil.copy(note_template, dest)
             # TODO support references?
