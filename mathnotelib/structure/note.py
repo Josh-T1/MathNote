@@ -161,7 +161,6 @@ class Note(SourceFile):
 
 """ TODO: unfinished """
 class NotesManager:
-
     def __init__(self, root: Path):
         """
         root: directory at the root of notes
@@ -201,46 +200,36 @@ class NotesManager:
         """
         name: note name, stem of .tex/typ file path (no suffix)
         """
-        if name.upper() in set(note.name.upper() for note in parent.notes()):
-            print(f"Failed to create '{name}'. It's equal (up to capatilization) to existing note")
+        if name.upper() in {note.name.upper() for note in parent.notes()}:
+            print(f"Failed to create note '{name}'. It's equal (up to capatilization) to existing note")
             return
 
         if name == "resources":
-            raise ValueError("Failed to create note, the name 'resources' is resereved")
+            print(f"Failed to create note, the name 'resources' is resereved")
+            return
 
-        # TODO clean this up. + fix cat-metadata vs metadata
-        if note_type == FileType.LaTeX:
-            note_dir_path = parent.path / name
-            note_path = note_dir_path / f"{name}.tex"
-            metadata_path = note_dir_path / "metadata.json"
+        ext = "tex" if note_type == FileType.LaTeX else "typ"
+        note_dir_path = parent.path / name
+        note_path = note_dir_path / f"{name}.{ext}"
+        metadata_path = note_dir_path / "metadata.json"
+        note_dir_path.mkdir()
+        self._init_metadata(metadata_path)
+        note_template = CONFIG.template_files[note_type]["note_template"]
+        shutil.copy(note_template, note_path)
+        notes = parent.notes(force=True) # reload category notes
+        # I dont like this
+        for note in notes:
+            if note.name == name:
+                if CONFIG.set_note_title:
+                    self.insert_title(note)
+                return note
+        return None
 
-            note_dir_path.mkdir()
-            self._init_metadata(metadata_path)
-
-            note_template = CONFIG.template_files[note_type]["note_template"]
-            dest = note_dir_path / f"{name}.tex"
-            shutil.copy(note_template, dest)
-            # TODO support references?
+        # TODO support references?
+        # TODO support auto generated titles
 #            with self.refs_file.open(mode="a") as f:
 #                f.write(f"\\externaldocument[{note}-]{{../{note}/{note}}}\n")
 #            new_note = Note(dir)
-
-            # TODO support auto generated titles
-#            if config["set-note-title"]:
-#                self.insert_title(dir / f"{name}.tex", new_note.name())
-
-            parent.notes(force=True) # reload category notes
-
-        elif note_type == FileType.Typst:
-            note_dir_path = parent.path / name
-            note_path = note_dir_path / f"{name}.typ"
-            metadata_path = note_dir_path / "metadata.json"
-
-            note_dir_path.mkdir()
-            note_path.touch()
-            self._init_metadata(metadata_path)
-            parent.notes(force=True) # reload category with notes
-
 #            note_template = Path(config["note-template"])
 #            dest = dir / f"{note}.tex"
 #            shutil.copy(note_template, dest)
@@ -249,34 +238,75 @@ class NotesManager:
 #            f.write(f"\\externaldocument[{note}-]{{../{note}/{note}}}\n")
 #        new_note = Note(dir)
 #        self.notes[new_note.name()] = new_note
-#
-#        if config["set-note-title"]:
-#            self.insert_title(dir / f"{name}.tex", new_note.name())
+    def del_category(self, cat: Category):
+        parent = cat.parent
+        # remove cat from parent cat if possible
+        dir = cat.path
+        shutil.rmtree(dir)
+        if parent is not None:
+            parent.children(force=True)
 
-    def new_category(self, name, parent: Optional[Category] = None):
-        #raise NotImplemented("This does not currently work")
-        # we actually have to build directory and ensure it does not already exist
+
+    def new_category(self, name, parent: Category | None=None) -> Category | None:
         head = self.root_category if parent is None else parent
         if not name in (cat.name for cat in head.children()):
             new_cat_path = head.path / name
             new_cat_path.mkdir()
             self._init_metadata(new_cat_path / "cat-metadata.json")
             head.children(force=True) # re-fresh category children
+            for cat in head.children():
+                if cat.name == name:
+                    return cat
+        return None
 
     @staticmethod
     def _init_metadata(path: Path):
+        # TODO: currently we write empty dict...
         with open(path, "w") as f:
             json.dump({}, f, indent=2)
 
-    def rename(self, note: Note, new_name):
-        # TODO
-        pass
+    def rename_cat(self, cat: Category, new_name: str, new_parent_cat: Category | None=None):
+        # reload parent cat
+        old_parent = cat.parent
+        if old_parent is None:
+            # TODO error msg? users can not rename Notes/
+            return
+        new_cat = new_parent_cat if new_parent_cat is not None else old_parent
+        if any(new_name.upper() == child.name.upper() for child in new_cat.children()):
+            raise
+        new_dir = new_cat.path / new_name
+        if new_dir.exists():
+            raise FileExistsError()
+        cat.path.rename(new_dir)
+
+        old_parent.children(force=True)
+        if new_cat.path != old_parent.path:
+            new_cat.children(force=True)
+
+    def rename_note(self, note: Note, new_name: str, new_parent_cat: Category | None=None):
+        old_cat, old_path = note.category, note.path
+        old_dir = note.category.path
+        parent_cat = note.category if new_parent_cat is None else new_parent_cat
+        if any(new_name.upper() == note.name.upper() for note in parent_cat.notes()):
+            return 1
+
+        new_dir = parent_cat.path / new_name
+        if old_path.exists():
+            raise FileExistsError(f"Directory '{new_dir}' already exists")
+        old_path.rename(f"{new_name}.{note.path.suffix}")
+        old_dir.rename(new_dir)
+
+        parent_cat.path = new_dir
+        old_cat.notes(force=True)
+        if old_cat.path != parent_cat.path:
+            parent_cat.notes(force=True)
 
     def del_note(self, note: Note):
-        dir = note.path
+        dir = note.path.parent
         shutil.rmtree(dir)
+        note.category.notes(force=True)
 
-    def insert_title(self):
+    def insert_title(self, note: Note):
         pass
 
     def get_note(self, name: str, category: Category) -> Note | None:

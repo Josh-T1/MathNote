@@ -1,0 +1,14 @@
+{  
+    "root": "",
+
+    "section_names": {},
+    
+    "editor": "vim",
+
+    "log_level": "DEBUG",
+
+    "iterm2_enabled": false,
+
+    "set_note_title": true
+}   
+

@@ -1,5 +1,5 @@
 from .note import Note, NotesManager, Category
-from .courses import Course, Courses, Lecture
+from .courses import Course, Courses, Lecture, Assignment, CourseBoundSourceFile
 from .source_file import SourceFile, CompileOptions, OutputFormat
 
 __all__ = [
@@ -12,4 +12,6 @@ __all__ = [
         "Lecture",
         "CompileOptions",
         "SourceFile",
+        "Assignment",
+        "CourseBoundSourceFile"
         ]

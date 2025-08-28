@@ -9,7 +9,7 @@ from PyQt6.QtPdf import QPdfDocument
 from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtGui import QColor, QPalette, QStandardItem, QStandardItemModel
 
-from ..utils import LatexCompilationError, CONFIG
+from ..utils import LaTeXCompilationError, CONFIG
 from ..structure import Courses, Course
 
 logger = logging.getLogger("mathnote")
@@ -290,7 +290,7 @@ class PdfWindow(QWidget):
         load_status = self._load_pdf(pdf_path, tex)
         if load_status != QPdfDocument.Error.None_:
             self.document = None
-            raise LatexCompilationError(f"Failed to compile card: {pdf_path}. Load status: {load_status}")
+            raise LaTeXCompilationError(f"Failed to compile card: {pdf_path}. Load status: {load_status}")
 
 class FlashcardMainWindow(QMainWindow):
     def __init__(self):

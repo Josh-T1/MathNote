@@ -10,7 +10,7 @@ from PyQt6.QtWidgets import QApplication
 # from .noteviewer import MainWindow
 from .utils import load_json, dump_json, FileType, Config
 from .structure import Courses, Course, NotesManager, Note
-from .noteviewer import MainWindow
+from .noteviewer import MainWindow, NoteViewerController
 
 logger = logging.getLogger("mathnote")
 
@@ -24,7 +24,9 @@ class NoteViewer(Command):
 
     def cmd(self, namespace: argparse.Namespace) -> None:
         app = QApplication(sys.argv)
+
         window = MainWindow()
+        cont = NoteViewerController(window, window.nav_bar, window.viewer)
         window.resize(800, 600)
         window.show()
         sys.exit(app.exec())

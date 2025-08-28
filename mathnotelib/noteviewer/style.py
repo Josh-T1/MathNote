@@ -1,6 +1,6 @@
 # #2E2E2E is a dark grey
 # #d3d3d3 is a light grey
-# #444 and #555 are very light grey's. #555 is lighter
+# #444 is light grey and #555 is a very ligh grey's
 
 BUILDER_LIST_CSS = """
 QListView {
@@ -61,6 +61,7 @@ QPushButton:hover {
 
 TAB_BTN_CSS = """
 QPushButton {
+    margin: 3px;
     border: none;
     background: transparent;
     text-align: left;
@@ -106,5 +107,24 @@ QLineEdit {
     color: #2E2E2E;
     border-radius: 4px;
     padding: 2px;
+}
+"""
+
+SWITCH_CSS = """
+QPushButton {
+    border: 0px solid #d3d3d3;
+    margin: 0px;
+    padding: 0px 0px;
+    border-radius: 4px;
+}
+QPushButton:checked {
+    background-color: #555;
+    color: #d3d3d3;
+}
+"""
+
+LABEL_CSS = """
+QLabel {
+    color: #d3d3d3;
 }
 """

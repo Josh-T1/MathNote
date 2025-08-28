@@ -14,8 +14,6 @@ class FileType(Enum):
 class Config:
     root_path: Path = Path.home() / "MathNote"
     templates_path: Path = Path(__file__).parent / "templates"
-    latex_templates_path: Path = field(init=False)
-    typst_templates_path: Path = field(init=False)
     macro_names: list[str] = field(default_factory=list)
     section_names: dict[str, str] = field(default_factory=dict)
     log_level: str = "INFO"
@@ -25,8 +23,6 @@ class Config:
     editor: str = "vim"
 
     def __post_init__(self):
-        self.latex_templates_path = self.templates_path / "LaTeX"
-        self.typst_templates_path = self.templates_path / "Typst"
         config_dir = self.config_dir()
         if not config_dir.is_dir():
             return
@@ -37,6 +33,8 @@ class Config:
         with open(config_path, 'r') as f:
             data = json.load(f)
             for k, v in data.items():
+                if not isinstance(v, bool) and not isinstance(v, int) and not v: # skip emtpy entries
+                    continue
                 if hasattr(self, k):
                     setattr(self, k, v)
         files = ["main_template",
@@ -84,14 +82,15 @@ class Config:
 
 
 CONFIG = Config()
-# TODO: change spelling to 'LaTeX'
-class LatexCompilationError(Exception):
+
+class LaTeXCompilationError(Exception):
     pass
+
 
 class TypstCompilationError(Exception):
     pass
 
-# TODO: fix this
+
 class SectionNamesDescriptor:
     def __init__(self, name: str, value: str):
         self.name = name
@@ -101,6 +100,7 @@ class SectionNamesDescriptor:
         return self
     def __str__(self):
         return self.value
+
 
 class ImmutableMeta(type):
     _is_initialized = False
@@ -143,6 +143,7 @@ class ImmutableMeta(type):
         else:
             return False
 
+
 # TODO: This solution sucks
 # Warning: we dynamically set attr 'proof' using the value of SectionNames.PROOF
 class SectionNames(metaclass=ImmutableMeta):
@@ -155,7 +156,6 @@ class SectionNames(metaclass=ImmutableMeta):
     PROPOSITION = "proposition"
     UNNAMED = "unnamed"
     PREAMBLE = "preamble"
-
 
 
 def load_json(file: str):

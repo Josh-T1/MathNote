@@ -1,51 +1,124 @@
-import tempfile
-from pathlib import Path
-from typing import Protocol, Callable, Optional
+from typing import Any, Literal, Protocol, Callable, Optional
 
 from PyQt6.QtGui import QBrush, QIcon, QMouseEvent, QPalette, QStandardItem, QStandardItemModel, QTransform
-from PyQt6.QtWidgets import (QApplication, QButtonGroup, QFrame, QGestureEvent, QGraphicsRectItem, QGraphicsScene, QGraphicsView, QHBoxLayout, QLabel, QListWidget, QMainWindow, QPinchGesture, QPushButton, QScrollArea, QSizePolicy,
-                             QSpacerItem, QStyle, QStyleOptionViewItem, QToolBar, QTreeView, QVBoxLayout, QWidget)
-from PyQt6.QtCore import QEvent, QFileSystemWatcher, QModelIndex, QProcess, QSize, QTimer, pyqtSignal, Qt
+from PyQt6.QtWidgets import (QApplication, QButtonGroup, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFormLayout, QFrame, QGestureEvent, QGraphicsRectItem, QGraphicsScene, QGraphicsView, QHBoxLayout, QLabel, QLineEdit, QListWidget, QMainWindow, QPinchGesture, QPushButton, QRadioButton, QScrollArea, QSizePolicy,
+                             QSpacerItem, QStackedWidget, QStyle, QStyleOptionViewItem, QToolBar, QTreeView, QVBoxLayout, QWidget)
+from PyQt6.QtCore import QEvent, QFileSystemWatcher, QLine, QModelIndex, QProcess, QSize, QTimer, pyqtSignal, Qt
 
-from .style import ICON_CSS, TREE_VIEW_CSS
+from mathnotelib.structure.courses import Course
+
+from .style import ICON_CSS, LABEL_CSS, SWITCH_CSS, TREE_VIEW_CSS
 from . import constants
-from ..utils import FileType, CONFIG, rendered_sorted_key
+from ..utils import FileType, CONFIG
 from ..structure import NotesManager, Courses, Category, OutputFormat, CompileOptions, SourceFile,Note
 from ..flashcard import FlashcardMainWindow, CompilationManager, FlashcardModel, FlashcardController
 
 
-class UpdateSvgCallback(Protocol):
-    def __call__(self, path: list[str], tmpdir: tempfile.TemporaryDirectory | None=None, name: str | None=None) -> None:...
+
+class StandardItemModel(QStandardItemModel):
+    def __init__(self, parent=None):
+        super().__init__(parent=parent)
+
+    def hasChildren(self, parent: QModelIndex=QModelIndex()) -> bool:
+        if not parent.isValid():
+            return True
+        return super().hasChildren(parent)
+#        parent = QModelIndex()
+#        if not parent.isValid():
+#            print("not valid")
+#            return True
+#        is_fake = parent.data(constants.EMPTY)
+#        if is_fake is True:
+#            return True
 
 
+class NameDialog(QDialog):
+    def __init__(self, title: str | None=None):
+        super().__init__()
+        self.title = title
+        self.initUI()
+
+    def initUI(self):
+        layout = QFormLayout()
+        self.setLayout(layout)
+        if self.title is not None:
+            self.setWindowTitle(self.title)
+        self.name = QLineEdit()
+        layout.addRow("Name:", self.name)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def get_data(self):
+        return self.name.text()
+
+
+
+class NewNoteDialog(QDialog):
+    def __init__(self):
+        super().__init__()
+        self.initUI()
+
+    def initUI(self):
+        layout = QFormLayout()
+        self.setLayout(layout)
+        self.name = QLineEdit()
+        layout.addRow("Name:", self.name)
+        self.ftype_combo = QComboBox()
+        self.ftype_combo.addItems(["Typst", "LaTeX"])
+        layout.addRow("File Type", self.ftype_combo)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        layout.addWidget(buttons)
+
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+
+    def get_data(self):
+        ftype = FileType.LaTeX if self.ftype_combo.currentText() == "LaTeX" else FileType.Typst
+        return self.name.text(), ftype
+
+class DaysOfWeekSelector(QWidget):
+    def __init__(self):
+        super().__init__()
+        layout = QHBoxLayout(self)
+        self.checkboxes = {}
+        days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        for d in days:
+            cb = QCheckBox(d)
+            layout.addWidget(cb)
+            self.checkboxes[d] = cb
+
+    def get_selected_days(self) -> list:
+        return [day for day, cb in self.checkboxes.items() if cb.isChecked()]
+
+    def set_selected_days(self, days):
+        for d, cb in self.checkboxes.items():
+            cb.setChecked(d in days)
+
+# TODO add ...
 class LauncherWidget(QWidget):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.main_layout = QVBoxLayout()
-        self.btn_layout = QHBoxLayout()
-        self.btn_container = QWidget()
         self.setLayout(self.main_layout)
-        self.btn_container.setLayout(self.btn_layout)
         self.setContentsMargins(0, 0, 0, 0)
         self.initUI()
 
     def initUI(self):
-        self._create_widgets()
-        self._configure_widgets()
-        self._add_widgets()
-
-    def _create_widgets(self):
-        self.launch_label = QLabel("Launch")
-        self.flashcard_button = QPushButton("Flashcards")
-
-    def _add_widgets(self):
-        self.btn_layout.addWidget(self.flashcard_button, Qt.AlignmentFlag.AlignCenter)
-        self.main_layout.addWidget(self.launch_label, alignment=Qt.AlignmentFlag.AlignCenter)
-        self.main_layout.addWidget(self.btn_container, alignment=Qt.AlignmentFlag.AlignCenter)
-
-    def _configure_widgets(self):
-        self.flashcard_button.setFixedWidth(100)
-        self.flashcard_button.clicked.connect(self.launch_flashcards)
+        row = QHBoxLayout()
+        launch_label = QLabel("Flashcards")
+        flashcard_button = QPushButton()
+        flashcard_button.setIcon(QIcon(str(constants.ICON_PATH / "cards.png")))
+        flashcard_button.setStyleSheet(ICON_CSS)
+        launch_label.setStyleSheet(LABEL_CSS)
+        flashcard_button.setFixedSize(constants.ICON_SIZE)
+        row.addWidget(launch_label)
+        row.addWidget(flashcard_button)
+        self.main_layout.addLayout(row)
+        flashcard_button.clicked.connect(self.launch_flashcards)
 
     # TODO ensure that we wait for flashcards to terminate properly
     def launch_flashcards(self):
@@ -58,56 +131,46 @@ class LauncherWidget(QWidget):
 
 
 class Navbar(QWidget):
-    file_opened = pyqtSignal(str)
+    file_opened = pyqtSignal(SourceFile)
+    new_note = pyqtSignal()
+    new_folder = pyqtSignal()
+    new_course = pyqtSignal()
+    delete = pyqtSignal()
 
-    def __init__(self, callback: UpdateSvgCallback):
-        """
-        callback: callable with str argument, should be a valid typst path
-        """
-        super().__init__()
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.tree_visible: bool = True
-        self.update_svg_func = callback
-
-        self.main_layout = QVBoxLayout()
-        self.main_layout.setContentsMargins(5, 8, 5, 8)
-        self.main_layout.setSpacing(4)
-
-        self.setLayout(self.main_layout)
-        self.setFixedWidth(200)
-
         self.root_course_cat = NotesManager.build_root_category(CONFIG.root_path / "Notes")
         self.root_notes_item = QStandardItem(self.root_course_cat.name)
         self.root_course_item = QStandardItem("Courses")
         self.initUI()
 
+
     def initUI(self):
-        self._create_widgets()
-        self._configure_widgets()
-        self._add_widgets()
-        self.populate_tree()
-
-    def _create_widgets(self):
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(5, 8, 5, 8)
+        main_layout.setSpacing(4)
+        self.setLayout(main_layout)
+        self.setFixedWidth(200)
+        #Init widgets
         self.minimize_button = QPushButton()
-        self.minimize_button.setToolTip("Close Sidebar")
         self.new_note_btn = QPushButton()
-        self.new_note_btn.setToolTip("New Note")
         self.new_folder_btn = QPushButton()
-        self.new_folder_btn.setToolTip("New Note Folder")
         self.search_btn = QPushButton()
-        self.search_btn.setToolTip("Search")
+        self.trash_btn = QPushButton()
         self.mode_selector = ModeSelector()
-        self.model = QStandardItemModel()
+        self.model = StandardItemModel()
         self.tree = QTreeView()
-
         self.root_item = self.model.invisibleRootItem()
         self.launcher_widget = LauncherWidget()
         self.menu_bar_layout = QHBoxLayout()
 
-    def _configure_widgets(self):
+        #Configure
         icons = [(self.minimize_button, "sidebar_left.png"),
                  (self.new_folder_btn, "add_folder.png"),
                  (self.new_note_btn, "new_note.png"),
-                 (self.search_btn, "search.png")
+                 (self.search_btn, "search.png"),
+                 (self.trash_btn, "trash.png")
                  ]
         for icon, icon_name in icons:
             icon.setIcon(QIcon(str(constants.ICON_PATH / icon_name)))
@@ -121,29 +184,46 @@ class Navbar(QWidget):
         self.tree.clicked.connect(self._item_clicked_callback)
         if (header := self.tree.header()) is not None:
             header.hide()
+        self.minimize_button.setToolTip("Close Sidebar")
+        self.new_folder_btn.setToolTip("New Note Folder")
+        self.new_note_btn.setToolTip("New Note")
+        self.search_btn.setToolTip("Search")
+        self.trash_btn.setToolTip("Delete")
+        self.new_folder_btn.clicked.connect(self.new_folder.emit)
+        self.new_note_btn.clicked.connect(self.new_note.emit)
+        self.trash_btn.clicked.connect(self.delete.emit)
 
-    def _add_widgets(self):
-        self.menu_bar_layout.addWidget(self.minimize_button)
-        self.menu_bar_layout.addWidget(self.new_note_btn)
-        self.menu_bar_layout.addWidget(self.new_folder_btn)
-        self.menu_bar_layout.addWidget(self.search_btn)
+        # Add to layout
+        buttons = [self.minimize_button, self.new_note_btn, self.new_folder_btn, self.trash_btn, self.search_btn]
+        for btn in buttons:
+            self.menu_bar_layout.addWidget(btn)
         self.menu_bar_layout.addSpacerItem(QSpacerItem(15, 15, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed))
-        self.main_layout.addLayout(self.menu_bar_layout)
-        self.main_layout.addWidget(self.tree)
-        self.main_layout.addWidget(self.mode_selector)
-        self.main_layout.addWidget(self.launcher_widget)
+        main_layout.addLayout(self.menu_bar_layout)
+        main_layout.addWidget(self.tree)
+        main_layout.addWidget(self.mode_selector)
+        main_layout.addWidget(self.launcher_widget)
+
+        self.populate_tree()
+
+#    def add_category(self, cat: QStandardItem, parent: QStandardItem):
+#        parent.appendRow(cat)
 
     def _expand_callback(self, index: QModelIndex):
         # Remark: the item will originally expand with the placeholder element. Once this occurs
-        # we will remove placeholder and populate with correct options. This could give rise to a bug where placeholder persists
+        # we will remove placeholder and populate with correct options.
         item = self.model.itemFromIndex(index)
         if item is None:
             return
         cat = item.data(constants.DIR_ROLE)
         loaded = item.data(constants.LOADED_ROLE)
-        if cat is not None and loaded is not None:
-            if loaded is False:
-                self._load_item(item, cat)
+        if cat is not None and loaded is False:
+            self._load_item(item, cat)
+
+    def _toggle_tree(self, idx: QModelIndex) -> None:
+        if self.tree.isExpanded(idx):
+            self.tree.collapse(idx)
+        else:
+            self.tree.expand(idx)
 
     def _item_clicked_callback(self, index: QModelIndex):
         item = self.model.itemFromIndex(index)
@@ -152,58 +232,35 @@ class Navbar(QWidget):
 
         # TODO: handle failed compilation
         if item.data(constants.FILE_ROLE) is not None:
-
             file: SourceFile = item.data(constants.FILE_ROLE)
-            name = item.data(constants.FILE_ROLE)
-            tmpdir = tempfile.TemporaryDirectory()
-            tmpdir_path = Path(tmpdir.name)
-
-            options = CompileOptions(file.path, OutputFormat.SVG, multi_page=True)
-            options.set_output_dir(tmpdir_path)
-            options.set_output_file_stem(constants.OUTPUT_FILE_STEM)
-
-            if isinstance(file, Note):
-                file_name = file.name
-            else:
-                file_name = file.path.parent.parent.stem
-            return_code = file.compile(options)
-            svg_files = sorted(tmpdir_path.glob(f"{constants.OUTPUT_FILE_STEM}*.svg"), key=rendered_sorted_key)
-            self.update_svg_func([str(f) for f in svg_files], tmpdir=tmpdir, name=file_name)
-
+            self.file_opened.emit(file)
         # For any item with this role we must do 2 things:
         #   1. Check to see if we should expand or collapse tree around item
         #   2. Check if subcategories and notes have been load. If not, load data and populate rows.
-        elif item.data(constants.DIR_ROLE):
+        elif item.data(constants.DIR_ROLE) is not None:
             loaded = item.data(constants.LOADED_ROLE)
-
             if loaded is False:
                 cat: Category = item.data(constants.DIR_ROLE)
                 self._load_item(item, cat)
+            self._toggle_tree(index)
 
-            if self.tree.isExpanded(index):
-                self.tree.collapse(index)
-            else:
-                self.tree.expand(index)
-
-        elif item.data(constants.COURSE_CONTAINER_ROLE):
-            if self.tree.isExpanded(index):
-                self.tree.collapse(index)
-            else:
-                self.tree.expand(index)
+        elif item.data(constants.COURSE_CONTAINER_ROLE) is not None:
+            self._toggle_tree(index)
 
 
     def _load_item(self, item: QStandardItem, cat: Category):
         # Check for placeholder row
-        if (c1 := item.child(0)):
-            if c1.text() == "placeholder":
-                item.removeRow(0)
+#        if (c1 := item.child(0)):
+#            if c1.text() == "placeholder" and len(cat.children()) > 0:
+#                item.removeRow(0)
+#        if len(cat.notes()) > 0:
+#            item.setData(False, constants.EMPTY)
 
         for sub_cat in cat.children():
             sub_cat_item = QStandardItem(sub_cat.name)
             sub_cat_item.setFlags(sub_cat_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             sub_cat_item.setData(sub_cat, constants.DIR_ROLE)
             sub_cat_item.setData(False, constants.LOADED_ROLE)
-            sub_cat_item.appendRow(QStandardItem("placeholder"))
 
             item.appendRow(sub_cat_item)
 
@@ -218,15 +275,13 @@ class Navbar(QWidget):
     def populate_tree(self):
         if self.root_item is None:
             return
-
         self.root_notes_item.setFlags(self.root_notes_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
         self.root_notes_item.setData(self.root_course_cat, constants.DIR_ROLE)
         self.root_notes_item.setData(False, constants.LOADED_ROLE)
-        self.root_notes_item.appendRow(QStandardItem("placeholder"))
 
+#        self.root_notes_item.appendRow(QStandardItem("placeholder"))
         self.root_course_item.setFlags(self.root_course_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
         self.root_course_item.setData(True, constants.COURSE_CONTAINER_ROLE)
-
         self.root_item.appendRow(self.root_notes_item)
         self.root_item.appendRow(self.root_course_item)
 
@@ -241,51 +296,11 @@ class Navbar(QWidget):
                 main_item.setFlags(main_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
                 main_item.setData(main_file, constants.FILE_ROLE)
                 course_item.appendRow(main_item)
+#        if len(courses.courses) == 0:
+#            self.root_notes_item.setData(True, constants.EMPTY)
 
     def connect_toggle_button(self, callback: Callable[[], None]):
         self.minimize_button.clicked.connect(callback)
-
-    # TODO how do I get note name?
-    def connect_new_note(self, callback: Callable[[str, Category, FileType], None]):
-        def wrapper():
-            index = self.tree.currentIndex()
-            item = self.model.itemFromIndex(index)
-            if item is None:
-                return
-            if (note := item.data(constants.FILE_ROLE)) is not None:
-                parent_cat = self.root_course_cat
-                if isinstance(note, Note):
-                    parent_cat = note.category
-            text = index.data()
-#            callback(parent_cat)
-        self.new_note_btn.clicked.connect(wrapper)
-
-    def _is_note_child(self, item: QStandardItem) -> bool:
-        current = item
-        while current is not None:
-            if current is self.root_notes_item:
-                return True
-            current = current.parent()
-        return False
-
-    def connect_new_folder(self, callback: Callable[[str, Optional[Category]], None]):
-        def wrapper():
-            idx = self.tree.currentIndex()
-            item = self.model.itemFromIndex(idx)
-            if item is None:
-                return
-            is_note = self._is_note_child(item)
-            if not is_note:
-                return
-            if item.data(constants.FILE_ROLE) is not None:
-                note: Note = item.data(constants.FILE_ROLE)
-                parent_cat = note.category
-
-
-        self.new_folder_btn.clicked.connect(wrapper)
-
-    def connect_search(self, callback):
-        pass
 
     def connect_doc_builder(self, builder_widget: QWidget):
         def callback(mode: str) -> None:
@@ -330,15 +345,20 @@ class ModeSelector(QWidget):
         self.btn_preview = QPushButton("Preview")
         self.btn_editor = QPushButton("Editor")
         self.btn_label = QLabel("Document Mode")
+        self.btn_label.setStyleSheet(LABEL_CSS)
         main_layout = QVBoxLayout()
         btn_widget = QWidget()
         btn_layout = QHBoxLayout()
-
+        btn_layout.setSpacing(0)
+        btn_layout.setContentsMargins(0, 0, 0, 0)
         self.btn_group = QButtonGroup(self)
         self.btn_group.setExclusive(True)
 
         for btn in (self.btn_editor, self.btn_preview):
             btn.setCheckable(True)
+            btn.setFlat(True)
+            btn.setStyleSheet(SWITCH_CSS)
+            btn.setFixedHeight(30)
             btn_layout.addWidget(btn)
             self.btn_group.addButton(btn)
 

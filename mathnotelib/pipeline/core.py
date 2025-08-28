@@ -51,8 +51,16 @@ class TrackedText:
         joined_text = self.text.join([str(tracked_text) for tracked_text in iterable])
         return TrackedText(joined_text, source = self.source)
 
-    def __getitem__(self, __key: SupportsIndex | slice) -> 'TrackedText':
-        return TrackedText(self.text.__getitem__(__key), source=self.source)
+    def __getattr__(self, name: str):
+        attr = getattr(self.text, name)
+        if callable(attr):
+            def wrapper(*args, **kwargs):
+                result = attr(*args, **kwargs)
+                if isinstance(result, str):
+                    return TrackedText(result, source=self.source)
+                return result
+            return wrapper
+        return attr
 
     def filetype(self) -> FileType:
         suffix_map = {".typ": FileType.Typst, ".tex": FileType.LaTeX}
@@ -68,11 +76,11 @@ class TrackedText:
         new_text = re.sub(pattern, repl, self.text)
         return TrackedText(new_text, source=self.source)
 
-    def replace(self, old: str, new: str):
-        return TrackedText(self.text.replace(old, new), source=self.source)
-
     def encode(self, encoding: str = 'utf-8', errors: str = 'strict') -> bytes:
         return self.text.encode(encoding=encoding, errors=errors)
+
+    def __getitem__(self, __key: SupportsIndex | slice) -> 'TrackedText':
+        return TrackedText(self.text.__getitem__(__key), source=self.source)
 
     def __bool__(self) -> bool:
         return len(self.text) != 0
@@ -119,11 +127,7 @@ class TrackedText:
             return item.text in self.text
         return item in self.text
 
-    def startswith(self, prefix: str | tuple[str, ...], *args) -> bool:
-        return self.text.startswith(prefix, *args)
 
-    def isalpha(self) -> bool:
-        return self.text.isalpha()
 
 # We would prefer to have name as enum (containing all section names), however users may define new sections in config file. Look at ImmutableMeta in mathnotelib.utils
 # Using SectionNames/SectionNamesDescriptor is hack, not really sure how to fix this

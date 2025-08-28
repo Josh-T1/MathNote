@@ -1,15 +1,16 @@
 from enum import Enum, auto
 import re
-from typing import Literal, TypedDict, Union
+from typing import Literal, Optional, Protocol, TypedDict, Union
 from math import ceil
 from pathlib import Path
 from datetime import datetime
 import json
 import logging
 import shutil
+from dataclasses import dataclass
 
 from .source_file import FileType, OutputFormat, CompileOptions, SourceFile
-from ..utils import Config
+from ..utils import CONFIG, Config
 
 logger = logging.getLogger("mathnote")
 
@@ -19,11 +20,17 @@ def number2filename(num: int, filetype: FileType):
     else:
         return 'lec_{0:02d}.typ'.format(num)
 
+# TODO: delete?
 class CourseSubdir(Enum):
     Assignment = auto()
     Lectures = auto()
 
-class Assignment(SourceFile):
+# Hack for type hinting course propety. Ideally we would use intersection type
+@dataclass
+class CourseBoundSourceFile(SourceFile):
+    course: "Course"
+
+class Assignment(CourseBoundSourceFile):
     def number(self) -> int:
         pattern = r"-A(\d+)"
         matches = re.findall(pattern, self.path.name)
@@ -32,7 +39,7 @@ class Assignment(SourceFile):
         else:
             return int(matches[-1])
 
-class Lecture(SourceFile):
+class Lecture(CourseBoundSourceFile):
     def __post_init__(self):
         assert self.file_type() != FileType.Unsupported
 
@@ -63,8 +70,8 @@ class Course:
         path: root path to course directory
         """
         self.path = path
-        self.name: str = path.stem
-        self.typset_files: CompilableCourseFiles = self._load_typset_files()
+        self.name = path.stem
+        self.typset_files = self._load_typset_files()
         self._course_info: dict | None = None
 
     def _load_typset_files(self) -> CompilableCourseFiles:
@@ -74,19 +81,19 @@ class Course:
         lectures_path = main_path / "lectures"
 
         if (main_file := main_path / "main.tex").exists():
-            d["main"] = SourceFile(main_file)
+            d["main"] = CourseBoundSourceFile(main_file, self)
         if assignment_path.exists() and assignment_path.is_dir():
             for p in assignment_path.iterdir():
                 if not p.is_file():
                     continue
                 if p.suffix in {'.typ', ".tex"}:
-                    d["assignments"].append(Assignment(p))
+                    d["assignments"].append(Assignment(p, self))
         if lectures_path.exists() and lectures_path.is_dir():
             for p in lectures_path.iterdir():
                 if not p.is_file():
                     continue
                 if p.suffix in {'.typ', ".tex"}:
-                    d["lectures"].append(Lecture(p))
+                    d["lectures"].append(Lecture(p, self))
         return d
 
     #TODO: Rename lecture type
@@ -127,6 +134,10 @@ class Course:
         info["weekdays"] = [] if not info["weekdays"] else self._weekdays_string_to_list(info["weekdays"])
         info["name"] = self.name
         return info
+
+#    def write_course_info(self):
+#        with open(self.path / "course_info.json", 'r') as f:
+#            f.write()
 
     def this_semester(self) -> bool:
         """
@@ -260,7 +271,7 @@ class Course:
 #        new_lecture_path.write_text(f'\\{{lecture{{{new_lecture_number}}}}}\n')
         logger.debug("Updating main file")
 
-        new_lecture = Lecture(new_lecture_path)
+        new_lecture = Lecture(new_lecture_path, self)
         new_lecture.path.write_text(fr'\section*{{Lecture {new_lecture.number()}}}')
         self.lectures.append(new_lecture)
 
@@ -318,35 +329,21 @@ class Course:
 """ Needs refactor """
 class Courses():
     """ Container for all Course objects """
+    _instance: Optional['Courses']=None
+    _courses: dict[str, Course] = {}
+
     def __init__(self, config: Config):
+        if getattr(self, "_initialized", False):
+            return
         self.config = config
         self.root = config.root_path
         self.course_root = self.root / "Courses"
-        self._courses: dict[str, Course] = {}
+        self._initialized = True
 
-    def _find_courses(self, _key = lambda c: c.name) -> list[Course]:
-        """
-        _key: key for sorting course objects. Default key is sort by name
-        returns: list of courses sorted by _key
-        """
-        course_directories = [x for x in self.course_root.iterdir() if x.is_dir() and (x / "course_info.json").is_file()]
-        courses = [Course(course) for course in course_directories]
-        return list(sorted(courses, key=_key))
-
-    def macros_path(self, note_type: FileType = FileType.Typst):
-        if note_type == FileType.LaTeX:
-            return self.root / "Preambles" / "macros.tex"
-        else:
-            return self.root / "Preambles" / "macros.typ"
-
-    def preamble_path(self, note_type: FileType = FileType.Typst):
-        if note_type == FileType.LaTeX:
-            return self.root / "Preambles" / "preamble.tex"
-        else:
-            return self.root / "Preambles" / "preamble.typ"
-
-    def get_course(self, name: str) -> Course | None:
-        return self.courses.get(name, None)
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
 
     @property
     def courses(self) -> dict[str,Course]:
@@ -357,6 +354,25 @@ class Courses():
             return self._courses
         course_list = self._find_courses(_key=lambda course: (course.last_edit() is not None, course.last_edit()))
         return {obj.name: obj for obj in course_list}
+
+    def _find_courses(self, _key = lambda c: c.name) -> list[Course]:
+        """
+        _key: key for sorting course objects. Default key is sort by name
+        returns: list of courses sorted by _key
+        """
+        course_directories = [x for x in self.course_root.iterdir() if x.is_dir() and (x / "course_info.json").is_file()]
+        courses = [Course(course) for course in course_directories]
+        return list(sorted(courses, key=_key))
+
+    # TODO should these even be methods?
+    def macros_path(self, note_type: FileType = FileType.Typst):
+        return CONFIG.template_files[note_type]["macros"]
+
+    def preamble_path(self, note_type: FileType = FileType.Typst):
+        return CONFIG.template_files[note_type]["preamble"]
+
+    def get_course(self, name: str) -> Course | None:
+        return self.courses.get(name, None)
 
     def get_active_course(self, tolerance: int = 10) -> Union[None, Course]:
         """
@@ -414,7 +430,13 @@ class Courses():
         else:
             logger.warning("TODO")
 
+    def delete_course(self, course: Course) -> None:
+        dir = course.path
+        shutil.rmtree(dir)
+        del self.courses[course.name]
+
     def __contains__(self, course_name: str):
         if not isinstance(course_name, str):
             return False
         return course_name in self.courses
+

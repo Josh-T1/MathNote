@@ -10,7 +10,7 @@ from PyQt6.QtWidgets import QApplication, QListView
 from .flashcard_model import FlashcardModel, FlashcardNotFoundException
 from .edit_tex import open_file_with_editor
 from ..structure import Courses
-from ..utils import SectionNames, SectionNamesDescriptor, LatexCompilationError, Config
+from ..utils import SectionNames, SectionNamesDescriptor, LaTeXCompilationError, Config
 
 logger = logging.getLogger("mathnote")
 
@@ -76,7 +76,7 @@ class FlashcardController:
             return
         try:
             self.view.plot_tex(path_attr, text_attr)
-        except LatexCompilationError as e:
+        except LaTeXCompilationError as e:
             if len(text_attr) > 1000:
                 text_attr = text_attr[:1001]
             logging.warning(f"Failed to compile card: {self.model.current_card} with tex: {text_attr}, {e}")
@@ -93,7 +93,7 @@ class FlashcardController:
         except FlashcardNotFoundException as e:
             logger.error(f"Failed to show next flashcard question, {e}")
             self.view.set_error_message(str(e))
-        except LatexCompilationError as e:
+        except LaTeXCompilationError as e:
             logger.error(f"Failed to compile next flashcard question, {e}")
             self.view.set_error_message(str(e))
         self.display_card("question", "pdf_question_path")
@@ -107,7 +107,7 @@ class FlashcardController:
         except FlashcardNotFoundException as e:
             logger.error(f"Failed to show next flashcard question, {e}")
             self.view.set_error_message(str(e))
-        except LatexCompilationError as e:
+        except LaTeXCompilationError as e:
             logger.error(f"Failed to compile prev flashcard question, {e}")
             self.view.set_error_message(str(e))
         self.display_card("question", "pdf_question_path")

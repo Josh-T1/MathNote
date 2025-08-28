@@ -71,6 +71,10 @@ class SourceFile:
         map = {".tex": FileType.LaTeX, ".typ": FileType.Typst}
         return map.get(self.path.suffix, FileType.Unsupported)
 
+    @property
+    def name(self) -> str:
+        return self.path.name
+
     # TODO: improve error msg, return code 1 vs 0 is not ideal
     def compile(self, options: CompileOptions) -> int:
         if self.file_type() == FileType.LaTeX:

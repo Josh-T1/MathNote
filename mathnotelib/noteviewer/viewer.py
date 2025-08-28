@@ -14,8 +14,6 @@ from . import constants
 
 class ZMultiPageViewer(QGraphicsView):
     EDGE_THRESHOLD = 20
-    VIEWER_WIDTH = 800
-    VIEWER_HEIGHT = 970
     MAX_ZOOM = 5.0
     MIN_ZOOM = 1.0
     BATCH_SIZE = 5
@@ -109,20 +107,20 @@ class ZMultiPageViewer(QGraphicsView):
         if len(items := self._scene.items()) > 0:
             prev_item = items[-1]
             prev_bounds = prev_item.boundingRect()
-            prev_scale_y = self.VIEWER_HEIGHT / prev_bounds.height()
+            prev_scale_y = constants.VIEWER_HEIGHT / prev_bounds.height()
             self._y_offset += 20 * prev_scale_y
 
         item = QGraphicsSvgItem(path)
         item.setPos(0, self._y_offset)
 
         bounds = item.boundingRect()
-        scale_x = self.VIEWER_WIDTH / bounds.width()
-        scale_y = self.VIEWER_HEIGHT / bounds.height()
+        scale_x = constants.VIEWER_WIDTH / bounds.width()
+        scale_y = constants.VIEWER_HEIGHT / bounds.height()
         item.setTransform(QTransform().scale(scale_x, scale_y))
         self._y_offset += scale_y * bounds.height()
 
         self._scene.addItem(item)
-        self._scene.setSceneRect(0, 0, self.VIEWER_WIDTH, self._y_offset)
+        self._scene.setSceneRect(0, 0, constants.VIEWER_WIDTH, self._y_offset)
 
     def event(self, event: QtCore.QEvent | None) -> bool:
         if event is None: return False
@@ -193,10 +191,12 @@ class ToolTabBar(QWidget):
         cont.setLayout(layout)
 
         self.add_tab_btn = QPushButton()
+        self.add_tab_btn.setToolTip("New Tab")
         self.add_tab_btn.setIcon(QIcon(str(constants.ICON_PATH / "add.png")))
         self.add_tab_btn.setFixedSize(constants.ICON_SIZE)
         self.add_tab_btn.setStyleSheet(ICON_CSS)
         self.settings_btn = QPushButton()
+        self.settings_btn.setToolTip("Settings")
         self.settings_btn.setIcon(QIcon(str(constants.ICON_PATH / "settings_icon.png")))
         self.settings_btn.setFixedSize(constants.ICON_SIZE)
         self.settings_btn.setStyleSheet(ICON_CSS)
@@ -261,37 +261,40 @@ class ToolTabBar(QWidget):
 class TabbedSvgViewer(QWidget):
     def __init__(self, parent: QWidget | None=None):
         super().__init__(parent)
-        self.main_layout = QVBoxLayout()
-        self.setLayout(self.main_layout)
-        self.setContentsMargins(0, 0, 0, 0)
-        self.main_layout.setSpacing(0)
         self.initUI()
         self.max_tabs = 5
 
     def initUI(self):
+        # Layout
+        self.main_layout = QVBoxLayout()
+        self.main_layout.setSpacing(0)
+        self.setLayout(self.main_layout)
+        self.setContentsMargins(0, 0, 0, 0)
+        # Create widgets
         self.tab_bar = ToolTabBar()
-        self.main_layout.addWidget(self.tab_bar)
         self.stack = QStackedWidget()
-        self.stack.setStyleSheet("background-color: white;")
-        self.stack.setFixedSize(800, 970)
-        self.stack.setContentsMargins(0, 0, 0, 0)
         self.settings_widget = SettingsWidget()
+        # Configure widgets
+        self.tab_bar.connect_tab_btn(self.add_svg_tab)
+        self.stack.setStyleSheet("background-color: white;")
+        self.stack.setFixedSize(constants.VIEWER_WIDTH, constants.VIEWER_HEIGHT)
+        self.stack.setContentsMargins(0, 0, 0, 0)
         self.tab_bar.connect_settings_btn(self.open_settings)
+        # Add widgets to layout
+        self.main_layout.addWidget(self.tab_bar)
         self.stack.addWidget(self.settings_widget)
         self.main_layout.addWidget(self.stack)
-        self.tab_bar.connect_tab_btn(self.add_svg_tab)
 
-    def addTab(self, widget: QWidget, label: str):
+
+    def addTab(self, widget: QWidget, label: str, focus: bool=False):
         if self.max_tabs == self.stack.count() - 1: # -1 to account for settings widget in toolbar
             return
-
         def close_tab():
             idx = self.stack.indexOf(widget)
             if idx == -1: # widget is not in stack
                 return
             self.stack.removeWidget(widget)
             widget.deleteLater()
-
         def change_tab():
             idx = self.stack.indexOf(widget)
             self.stack.setCurrentIndex(idx)
@@ -300,28 +303,26 @@ class TabbedSvgViewer(QWidget):
         self.stack.addWidget(widget)
         self.tab_bar.add_tab_button(label, change_tab, close_tab)
         # First tab should auto focus
-        if self.stack.count() - 1 == 1:
+        if self.stack.count() - 1 == 1 or focus:
             change_tab()
             self.stack.setCurrentWidget(widget)
 
-    def add_svg_tab(self):
+    def add_svg_tab(self, focus: bool=False):
         view = ZMultiPageViewer()
-        view.setFixedSize(800, 970)
-        self.addTab(view, f"{self.stack.count()}")
+        view.setFixedSize(constants.VIEWER_WIDTH, constants.VIEWER_HEIGHT)
+        self.addTab(view, f"{self.stack.count()}", focus=focus)
+
 
     def open_settings(self):
         self.stack.setCurrentWidget(self.settings_widget)
         self.tab_bar.focus_tab(-1) # unselect current tab
 
     def load_current_viewer(self, svg_paths: list[str] | str, tmpdir: tempfile.TemporaryDirectory | None=None, name: str | None=None):
-        # Add name?
         current_viewer = self.stack.currentWidget()
         if not isinstance(current_viewer, ZMultiPageViewer):
             return
         current_viewer.load(svg_paths, tmpdir)
         idx = self.stack.indexOf(current_viewer)
-        # Set tab name
-        # TODO: maybe silently handling errors is not the move...
         if name is None:
             return
         try:
@@ -338,27 +339,22 @@ class TabbedSvgViewer(QWidget):
 class SettingsWidget(QWidget):
     def __init__(self):
         super().__init__()
-        self.main_layout = QVBoxLayout()
-        self.main_layout.setContentsMargins(0, 0, 0, 0)
-        self.main_layout.setSpacing(0)
-        self.setFixedSize(800, 970)
-        self.setLayout(self.main_layout)
-        self.setStyleSheet("background-color: #282828;")
         self.initUI()
 
     def initUI(self):
-        self._create_widgets()
-        self._add_widgets()
-        self._configure_widgets()
+        # layout
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+        self.setFixedSize(constants.VIEWER_WIDTH, constants.VIEWER_HEIGHT)
+        self.setLayout(main_layout)
+        self.setStyleSheet("background-color: #282828;")
 
-    def _create_widgets(self):
         self.title = QLabel("Settings")
-        self.spacer = QWidget()
-        self.spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        spacer = QWidget()
 
-    def _add_widgets(self):
-        self.main_layout.addWidget(self.title, alignment=Qt.AlignmentFlag.AlignTop)
-        self.main_layout.addWidget(self.spacer)
-
-    def _configure_widgets(self):
         self.title.setStyleSheet("font-size: 24px;")
+        spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+
+        main_layout.addWidget(self.title, alignment=Qt.AlignmentFlag.AlignTop)
+        main_layout.addWidget(spacer)
