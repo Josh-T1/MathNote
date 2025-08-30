@@ -47,7 +47,7 @@ class ZMultiPageViewer(QGraphicsView):
         self.page_input.setStyleSheet(PAGE_INPUT_CSS)
         self.page_input.setAlignment(Qt.AlignmentFlag.AlignHCenter)
         self.page_input.returnPressed.connect(self._jump_to_page)
-        x, y = (constants.VIEWER_SIZE[0] - self.page_input.width()) // 2, 2
+        x, y = (constants.VIEWER_WIDTH - self.page_input.width()) // 2, 2
         self.page_input.move(x, y)
 
     def _jump_to_page(self):

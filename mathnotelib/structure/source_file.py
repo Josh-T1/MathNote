@@ -73,7 +73,7 @@ class SourceFile:
 
     @property
     def name(self) -> str:
-        return self.path.name
+        return self.path.stem
 
     # TODO: improve error msg, return code 1 vs 0 is not ideal
     def compile(self, options: CompileOptions) -> int:

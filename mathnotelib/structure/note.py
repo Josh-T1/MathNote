@@ -285,18 +285,18 @@ class NotesManager:
 
     def rename_note(self, note: Note, new_name: str, new_parent_cat: Category | None=None):
         old_cat, old_path = note.category, note.path
-        old_dir = note.category.path
+        old_dir = note.path.parent
         parent_cat = note.category if new_parent_cat is None else new_parent_cat
         if any(new_name.upper() == note.name.upper() for note in parent_cat.notes()):
             return 1
 
         new_dir = parent_cat.path / new_name
-        if old_path.exists():
+        new_path = note.path.parent / f"{new_name}{note.path.suffix}"
+        if new_dir.exists() or new_path.exists():
             raise FileExistsError(f"Directory '{new_dir}' already exists")
-        old_path.rename(f"{new_name}.{note.path.suffix}")
+        old_path.rename(new_path)
         old_dir.rename(new_dir)
 
-        parent_cat.path = new_dir
         old_cat.notes(force=True)
         if old_cat.path != parent_cat.path:
             parent_cat.notes(force=True)

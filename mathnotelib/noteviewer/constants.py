@@ -16,4 +16,3 @@ DIR_ROLE = Qt.ItemDataRole.UserRole + 2
 LOADED_ROLE = Qt.ItemDataRole.UserRole + 3
 COURSE_CONTAINER_ROLE = Qt.ItemDataRole.UserRole + 4
 EMPTY = Qt.ItemDataRole.UserRole + 5
-
