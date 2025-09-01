@@ -5,11 +5,9 @@ import shutil
 import subprocess
 
 from ..models import SourceFile
-from ..utils import FileType
+from .._enums import FileType, OutputFormat
 
-class OutputFormat(Enum):
-    PDF = "pdf"
-    SVG = "svg"
+
 
 @dataclass
 class CompileOptions:

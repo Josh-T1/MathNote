@@ -5,8 +5,8 @@ import logging
 import logging.config
 from pathlib import Path
 
-from .controller import CourseCommand, FlashcardCommand, NoteCommand, NoteViewer
-from .utils import CONFIG
+from .cmd import CourseCommand, FlashcardCommand, NoteCommand, NoteViewer
+from .config import CONFIG
 
 """
 TODO: refs?

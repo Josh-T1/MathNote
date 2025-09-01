@@ -1,23 +1,17 @@
-import sys
-import tempfile
-from pathlib import Path
-from typing import Optional
-
 from PyQt6.QtGui import QKeyEvent, QMouseEvent
 from PyQt6.QtWidgets import (QApplication, QFrame, QGestureEvent, QGraphicsScene, QGraphicsView, QHBoxLayout,
                              QLabel, QListWidget, QMainWindow, QPinchGesture, QToolBar, QTreeView, QVBoxLayout, QWidget)
 from PyQt6.QtCore import QEvent, QFileSystemWatcher, QModelIndex, QObject, QProcess, QTimer, pyqtSignal, Qt
 from PyQt6.QtSvgWidgets import QGraphicsSvgItem, QSvgWidget
 
-
-from ..utils import FileType, CONFIG
-from . import constants
 from .navbar import CollapsedNavBar, CourseNavBar, ModeSelector, NavBarContainer, NotesNavBar, SettingsWidget
 from .builder_widget import DocumentBuilder
 from .viewer import TabbedSvgViewer
 from .style import MAIN_WINDOW_CSS
 from .controllers import NoteController, CourseController
 from .search import SearchWidget
+from ..config import CONFIG
+from .._enums import FileType
 
 class EventFilter(QObject):
     def __init__(self, search_widget: SearchWidget):

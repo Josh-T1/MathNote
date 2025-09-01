@@ -7,7 +7,6 @@ from PyQt6.QtWidgets import (QWIDGETSIZE_MAX, QApplication, QFrame, QGestureEven
 from PyQt6.QtCore import QEvent, QFileSystemWatcher, QModelIndex, QProcess, QSize, QTimer, pyqtSignal, Qt
 from PyQt6.QtSvgWidgets import QGraphicsSvgItem, QSvgWidget
 from PyQt6 import QtCore
-from pathlib import Path
 
 from .style import CLOSE_TAB_BTN_CSS, ICON_CSS, PAGE_INPUT_CSS, TAB_BTN_CSS, TAB_BTN_EMPTY_CSS, TAB_WIDGET_CSS
 from . import constants

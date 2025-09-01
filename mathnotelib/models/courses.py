@@ -1,16 +1,13 @@
 from enum import Enum, auto
-import re
 from typing import Callable
 from math import ceil
 from pathlib import Path
 from datetime import datetime
 import json
 import logging
-import shutil
-from dataclasses import dataclass
 
 from .source_file import Assignment, FileType, Lecture, StandaloneSourceFile
-from ..utils import CONFIG, Config
+from ..config import CONFIG, Config
 
 logger = logging.getLogger("mathnote")
 
@@ -20,10 +17,7 @@ def number2filename(num: int, filetype: FileType):
     else:
         return 'lec_{0:02d}.typ'.format(num)
 
-# TODO: delete?
-class CourseSubdir(Enum):
-    Assignment = auto()
-    Lectures = auto()
+
 
 
 class Course:

@@ -2,13 +2,10 @@ from pathlib import Path
 import json
 import shutil
 import logging
-from datetime import datetime
 
-from mathnotelib.models.source_file import Assignment, Lecture
-
-from ..services import get_header_footer
-from ..utils import Config, CONFIG, FileType
-from ..models import Note, Category, Course, Metadata
+from ..config import CONFIG
+from ..models import Note, Category, Metadata
+from .._enums import FileType
 
 logger = logging.getLogger(__name__) # TODO
 

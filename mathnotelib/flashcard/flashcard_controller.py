@@ -7,10 +7,12 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QStandardItemModel
 from PyQt6.QtWidgets import QApplication, QListView
 
-from .flashcard_model import FlashcardModel, FlashcardNotFoundException
+from .flashcard_model import FlashcardModel
+from ..exceptions import FlashcardNotFoundException, LaTeXCompilationError
 from .edit_tex import open_file_with_editor
-from ..repo import CourseRepository
-from ..utils import SectionNames, SectionNamesDescriptor, LaTeXCompilationError, Config
+from ..services import CourseRepository
+from ..models import SectionNames, SectionNamesDescriptor
+from ..config import Config
 
 logger = logging.getLogger("mathnote")
 

@@ -10,9 +10,11 @@ from PyQt6.QtCore import QByteArray, QDate, QEvent, QFileSystemWatcher, QLine, Q
 from .style import ICON_CSS, LABEL_CSS, SEARCH_CSS, SWITCH_CSS, TITLE_LABEL_CSS, TREE_VIEW_CSS
 from . import constants
 from .search import SearchWidget
-from ..utils import Config, FileType, CONFIG
+from ..config import Config, CONFIG
 from ..models import SourceFile, Category
-from ..flashcard import FlashcardMainWindow, CompilationManager, FlashcardModel, FlashcardController
+from .._enums import FileType
+from ..flashcard import FlashcardMainWindow, FlashcardModel, FlashcardController
+from ..services import CompilationManager
 
 
 class StandardItemModel(QStandardItemModel):

@@ -7,9 +7,11 @@ import sys
 
 from PyQt6.QtWidgets import QApplication, QWidget
 
-from .utils import load_json, dump_json, FileType, Config
-from .models import Course, Note
-from .repo import NotesRepository, CourseRepository
+from .utils import load_json, dump_json
+from .config import Config
+from .models import Course
+from ._enums import FileType
+from .services import NotesRepository, CourseRepository
 from .noteviewer import MainWindow
 
 logger = logging.getLogger("mathnote")
@@ -71,7 +73,8 @@ class FlashcardCommand(Command):
     def _ensure_import(cls):
         if cls._app is None or cls._window is None or cls._model is None or cls._compilation_manager is None or cls._controller is None:
             from PyQt6.QtWidgets import QApplication
-            from .flashcard import FlashcardModel, CompilationManager, FlashcardMainWindow, FlashcardController
+            from .flashcard import FlashcardModel, FlashcardMainWindow, FlashcardController
+            from .services import CompilationManager
             cls._app = QApplication([])
             cls._window = FlashcardMainWindow
             cls._model = FlashcardModel

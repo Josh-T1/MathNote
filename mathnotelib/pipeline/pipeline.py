@@ -5,8 +5,8 @@ from collections.abc import Iterable
 from pathlib import Path
 from abc import abstractmethod, ABC
 
-from ..utils import SectionNames, SectionNamesDescriptor, FileType
-from .core import Flashcard, TrackedText, langauage_char_registry, Section
+from ..models import SectionNames, SectionNamesDescriptor, Flashcard, langauage_char_registry, Section, TrackedText
+from .._enums import FileType
 
 
 logger = logging.getLogger("mathnote")

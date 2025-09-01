@@ -7,8 +7,9 @@ from datetime import datetime
 from mathnotelib.models.source_file import Assignment, Lecture
 
 from ..services import get_header_footer
-from ..utils import Config, CONFIG, FileType
-from ..models import Note, Category, Course, Metadata
+from ..config import Config, CONFIG
+from ..models import Course
+from .._enums import FileType
 
 logger = logging.getLogger(__name__) # TODO
 

@@ -7,8 +7,8 @@ from PyQt6.QtWidgets import (QApplication, QButtonGroup, QCheckBox, QComboBox, Q
 from PyQt6.QtCore import QByteArray, QEvent, QFileSystemWatcher, QLine, QModelIndex, QObject, QPoint, QProcess, QSize, QTimer, pyqtSignal, Qt
 
 from .style import SEARCH_CSS
-from ..repo import NotesRepository
-from ..utils import CONFIG
+from ..services import NotesRepository
+from ..config import CONFIG
 
 
 def main():

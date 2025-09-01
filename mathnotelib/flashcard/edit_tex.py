@@ -1,6 +1,6 @@
 from functools import partial
 
-from ..utils import CONFIG
+from ..config import CONFIG
 
 
 def latex_template(tex: str) -> str:

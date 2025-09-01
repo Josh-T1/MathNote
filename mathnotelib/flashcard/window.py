@@ -9,9 +9,10 @@ from PyQt6.QtPdf import QPdfDocument
 from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtGui import QColor, QPalette, QStandardItem, QStandardItemModel
 
-from ..utils import LaTeXCompilationError, CONFIG
+from ..exceptions import LaTeXCompilationError
+from ..config import CONFIG
 from ..models import Course
-from ..repo import CourseRepository
+from ..services import CourseRepository
 
 logger = logging.getLogger("mathnote")
 

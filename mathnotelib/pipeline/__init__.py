@@ -1,6 +1,6 @@
-from .pipeline import (MainSectionFinder, ProofSectionFinder, ProcessingPipeline, FlashcardBuilderStage, SectionBuilderStage,
-                       CleanStage, DataGenerator, TrackedText)
-from .core import get_hack_macros, load_macros, Flashcard, FileType
+from .pipeline import (MainSectionFinder, ProofSectionFinder, ProcessingPipeline, FlashcardBuilderStage,
+                       SectionBuilderStage, CleanStage, DataGenerator, TrackedText)
+from .core import get_hack_macros, load_macros
 
 __all__ = [
         "MainSectionFinder",
@@ -8,11 +8,9 @@ __all__ = [
         "ProofSectionFinder",
         "FlashcardBuilderStage",
         "SectionBuilderStage",
-        "FileType",
         "CleanStage",
         "DataGenerator",
         "TrackedText",
         "get_hack_macros",
         "load_macros",
-        "Flashcard"
         ]

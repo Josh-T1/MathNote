@@ -1,19 +1,19 @@
 import tempfile
 from pathlib import Path
-from typing import Literal, Generic, TypeVar
+from typing import Literal
 
 from PyQt6.QtCore import QFileSystemWatcher, QModelIndex, QObject, Qt
 from PyQt6.QtGui import QStandardItem
-from PyQt6.QtWidgets import QMainWindow, QMessageBox, QStyleOptionTabBarBase, QWidget
+from PyQt6.QtWidgets import QMainWindow, QMessageBox, QWidget
 
 from . import constants
 from .navbar import CourseNavBar, NewCourseDialog, NewNoteDialog, NameDialog, NotesNavBar
 from .viewer import TabbedSvgViewer
 from ..models import Category, Course, SourceFile, Note
-from ..repo import NotesRepository, CourseRepository
-from ..utils import CONFIG, FileType, rendered_sorted_key
-from ..services import CompileOptions, OutputFormat
-from ..services.compiler import compile_source
+from ..utils import rendered_sorted_key
+from ..services import CompileOptions, compile_source, NotesRepository, CourseRepository
+from ..config import CONFIG
+from .._enums import OutputFormat
 
 
 def confirm_delete(window: QWidget, item: SourceFile | Course | Category) -> bool:
