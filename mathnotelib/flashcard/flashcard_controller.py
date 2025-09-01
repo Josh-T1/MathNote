@@ -9,7 +9,7 @@ from PyQt6.QtWidgets import QApplication, QListView
 
 from .flashcard_model import FlashcardModel, FlashcardNotFoundException
 from .edit_tex import open_file_with_editor
-from ..structure import Courses
+from ..repo import CourseRepository
 from ..utils import SectionNames, SectionNamesDescriptor, LaTeXCompilationError, Config
 
 logger = logging.getLogger("mathnote")
@@ -19,7 +19,7 @@ class FlashcardController:
     def __init__(self, view, model: FlashcardModel, config: Config) -> None:
         self.model = model
         self.view = view
-        self.courses = Courses(config)
+        self.courses = CourseRepository(config)
         self.flashcards = []
         self._setBindings()
         self._populate_view()
@@ -37,7 +37,7 @@ class FlashcardController:
 
     def _populate_view(self):
         """ Use model data to populate view """
-        courses = self.courses.courses.keys()
+        courses = self.courses.courses().keys()
         self.view.course_combo().addItems(courses)
 
     def run(self, app: QApplication | None):
@@ -176,17 +176,18 @@ class FlashcardController:
                     checked_items.append(item)
         return checked_items
 
+    # TODO
     def _get_pdf_source(self) -> str | None:
         card = self.model.current_card
         if card is None:
             return
         tracked_string = card.question if self.view.document == card.pdf_question_path else card.answer
         source = tracked_string.source
-        return source
+        return str(source)
 
     def open_main(self):
         course_name, *_ = self.get_flashcard_pipeline_config()
-        course = self.courses.courses.get(course_name, None)
+        course = self.courses.get_course(course_name)
         if course is not None:
             course.open_main()
 

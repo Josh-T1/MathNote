@@ -12,7 +12,7 @@ from typing import Optional, OrderedDict, Deque
 from collections import deque
 
 from .edit_tex import latex_template, typst_template
-from ..structure import Courses
+from ..repo import CourseRepository
 from ..utils import SectionNames, SectionNamesDescriptor, CONFIG, FileType
 from ..pipeline import FlashcardBuilderStage, CleanStage, DataGenerator, Flashcard, FileType, ProcessingPipeline, MainSectionFinder, ProofSectionFinder, TrackedText, get_hack_macros, load_macros
 
@@ -413,7 +413,7 @@ class FlashcardModel:
         self.current_card: Optional[Flashcard] = None # threadsafe, never accessed by thread
         self.compile_thread = StoppableThread(callback=self._compile)
         self._macros = None
-        self.courses = Courses(CONFIG)
+        self.courses = CourseRepository(CONFIG)
 
     @property
     def macros(self) -> dict:

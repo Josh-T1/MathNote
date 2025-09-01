@@ -128,3 +128,17 @@ QLabel {
     color: #d3d3d3;
 }
 """
+
+TITLE_LABEL_CSS = """
+QLabel {
+    font-size: 16px;
+    color: #d3d3d3;
+}
+"""
+
+SEARCH_CSS = """
+QLineEdit {
+    margin: 4px;
+    border-radius: 4px;
+}
+"""

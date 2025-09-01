@@ -2,6 +2,7 @@ from functools import partial
 
 from ..utils import CONFIG
 
+
 def latex_template(tex: str) -> str:
     """ Flashcard contents are compiled with the following template """
     return fr"""

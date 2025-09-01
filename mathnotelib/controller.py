@@ -5,12 +5,12 @@ from typing import Protocol
 import argparse
 import sys
 
-from PyQt6.QtWidgets import QApplication
+from PyQt6.QtWidgets import QApplication, QWidget
 
-# from .noteviewer import MainWindow
 from .utils import load_json, dump_json, FileType, Config
-from .structure import Courses, Course, NotesManager, Note
-from .noteviewer import MainWindow, NoteViewerController
+from .models import Course, Note
+from .repo import NotesRepository, CourseRepository
+from .noteviewer import MainWindow
 
 logger = logging.getLogger("mathnote")
 
@@ -24,9 +24,7 @@ class NoteViewer(Command):
 
     def cmd(self, namespace: argparse.Namespace) -> None:
         app = QApplication(sys.argv)
-
         window = MainWindow()
-        cont = NoteViewerController(window, window.nav_bar, window.viewer)
         window.resize(800, 600)
         window.show()
         sys.exit(app.exec())
@@ -114,16 +112,16 @@ class CourseCommand(Command):
 
     def __init__(self, project_config: Config):
         self.project_config = project_config
-        self.courses_obj = Courses(self.project_config)
+        self.course_repo = CourseRepository(self.project_config)
 
     def create_course(self, namespace: argparse.Namespace):
         logger.info(f"Creating course with name: {namespace.name[0]}")
-        self.courses_obj.create_course(namespace.name[0])
+        self.course_repo.create_course(namespace.name[0])
         if namespace.user_input is not None:
-            self._get_user_input(self.courses_obj.courses[namespace.name[0]])
+            self._get_user_input(self.course_repo.courses()[namespace.name[0]])
 
     def get_course_information(self, name: str):
-        course = self.courses_obj.courses.get(name, None)
+        course = self.course_repo.courses().get(name, None)
         if course is None:
             print(f"Course {name} does not exist")
             return
@@ -153,19 +151,19 @@ class CourseCommand(Command):
             self.open_main(course)
 
         if namespace.new_lecture:
-            course_obj = self.courses_obj.get_course(course)
+            course_obj = self.course_repo.get_course(course)
             if course_obj is None:
                 print(f"Failed to create new lecture, no course with name: {course}")
             else:
-                course_obj.new_lecture()
+                self.course_repo.create_lecture(course_obj)
 
         # TODO determine file type
         if namespace.new_assignment:
-            course_obj = self.courses_obj.get_course(course)
+            course_obj = self.course_repo.get_course(course)
             if course_obj is None:
                 print(f"Failed to create new assignment, no course with name: {course}")
             else:
-                course_obj.new_assignment(self.project_config.template_files[FileType.Typst]["assignment_template"], FileType.Typst)
+                self.course_repo.create_assignment(course_obj)
 
     def _get_user_input(self, course: Course):
         path = course.path / "course_info.json"
@@ -190,14 +188,15 @@ class CourseCommand(Command):
         return '\n'.join([f"{k}: {v}" for k, v in info.items()])
 
     def open_main(self, name: str):
-        course = self.courses_obj.get_course(name)
-        if course is None:
-            print(f"Could not find course: {name}")
-        else:
-            course.open_main()
+        print("TODO")
+#        course = self.course_repo.get_course(name)
+#        if course is None:
+#            print(f"Could not find course: {name}")
+#        else:
+#            course.open_main()
 
     def get_active(self):
-        return self.courses_obj.get_active_course()
+        return self.course_repo.get_active_course()
 
 
 class NoteCommand(Command):
@@ -205,116 +204,117 @@ class NoteCommand(Command):
     def __init__(self, project_config: Config):
         self.config = project_config
         self.note_dir = Path(project_config.root_path) / "Notes"
+        self.notes_repo = NotesRepository(self.note_dir)
 
     def cmd(self, namespace: argparse.Namespace):
-        notes = NotesManager(self.note_dir)
+
 
         if namespace.new_note:
             name, item_type, parent_path = namespace.new_note[0], namespace.note_type[0], namespace.parent[0]
             new_type = {"tex": FileType.LaTeX, "typ": FileType.Typst}.get(item_type)
 
             if parent_path is None:
-                parent_cat = notes.root_category
+                parent_cat = self.notes_repo.root_category
             else:
-                parent_cat = notes.root_category.get_subcategory(Path(parent_path))
-                if parent_cat is None:
-                    print(f"Invalid path for parent category {parent_path}")
-                    return
+                print("TODO")
+#                parent_cat = self.notes_repo.caate
+#                if parent_cat is None:
+#                    print(f"Invalid path for parent category {parent_path}")
+#                    return
 
-            if new_type is None:
-                print(f"Invalid item type {item_type}")
+#            if new_type is None:
+#                print(f"Invalid item type {item_type}")
+#
+#            else:
+#                self.notes_repo.create_note(name, parent_cat, new_type)
 
-            else:
-                notes.new_note(name, parent_cat, new_type)
+#        elif namespace.new_category:
+#            name, parent = namespace.new_category[0], namespace.parent[0]
+#            if parent is None:
+#                parent = self.notes_repo.root_category
+#            else:
+#                valid_parent = self.notes_repo.root_category.get_subcategory(parent)
+#                if valid_parent is False:
+#                    print(f"Invalid path for parent category {parent}")
+#                    return
+#            self.notes_repo.create_category(name, parent)
 
-        elif namespace.new_category:
-            name, parent = namespace.new_category[0], namespace.parent[0]
-            if parent is None:
-                parent = notes.root_category
-            else:
-                valid_parent = notes.root_category.get_subcategory(parent)
-                if valid_parent is False:
-                    print(f"Invalid path for parent category {parent}")
-                    return
-            notes.new_category(name, parent)
+#        elif namespace.remove_note:
+#            name, parent = namespace.remove_note[0], namespace.parent[0]
+#            if parent is None:
+#                parent = notes.root_category
+#            else:
+#                parent = notes.root_category.get_subcategory(parent)
+#                if parent is None:
+#                    print(f"Parent category {parent} does not exist")
+#                    return
+#
+#            note = notes.get_note(name, parent)
+#            if note is None:
+#                print(f"Note {parent.path / name} does not exist")
+#                return
+#            try:
+#                notes.del_note(note)
+#            except Exception as e:
+#                print(f"Failed to remove note {parent.path / name}")
+#                print(e)
 
-        elif namespace.remove_note:
-            name, parent = namespace.remove_note[0], namespace.parent[0]
-            if parent is None:
-                parent = notes.root_category
-            else:
-                parent = notes.root_category.get_subcategory(parent)
-                if parent is None:
-                    print(f"Parent category {parent} does not exist")
-                    return
-
-            note = notes.get_note(name, parent)
-            if note is None:
-                print(f"Note {parent.path / name} does not exist")
-                return
-            try:
-                notes.del_note(note)
-            except Exception as e:
-                print(f"Failed to remove note {parent.path / name}")
-                print(e)
-
-        elif namespace.list_notes:
-            parent = namespace.parent[0]
-            if parent is None:
-                parent = notes.root_category
-            else:
-                parent = notes.root_category.get_subcategory(parent)
-                if parent is None:
-                    print(f"Parent category {namespace.parent[0]} does not exist")
-                    return
+#        elif namespace.list_notes:
+#            parent = namespace.parent[0]
+#            if parent is None:
+#                parent = notes.root_category
+#            else:
+#                parent = notes.root_category.get_subcategory(parent)
+#                if parent is None:
+#                    print(f"Parent category {namespace.parent[0]} does not exist")
+#                    return
 
             # TODO re-work this
-            for note in parent.children:
-                if isinstance(note, Note):
-                    print(note.name)
+#            for note in parent.children:
+#                if isinstance(note, Note):
+#                    print(note.name)
 
+#        elif namespace.open_note:
+#            note = notes.get_note(namespace.open_note[0], notes.root_category)
+#            if note is None:
+#                print(f"Note {namespace.open_note[0]} does not exist")
+#            else:
+#                note.open()
 
-        elif namespace.open_note:
-            note = notes.get_note(namespace.open_note[0], notes.root_category)
-            if note is None:
-                print(f"Note {namespace.open_note[0]} does not exist")
-            else:
-                note.open()
-#
-        elif namespace.compile_note:
-            parent = namespace.parent[0]
-            if parent is None:
-                parent = notes.root_category
-            else:
-                parent = notes.root_category.get_subcategory(Path(namespace.parent[0]))
-                if parent is None:
-                    print(f"Parent category {namespace.parent[0]} does not exist")
-                    return
-            note = notes.get_note(namespace.compile_note[0], parent)
-            if note is None:
-                print(f"Note {namespace.compile_note[0]} does not exist")
-            else:
-                note.compile()
+#        elif namespace.compile_note:
+#            parent = namespace.parent[0]
+#            if parent is None:
+#                parent = notes.root_category
+#            else:
+#                parent = notes.root_category.get_subcategory(Path(namespace.parent[0]))
+#                if parent is None:
+#                    print(f"Parent category {namespace.parent[0]} does not exist")
+#                    return
+#            note = notes.get_note(namespace.compile_note[0], parent)
+#            if note is None:
+#                print(f"Note {namespace.compile_note[0]} does not exist")
+#            else:
+#                note.compile()
 
         #TODO need parent category aswell
-        elif namespace.rename:
-            old_name, new_name, parent = namespace.rename[0], namespace.rename[1], namespace.parent[0]
-            if parent is None:
-                parent = notes.root_category
-            else:
-                parent = notes.root_category.get_subcategory(Path(namespace.parent[0]))
-                if parent is None:
-                    print(f"Parent category {namespace.parent[0]} does not exist")
-                    return
-            note = notes.get_note(old_name, parent)
-            if note is None:
-                print(f"Note {parent.path / old_name} does not exist")
-                return
-
-            try:
-                notes.rename(note, new_name)
-            except ValueError as e:
-                print(f"Note with name '{new_name}' already exists")
+#        elif namespace.rename:
+#            old_name, new_name, parent = namespace.rename[0], namespace.rename[1], namespace.parent[0]
+#            if parent is None:
+#                parent = notes.root_category
+#            else:
+#                parent = notes.root_category.get_subcategory(Path(namespace.parent[0]))
+#                if parent is None:
+#                    print(f"Parent category {namespace.parent[0]} does not exist")
+#                    return
+#            note = notes.get_note(old_name, parent)
+#            if note is None:
+#                print(f"Note {parent.path / old_name} does not exist")
+#                return
+#
+#            try:
+#                notes.rename(note, new_name)
+#            except ValueError as e:
+#                print(f"Note with name '{new_name}' already exists")
 
 #
 #        elif namespace.tag:

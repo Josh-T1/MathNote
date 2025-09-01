@@ -10,7 +10,8 @@ from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtGui import QColor, QPalette, QStandardItem, QStandardItemModel
 
 from ..utils import LaTeXCompilationError, CONFIG
-from ..structure import Courses, Course
+from ..models import Course
+from ..repo import CourseRepository
 
 logger = logging.getLogger("mathnote")
 
@@ -56,6 +57,7 @@ class InfoButton(QWidget):
         self.clicked.connect(slot)
 
 
+# TODO remove courses
 class VConfigBar(QWidget):
     def __init__(self):
         super().__init__()
@@ -63,7 +65,7 @@ class VConfigBar(QWidget):
         self.initUi()
         self.setFixedWidth(160)
         self.setLayout(self.config_layout)
-        self.courses = Courses(CONFIG)
+        self.courses = CourseRepository(CONFIG)
 
     def initUi(self):
         self._create_widgets()

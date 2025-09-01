@@ -10,6 +10,7 @@ TYP_FILE_LIVE = "/tmp/live.typ"
 SVG_FILE_LIVE = "/tmp/live.svg"
 VIEWER_HEIGHT = 985
 VIEWER_WIDTH = 800
+LABEL_HEIGHT = 30
 
 FILE_ROLE = Qt.ItemDataRole.UserRole + 1
 DIR_ROLE = Qt.ItemDataRole.UserRole + 2

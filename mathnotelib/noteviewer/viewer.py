@@ -189,28 +189,22 @@ class ToolTabBar(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         cont.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         cont.setLayout(layout)
-
         self.add_tab_btn = QPushButton()
         self.add_tab_btn.setToolTip("New Tab")
         self.add_tab_btn.setIcon(QIcon(str(constants.ICON_PATH / "add.png")))
         self.add_tab_btn.setFixedSize(constants.ICON_SIZE)
         self.add_tab_btn.setStyleSheet(ICON_CSS)
-        self.settings_btn = QPushButton()
-        self.settings_btn.setToolTip("Settings")
-        self.settings_btn.setIcon(QIcon(str(constants.ICON_PATH / "settings_icon.png")))
-        self.settings_btn.setFixedSize(constants.ICON_SIZE)
-        self.settings_btn.setStyleSheet(ICON_CSS)
         layout.addWidget(self.add_tab_btn, alignment=Qt.AlignmentFlag.AlignVCenter)
-        layout.addWidget(self.settings_btn)
         return cont
 
     def add_tab_button(self, label: str, switch_callback: Callable[[], None], close_callback: Callable[[], None]) -> None:
-        def wrapped_close():
-            cont.deleteLater()
-            close_callback()
-
         cont = QWidget()
         cont.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
+        def wrapped_close():
+            cont.deleteLater()
+            self.main_layout.removeWidget(cont)
+            close_callback()
+
         layout = QHBoxLayout(cont)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
@@ -232,26 +226,21 @@ class ToolTabBar(QWidget):
 
         layout.addWidget(tab_btn)
         layout.addWidget(close_btn)
-
         count = self.main_layout.count()
         self.main_layout.insertWidget(max(0, count - 1), cont)
 
     def connect_tab_btn(self, callback: Callable[[], None]):
         self.add_tab_btn.clicked.connect(callback)
 
-    def connect_settings_btn(self, callback: Callable[[], None]):
-        self.settings_btn.clicked.connect(callback)
-
     def focus_tab(self, idx: int):
         # TODO remove for loop
-        for i in range(self.main_layout.count() -1): # -1 to account for settings widget in toolbar
+        for i in range(self.main_layout.count()): # -1 to account for settings widget in toolbar
             item = self.main_layout.itemAt(i)
             if item is None:
                 return
             tab = item.widget()
             if tab is None:
                 return
-
             if i == idx:
                 tab.setStyleSheet("background-color: #555;")
             else:
@@ -273,51 +262,56 @@ class TabbedSvgViewer(QWidget):
         # Create widgets
         self.tab_bar = ToolTabBar()
         self.stack = QStackedWidget()
-        self.settings_widget = SettingsWidget()
         # Configure widgets
-        self.tab_bar.connect_tab_btn(self.add_svg_tab)
+        self.tab_bar.connect_tab_btn(lambda: self.add_svg_tab(focus=True))
         self.stack.setStyleSheet("background-color: white;")
         self.stack.setFixedSize(constants.VIEWER_WIDTH, constants.VIEWER_HEIGHT)
         self.stack.setContentsMargins(0, 0, 0, 0)
-        self.tab_bar.connect_settings_btn(self.open_settings)
         # Add widgets to layout
         self.main_layout.addWidget(self.tab_bar)
-        self.stack.addWidget(self.settings_widget)
         self.main_layout.addWidget(self.stack)
 
-
-    def addTab(self, widget: QWidget, label: str, focus: bool=False):
-        if self.max_tabs == self.stack.count() - 1: # -1 to account for settings widget in toolbar
+    def close_tab(self, widget: QWidget):
+        idx = self.stack.indexOf(widget)
+        if idx == -1: # widget is not in stack
             return
-        def close_tab():
-            idx = self.stack.indexOf(widget)
-            if idx == -1: # widget is not in stack
-                return
-            self.stack.removeWidget(widget)
-            widget.deleteLater()
-        def change_tab():
-            idx = self.stack.indexOf(widget)
-            self.stack.setCurrentIndex(idx)
-            self.tab_bar.focus_tab(idx - 1)
+        self.stack.removeWidget(widget)
+        widget.deleteLater()
+        if self.stack.count() == 0:
+            self.add_svg_tab(focus=True)
+#                self.tab_bar.focus_tab()
+        else:
+            next_idx = idx if self.stack.count() -1 >= idx else self.stack.count()- 1
+            self.stack.setCurrentIndex(next_idx)
+            self.tab_bar.focus_tab(next_idx)
 
+    def change_tab(self, widget: QWidget):
+        idx = self.stack.indexOf(widget)
+        self.stack.setCurrentIndex(idx)
+        self.tab_bar.focus_tab(idx)
+
+    def addTab(self, widget: QWidget, label: str, focus: bool=True):
+        if self.max_tabs == self.stack.count():
+            return
+        change = lambda: self.change_tab(widget)
+        close = lambda: self.close_tab(widget)
         self.stack.addWidget(widget)
-        self.tab_bar.add_tab_button(label, change_tab, close_tab)
+        self.tab_bar.add_tab_button(label, change, close)
         # First tab should auto focus
-        if self.stack.count() - 1 == 1 or focus:
-            change_tab()
-            self.stack.setCurrentWidget(widget)
+        if self.stack.count() == 1 or focus:
+            self.change_tab(widget)
 
-    def add_svg_tab(self, focus: bool=False):
+    def add_svg_tab(self, focus: bool=True):
         view = ZMultiPageViewer()
         view.setFixedSize(constants.VIEWER_WIDTH, constants.VIEWER_HEIGHT)
-        self.addTab(view, f"{self.stack.count()}", focus=focus)
+        self.addTab(view, f"{self.stack.count() + 1}", focus=focus)
 
 
-    def open_settings(self):
-        self.stack.setCurrentWidget(self.settings_widget)
-        self.tab_bar.focus_tab(-1) # unselect current tab
-
-    def load_current_viewer(self, svg_paths: list[str] | str, tmpdir: tempfile.TemporaryDirectory | None=None, name: str | None=None):
+    def load_current_viewer(self,
+                            svg_paths: list[str] | str,
+                            tmpdir: tempfile.TemporaryDirectory | None=None,
+                            name: str | None=None,
+                            ):
         current_viewer = self.stack.currentWidget()
         if not isinstance(current_viewer, ZMultiPageViewer):
             return
@@ -326,7 +320,7 @@ class TabbedSvgViewer(QWidget):
         if name is None:
             return
         try:
-            widget = self.tab_bar.main_layout.itemAt(idx - 1).widget()
+            widget = self.tab_bar.main_layout.itemAt(idx).widget()
             btn = widget.layout().itemAt(0).widget()
             if isinstance(btn, QPushButton):
                 btn.setText(name)

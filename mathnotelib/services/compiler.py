@@ -1,30 +1,11 @@
-from dataclasses import dataclass
-from pathlib import Path
 from enum import Enum
-from typing import Optional
-import subprocess
+from pathlib import Path
+from dataclasses import dataclass
 import shutil
-import platform
+import subprocess
 
+from ..models import SourceFile
 from ..utils import FileType
-
-"""
-TODO: we get errors from latexmk, but output is still produced. Look into different error code meanings.
-Currently we can just check for output file to validate compilation
-"""
-
-def open_cmd() -> str:
-    """
-    Returns the open command for the respective operating system
-    """
-    system_name = platform.system().lower()
-    if system_name == "darwin":
-        cmd = "open"
-    elif system_name == "linux":
-        cmd = "xdg-open"
-    else:
-        cmd = "start"
-    return cmd
 
 class OutputFormat(Enum):
     PDF = "pdf"
@@ -35,9 +16,9 @@ class CompileOptions:
     filepath: Path
     output_format: OutputFormat
     multi_page: bool = True
-    _output_file_stem: Optional[str] = None
-    _output_dir: Optional[Path] = None
-    _cwd: Optional[Path] = None
+    _output_file_stem: str | None=None
+    _output_dir: Path | None=None
+    _cwd: Path | None=None
 
     def set_output_file_stem(self, stem: str):
         self._output_file_stem = stem
@@ -63,48 +44,28 @@ class CompileOptions:
             return self._output_dir
         return self.filepath.parent
 
-@dataclass
-class SourceFile:
-    path: Path
+#def open_pdf(source: StandaloneSourceFile, lazy: bool=True) -> int:
+#    pdf_path = source.pdf_path()
+#    if pdf_path is None or lazy is False:
+#        options = CompileOptions(source.path, output_format=OutputFormat.PDF)
+#        source.compile(options)
+#
+#        pdf_path = source.pdf_path()
+#        if pdf_path is None:
+#            return False
+#
+#    open = open_cmd()
+#    result = subprocess.run([open, pdf_path], stdout=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
+#    return result.returncode
 
-    def file_type(self) -> FileType:
-        map = {".tex": FileType.LaTeX, ".typ": FileType.Typst}
-        return map.get(self.path.suffix, FileType.Unsupported)
-
-    @property
-    def name(self) -> str:
-        return self.path.stem
-
-    # TODO: improve error msg, return code 1 vs 0 is not ideal
-    def compile(self, options: CompileOptions) -> int:
-        if self.file_type() == FileType.LaTeX:
-            code = compile_latex(self.path, options)
-        elif self.file_type() == FileType.Typst:
-            code = compile_typst(self.path, options)
-        else:
-            code = 1
-        return code
-
-    def pdf_path(self) -> Path | None:
-        pdf_path = self.path.parent / self.path.with_suffix(".pdf").name
-        if pdf_path.exists():
-            return pdf_path
-        return None
-
-    def open_pdf(self, lazy: bool=True) -> int:
-        pdf_path = self.pdf_path()
-        if pdf_path is None or lazy is False:
-            options = CompileOptions(self.path, output_format=OutputFormat.PDF)
-            self.compile(options)
-
-            pdf_path = self.pdf_path()
-            if pdf_path is None:
-                return False
-
-        open = open_cmd()
-        result = subprocess.run([open, pdf_path], stdout=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
-        return result.returncode
-
+def compile_source(source: SourceFile, options: CompileOptions) -> int:
+    if source.file_type() == FileType.LaTeX:
+        code = compile_latex(source.path, options)
+    elif source.file_type() == FileType.Typst:
+        code = compile_typst(source.path, options)
+    else:
+        code = 1
+    return code
 
 def compile_typst(filepath: Path, options: CompileOptions):
     cmd = ["typst", "compile", "--format", options.output_format.value, str(filepath)]
