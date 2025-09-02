@@ -1,12 +1,11 @@
-from enum import Enum
 from pathlib import Path
 from dataclasses import dataclass
 import shutil
 import subprocess
 
-from ..models import SourceFile
+from ..models import SourceFile, StandaloneSourceFile
+from .filesystem import open_cmd
 from .._enums import FileType, OutputFormat
-
 
 
 @dataclass
@@ -42,24 +41,24 @@ class CompileOptions:
             return self._output_dir
         return self.filepath.parent
 
-#def open_pdf(source: StandaloneSourceFile, lazy: bool=True) -> int:
-#    pdf_path = source.pdf_path()
-#    if pdf_path is None or lazy is False:
-#        options = CompileOptions(source.path, output_format=OutputFormat.PDF)
-#        source.compile(options)
-#
-#        pdf_path = source.pdf_path()
-#        if pdf_path is None:
-#            return False
-#
-#    open = open_cmd()
-#    result = subprocess.run([open, pdf_path], stdout=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
-#    return result.returncode
+def open_pdf(source: StandaloneSourceFile, lazy: bool=True) -> int:
+    pdf_path = source.pdf_path()
+    if pdf_path is None or lazy is False:
+        options = CompileOptions(source.path, output_format=OutputFormat.PDF)
+        compile_source(source, options)
+
+        pdf_path = source.pdf_path()
+        if pdf_path is None:
+            return False
+
+    open = open_cmd()
+    result = subprocess.run([open, pdf_path], stdout=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
+    return result.returncode
 
 def compile_source(source: SourceFile, options: CompileOptions) -> int:
-    if source.file_type() == FileType.LaTeX:
+    if source.filetype() == FileType.LaTeX:
         code = compile_latex(source.path, options)
-    elif source.file_type() == FileType.Typst:
+    elif source.filetype() == FileType.Typst:
         code = compile_typst(source.path, options)
     else:
         code = 1
@@ -99,6 +98,7 @@ def compile_latex_to_pdf(filepath: Path, options: CompileOptions):
     pdf_cmd = ["latexmk",
                "-pdf",
                "-silent",
+               "-pdflatex=pdflatex -interaction=nonstopmode",
                f"-outdir={options.resolved_output_dir()}",
                f"-jobname={options.resolved_output_file_stem()}",
                str(filepath)
@@ -134,3 +134,26 @@ def compile_latex(filepath: Path, options: CompileOptions):
           cwd=options.resolved_cwd()
             )
     return result_2.returncode
+
+
+def latex_template(tex: str) -> str:
+    """ Flashcard contents are compiled with the following template """
+    return fr"""
+\documentclass[preview, border=0.1in]{{standalone}}
+\usepackage{{amsmath,amsfonts,amsthm,amssymb,mathtools}}
+\usepackage{{mathrsfs}}
+\begin{{document}}
+{tex}
+\end{{document}}"""
+
+# TODO
+def typst_template(typ: str) -> str:
+    return fr"""
+#set page(
+        width: auto,
+        height: auto,
+        margin: 5pt
+        )
+{typ}
+"""
+

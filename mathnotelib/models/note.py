@@ -4,6 +4,7 @@ from typing import Optional
 
 from .source_file import SourceFile
 
+
 @dataclass
 class Metadata:
     tags: set = field(default_factory=set)
@@ -13,6 +14,7 @@ class Metadata:
 
     def add_tag(self, tag: str):
         self.tags.add(tag)
+
 
 @dataclass
 class Category:
@@ -40,23 +42,28 @@ class Category:
 
 @dataclass
 class Note(SourceFile):
-    """ TODO """
+    """ Model of note """
     metadata: Metadata
     category: Category
-
-    def global_metadata(self):
-        cat = self.category
-        tags = self.metadata.tags.copy()
-        while cat:
-            tags.union(cat.metadata.tags)
-            cat = cat.parent
-        return Metadata(tags)
 
     @property
     def name(self) -> str:
         return self.path.stem
 
-    def tags(self) -> set:
+    def tags(self, all: bool=False) -> set:
+        """Returns note tags
+        Args:
+            all: bool, default False
+                if True note inherits all tags from parent categories
+        Returns:
+            set of tags
+        """
+        tags = self.metadata.tags.copy()
+        if not all:
+            cat = self.category
+            while cat:
+                tags.union(cat.metadata.tags)
+                cat = cat.parent
         return self.metadata.tags
 
     def remove_tag(self, tag: str) -> None:

@@ -1,16 +1,19 @@
+import math
 from pathlib import Path
 import sys
 import logging
 import threading
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QStandardItemModel
+from PyQt6.QtGui import QStandardItem, QStandardItemModel
 from PyQt6.QtWidgets import QApplication, QListView
 
+from mathnotelib.models.courses import Course
+
+from .window import FlashcardMainWindow
 from .flashcard_model import FlashcardModel
 from ..exceptions import FlashcardNotFoundException, LaTeXCompilationError
-from .edit_tex import open_file_with_editor
-from ..services import CourseRepository
+from ..services import CourseRepository, open_file_with_editor, open_pdf
 from ..models import SectionNames, SectionNamesDescriptor
 from ..config import Config
 
@@ -18,10 +21,10 @@ logger = logging.getLogger("mathnote")
 
 
 class FlashcardController:
-    def __init__(self, view, model: FlashcardModel, config: Config) -> None:
+    def __init__(self, view: FlashcardMainWindow, model: FlashcardModel, config: Config) -> None:
         self.model = model
         self.view = view
-        self.courses = CourseRepository(config)
+        self.course_repo = CourseRepository(config)
         self.flashcards = []
         self._setBindings()
         self._populate_view()
@@ -36,10 +39,28 @@ class FlashcardController:
         self.view.bind_show_proof_button(lambda: self.display_card("PROOF", "pdf_PROOF_path"))
         self.view.bind_open_main_button(self.open_main)
         self.view.bind_launch_iterm_button(self.launch_iterm)
+        self.view.config_bar.update_filters.connect(lambda: self.handle_update_filters())
+
+    def handle_update_filters(self):
+        text = self.view.course_combo().currentText()
+        course: Course | None = self.course_repo.get_course(text)
+        if course is None:
+            raise ValueError("Course directory not found")
+        day_per_week = max(len(course.days()), 2) # defualt to 2 if not set in course_info.json
+        num_weeks = math.ceil(len(course.lectures) / day_per_week)
+
+        self.view.list_model().clear()
+        all_box = QStandardItem('All')
+        all_box.setCheckable(True)
+        self.view.list_model().appendRow(all_box)
+        for i in range(1, num_weeks+1):
+            list_item = QStandardItem(f"Week {i}")
+            list_item.setCheckable(True)
+            self.view.list_model().appendRow(list_item)
 
     def _populate_view(self):
         """ Use model data to populate view """
-        courses = self.courses.courses().keys()
+        courses = self.course_repo.courses().keys()
         self.view.course_combo().addItems(courses)
 
     def run(self, app: QApplication | None):
@@ -133,7 +154,7 @@ class FlashcardController:
 
     def create_flashcards(self):
         course_name, section_names, weeks, random = self.get_flashcard_pipeline_config()
-        course = self.courses.get_course(course_name)
+        course = self.course_repo.get_course(course_name)
 
         # catch user errors
         if not section_names or not course:
@@ -189,13 +210,14 @@ class FlashcardController:
 
     def open_main(self):
         course_name, *_ = self.get_flashcard_pipeline_config()
-        course = self.courses.get_course(course_name)
+        course = self.course_repo.get_course(course_name)
         if course is not None:
-            course.open_main()
+            open_pdf(course.main_file)
 
     def launch_iterm(self):
         source = self._get_pdf_source()
-        open_file_with_editor(source)
+        if source is not None:
+            open_file_with_editor(source)
 
 
 

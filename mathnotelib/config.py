@@ -3,22 +3,56 @@ from pathlib import Path
 import json
 import shutil
 import os
+from typing import Optional
 
 from ._enums import FileType
 
-@dataclass
+
 class Config:
-    root_path: Path = Path.home() / "MathNote"
-    templates_path: Path = Path(__file__).parent / "templates"
-    macro_names: list[str] = field(default_factory=list)
-    section_names: dict[str, str] = field(default_factory=dict)
-    log_level: str = "INFO"
-    iterm2_enabled: bool = False
-    set_note_title: bool = True
-    template_files: dict[FileType, dict[str, Path]] = field(default_factory=dict)
-    editor: str = "vim"
+    """Singleton class that stores global configuration for the MathNote app"""
+    _instance: Optional["Config"]=None
+
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
+    def __init__(self,
+                 macro_names: list[str] | None=None,
+                 section_names: dict[str, str] | None=None,
+                 log_level: str = "INFO",
+                 iterm2_enabled: bool = False,
+                 set_note_title: bool = True,
+                 template_files: dict[FileType, dict[str, Path]] | None=None ,
+                 editor: str = "vim",
+                 ):
+        """
+        Args:
+            root_path: Root directory for MathNote data
+            templates_path: Directory containing all template files (i.e., templates_path/LaTeX(Typst)/{template}.tex(typ))
+            macro_names: List of macro names used in typestting projects
+            section_names: Mapping of section names to their abbreviations
+            log_level: Logging level
+            iterm2_enabled: If set to true additional iterm2 functinality is enabled. Default iterm2_enabled=False
+            template_files: Dict: filetype -> (template_name -> template_path). Maps filetype to a a new map, which maps template name to template path
+            editor: Default editor to open files, nvim and vim are the only supported options
+        """
+
+        if getattr(self, "_initizialized", False):
+            return
+        self._initizialized = True
+        self.root_path = Path.home() / "MathNote"
+        self.templates_path = Path(__file__).parent / "templates"
+        self.macro_names = macro_names if macro_names is not None else []
+        self.section_names = section_names if section_names is not None else {}
+        self.log_level = log_level
+        self.iterm2_enabled = iterm2_enabled
+        self.set_note_title = set_note_title
+        self.template_files = template_files if template_files is not None else {}
+        self.editor = editor
 
     def __post_init__(self):
+        """Updates default values with values specified in config file"""
         config_dir = self.config_dir()
         if not config_dir.is_dir():
             return
@@ -55,6 +89,12 @@ class Config:
 
     @classmethod
     def config_dir(cls):
+        """
+        Returns:
+            platform-specific user config directory
+        Raises:
+            OSError: if operating system is unsupported
+        """
         if os.name == "nt":
             config_dir = Path(os.getenv("APPDATA")) / "MathNote"
         elif os.name == "posix":
@@ -64,18 +104,18 @@ class Config:
         return config_dir
 
     def update_templates(self):
+        """Copies templates from user config directory to app templates directory"""
         # TODO test
-        for file_type, ext in [(FileType.LaTeX, "tex"), (FileType.Typst, "typ")]:
+        for file_type, ext in [(FileType.LaTeX, ".tex"), (FileType.Typst, ".typ")]:
             macros_path = self.template_files[file_type]["macros"]
             preamble_path = self.template_files[file_type]["preamble"]
             note_macros_path = self.template_files[file_type]["note_macros"]
             note_preamble_path = self.template_files[file_type]["note_preamble"]
 
-            shutil.copy(macros_path, self.templates_path / file_type.value / f"macros.{ext}")
-            shutil.copy(preamble_path, self.templates_path / file_type.value / f"preamble.{ext}")
-            shutil.copy(note_macros_path, self.templates_path / file_type.value / f"note_macros.{ext}")
-            shutil.copy(note_preamble_path, self.templates_path / file_type.value / f"note_preamble.{ext}")
+            shutil.copy(macros_path, self.templates_path / file_type.value / f"macros{ext}")
+            shutil.copy(preamble_path, self.templates_path / file_type.value / f"preamble{ext}")
+            shutil.copy(note_macros_path, self.templates_path / file_type.value / f"note_macros{ext}")
+            shutil.copy(note_preamble_path, self.templates_path / file_type.value / f"note_preamble{ext}")
 
 
 CONFIG = Config()
-

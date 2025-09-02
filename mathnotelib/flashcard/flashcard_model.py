@@ -6,12 +6,17 @@ from pathlib import Path
 from typing import Optional, Deque
 from collections import deque
 
+from mathnotelib._enums import FileType
+
 from ..services import CourseRepository, CompilationManager
-from ..models import SectionNames, SectionNamesDescriptor, Flashcard
+from ..models import SectionNames, SectionNamesDescriptor, Flashcard, FlashcardDoubleLinkedList
 from ..config import CONFIG
+from ..utils import StoppableThread
 from ..pipeline import FlashcardBuilderStage, CleanStage, DataGenerator, ProcessingPipeline, MainSectionFinder, ProofSectionFinder, get_hack_macros, load_macros
 
+
 logger = logging.getLogger("mathnote")
+
 
 class FlashcardCache:
     def __init__(self, cache_dir: Path):
@@ -41,36 +46,6 @@ class FlashcardCache:
                 cache[file.name] = str(file)
         return cache
 
-    # ?
-#    def load_from_cache(self, path: str) -> Any:
-#        with open(path, "r") as f:
-#            data = json.load(f)
-#        return data
-#
-#    def cache_key(self, path: Path) -> str | None:
-#        if self.section_names is None:
-#            return None
-#        key = "-".join(self.section_names) + str(path)
-#        return key
-#
-#    def get_cache(self, path: Path) -> :
-#        cache_key = self.cache_key(path)
-#        if cache_key is None:
-#            return None
-#
-#        filename = self.cache.get(cache_key, None)
-#        if filename is not None:
-#            cache_value = self.load_from_cache(filename)
-#            return cache_value
-#
-#        return None
-
-
-
-
-
-
-
 
 class FlashcardModel:
     """ Acts as a container for the flashcard data. MVC architecture for gui """
@@ -92,6 +67,7 @@ class FlashcardModel:
         self._macros = None
         self.courses = CourseRepository(CONFIG)
 
+    # TODO extend to typst and this should not be property
     @property
     def macros(self) -> dict:
         r"""
@@ -99,13 +75,8 @@ class FlashcardModel:
         (parse_tex.py has limited parsing capabilities)
         """
         if self._macros is None:
-            self._macros = self._load_macros()
+            self._macros = load_macros(self.courses.macros_path(FileType.LaTeX), CONFIG.macro_names)
         return self._macros
-
-    def _load_macros(self) -> dict:
-        """ Load macros from MACRO_PATH. Note there are limitations on macros that parse_tex can load and MACRO_NAMES are not created dynamically...See parse_tex.py """
-        return load_macros(self.courses.macros_path(), CONFIG.macro_names)
-
 
     def _next_compiled_flashcard(self) -> Flashcard:
         """ Thread safe retreival of next card
@@ -250,7 +221,7 @@ class FlashcardModel:
 
             cached_paths = self.compiler.list_cache_by_oldest()
             flashcard_hash = (set(self.compiler.get_hash(str(flashcard.question)) for flashcard in self.flashcards)
-                              | set(self.compiler.get_hash(value) for _card in self.flashcards for value in _card.additional_info.values()))
+                              | set(self.compiler.get_hash(str(value)) for _card in self.flashcards for value in _card.additional_info.values()))
 
             # Delete cached file starting from oldest if hash(flashcards.question) != hash(cached file)
             while delete_num > 0 and len(cached_paths) > 0:

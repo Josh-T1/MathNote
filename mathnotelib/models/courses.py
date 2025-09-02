@@ -19,7 +19,6 @@ def number2filename(num: int, filetype: FileType):
 
 
 
-
 class Course:
     def __init__(self,
                  path: Path,
@@ -48,7 +47,6 @@ class Course:
             return None
         return max([lecture.last_edit() for lecture in self.lectures])
 
-
     @property
     def course_info(self) -> dict:
         """
@@ -66,10 +64,6 @@ class Course:
         info["name"] = self.name
         return info
 
-#    def write_course_info(self):
-#        with open(self.path / "course_info.json", 'r') as f:
-#            f.write()
-
     def this_semester(self) -> bool:
         """
         returns: True if class is active this semester """
@@ -83,7 +77,6 @@ class Course:
     def _weekdays_string_to_list(data: str):
         return [day.strip() for day in data.split(",")]
 
-
     def start_time(self) -> datetime |  None:
         """
         returns: course start time as datetime.datetime object if start time is found, otherwise returns None
@@ -91,7 +84,6 @@ class Course:
         if (start_time := self.course_info["start-time"]):
             return datetime.strptime(start_time, "%H:%M")
         return None
-
 
     def end_time(self) -> datetime | None:
         """
@@ -110,7 +102,6 @@ class Course:
             logger.warning("Invalid 'Weeday' in course_info.json file")
             res = []
         return res
-
 
     def get_week(self, lecture: Lecture) -> int:
         """
@@ -151,22 +142,6 @@ class Course:
         path = self.path / "assignments" / filename
         return path
 
-
-#    def compile_main(self, options: CompileOptions | None = None):
-#        """ Compile main file
-#        lectures_only: If True pdf will only contain lecture notes, otherwise endnotes and prelimanary sections
-#        will be included
-#        returns: error code. e.i {}
-#        """
-#
-#        if (main_file := self.typset_files["main"]) is not None:
-#            if options is None:
-#                options = CompileOptions(main_file.path, OutputFormat.PDF)
-#            result_code = main_file.compile(options)
-#        else:
-#            result_code = 1
-#        return result_code
-
     def __eq__(self, other):
         if not isinstance(other, Course):
             return False
@@ -174,7 +149,7 @@ class Course:
 
     def __repr__(self) -> str:
         return f"{self.__class__}(path={self.path}, lectures={self.lectures})"
-
+    #TODO: delete, make sure I never use this first
     def __contains__(self, other) -> bool:
         if not isinstance(other, Lecture):
             return False
