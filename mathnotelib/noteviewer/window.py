@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import (QApplication, QFrame, QGestureEvent, QGraphicsScene
 from PyQt6.QtCore import QEvent, QFileSystemWatcher, QModelIndex, QObject, QProcess, QTimer, pyqtSignal, Qt
 from PyQt6.QtSvgWidgets import QGraphicsSvgItem, QSvgWidget
 
-from .navbar import CollapsedNavBar, CourseNavBar, ModeSelector, NavBarContainer, NotesNavBar, SettingsWidget
+from .navbar import CollapsedNavBar, CourseNavBar, ModeSelector, NavBarContainer, NotesNavBar, SettingsNavBar
 from .builder_widget import DocumentBuilder
 from .viewer import TabbedSvgViewer
 from .style import MAIN_WINDOW_CSS
@@ -62,7 +62,7 @@ class MainWindow(QMainWindow):
         # Set controllers. Should this code really live here?
         notes_navbar = NotesNavBar()
         courses_navbar = CourseNavBar()
-        settings = SettingsWidget(CONFIG)
+        settings = SettingsNavBar(CONFIG)
         self.notes_controller = NoteController(self, notes_navbar, self.viewer)
         self.coures_controller = CourseController(self, courses_navbar, self.viewer)
         self.navbar = NavBarContainer(notes_navbar, courses_navbar, settings)

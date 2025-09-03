@@ -4,12 +4,11 @@ import shutil
 import logging
 from datetime import datetime
 
-from mathnotelib.models.source_file import Assignment, Lecture
-
 from ..services import get_header_footer
-from ..config import Config, CONFIG
-from ..models import Course
+from ..config import Config
+from ..models import Course, Assignment, Lecture
 from .._enums import FileType
+from ..exceptions import CourseExistsError, InvalidNameError
 
 logger = logging.getLogger(__name__) # TODO
 
@@ -36,9 +35,7 @@ class CourseRepository:
         return cls._instances[path]
 
     def courses(self) -> dict[str,Course]:
-        """
-        returns: dict with the key value pairs, (course name, course object)
-        """
+        """Returns dict with the key value pairs: (course name, course object)"""
         if not self._courses:
             course_list = self.load_courses(_key=lambda course: (course.last_edit() is not None, course.last_edit()))
             self._courses = {obj.name: obj for obj in course_list}
@@ -51,9 +48,12 @@ class CourseRepository:
         return FileType.Typst
 
     def load_courses(self, _key = lambda c: c.name) -> list[Course]:
-        """
-        _key: key for sorting course objects. Default key is sort by name
-        returns: list of courses sorted by _key
+        """ Load coure objects from directories
+
+        Args:
+            _key: key for sorting course objects. By default we sort by name
+
+        Returns: list of Course objects sorted by _key
         """
         courses = []
         course_directories = [x for x in self.course_root.iterdir() if x.is_dir() and (x / "course_info.json").is_file()]
@@ -67,20 +67,22 @@ class CourseRepository:
 
     # TODO should these even be methods?
     def macros_path(self, note_type: FileType = FileType.Typst):
-        return CONFIG.template_files[note_type]["macros"]
+        return self.config.template_files[note_type]["macros"]
 
     def preamble_path(self, note_type: FileType = FileType.Typst):
-        return CONFIG.template_files[note_type]["preamble"]
+        return self.config.template_files[note_type]["preamble"]
 
     def get_course(self, name: str) -> Course | None:
         return self.courses().get(name, None)
 
     def get_active_course(self, tolerance: int = 10) -> Course | None:
         """
-        tolerance: maximum number of minutes for which a class with start_time = 'x' will be considered active at time ('x' - tolerance). e.g If class A starts at 10:00am we consider it activate at 9:50 by default
-        returns: active course or None
+        Args:
+            tolerance: maximum number of minutes for which a class with start_time = 'x' will be considered active at time ('x' - tolerance).
+                        e.g If class A starts at 10:00am we consider it activate at 9:50 by default
+        Returns:
+            course which is currently occuring or None
         """
-
         for course in self.courses().values():
             time_now = datetime.now()
             start, end = course.start_time(), course.end_time()
@@ -99,24 +101,38 @@ class CourseRepository:
 
     def create_course(self,
                       name: str,
-                      file_type: FileType = FileType.Typst,
+                      filetype: FileType = FileType.Typst,
                       start_time: str | None=None,
                       end_time: str | None=None,
                       weekdays: list[str] | None=None,
                       start_date: str | None=None,
                       end_date: str | None=None
-                      ) -> Course | None:
+                      ) -> Course:
         """ Creates directory structure for course, and creates all required files
-        -- Params --
-        name: name of new course
+
+        Args:
+            name: course name (e.g., math-445)
+            filetype: setting filetype determines the filetype of all lectures and main file
+            start_time: in format 'HH:MM'
+            end_time: in format 'HH:MM'
+            weekdays: list of weekdays for which the course has lectures
+            start_date: in format "yyyy/mm/dd"
+            end_date: in format "yyyy/mm/dd"
+
+        Raises:
+            CourseExistsError: If course with 'name' already exists
+            InvalidNameError: If name is left blank
+
+        Returns:
+            New course
         """
         course = self.get_course(name)
         # prevent overiding course
         if course != None:
-            logger.info(f"Failed to create, course with name={name} already exists")
-            raise ValueError(f"Attempting to create course with existing name: {name}")
+            logger.info(f"Course '{name}' already exists")
+            raise CourseExistsError(f"Course with name '{name}' already exists")
         if not name:
-            raise ValueError(f"Failed to create course: no name provided")
+            raise InvalidNameError(f"Name cannot be blank")
 
         course_path = self.course_root / name
         course_path.mkdir()
@@ -133,14 +149,9 @@ class CourseRepository:
 
         lectures_dir = main_dir / "lectures"
         lectures_dir.mkdir()
-        # TODO
-        shutil.copy(self.config.template_files[file_type]["main_template"], main_dir / "main.tex")
-        template_path = self.config.templates_path / "course_info_template.json"
-        if template_path.is_file():
-            self._init_course_info(course_path, file_type, start_time, end_time, weekdays, start_date, end_date)
-#            shutil.copy(template_path, info_path)
-        else:
-            logger.warning("TODO")
+
+        shutil.copy(self.config.template_files[filetype]["main_template"], main_dir / "main.tex")
+        self._init_course_info(course_path, filetype, start_time, end_time, weekdays, start_date, end_date)
         course = Course(course_path)
         self.courses()[name] = course
         return course
@@ -155,6 +166,7 @@ class CourseRepository:
                           ):
         info_path = course_path / "course_info.json"
         assert course_path.exists() and course_path.is_dir() and not info_path.is_file()
+
         info_path.touch()
         course_info = {
                 "filetype": file_type.value,

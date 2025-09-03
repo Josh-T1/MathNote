@@ -1,42 +1,33 @@
+from __future__ import annotations
 import tempfile
 from pathlib import Path
 from typing import Literal
 
 from PyQt6.QtCore import QFileSystemWatcher, QModelIndex, QObject, Qt
 from PyQt6.QtGui import QStandardItem
-from PyQt6.QtWidgets import QMainWindow, QMessageBox, QWidget
+from PyQt6.QtWidgets import QMainWindow
 
 from . import constants
-from .navbar import CourseNavBar, NewCourseDialog, NewNoteDialog, NameDialog, NotesNavBar
+from .navbar import CourseNavBar, NotesNavBar
+from .dialog import NewCourseDialog, NewNoteDialog, NameDialog, show_error_dialog
 from .viewer import TabbedSvgViewer
 from ..models import Category, Course, SourceFile, Note
 from ..utils import rendered_sorted_key
 from ..services import CompileOptions, compile_source, NotesRepository, CourseRepository
 from ..config import CONFIG
 from .._enums import OutputFormat
+from ..exceptions import NoItemSelected, NoteExistsError, CategoryExistsError, InvalidNameError, NoteExistsError, CourseExistsError
 
 
-def confirm_delete(window: QWidget, item: SourceFile | Course | Category) -> bool:
-    """
-    Show a confirmation dialog before deleting.
-
-    Args:
-        parent: Parent widget (e.g. main window).
-        name: Name of the object to delete.
-        kind: Type of object (e.g. "note", "course", "file").
-
-    Returns:
-        True if user confirmed, False otherwise.
-    """
-    msg = QMessageBox(window)
-    msg.setIcon(QMessageBox.Icon.Warning)
-    msg.setWindowTitle(f"Delete {item.name}")
-    msg.setText(f"Are you sure you want to delete the {type(item).__name__} '{item.name}'?")
-    msg.setInformativeText("This action cannot be undone.")
-    msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel)
-    msg.setDefaultButton(QMessageBox.StandardButton.Cancel)
-    result = msg.exec()
-    return result == QMessageBox.StandardButton.Yes
+def with_error_dialog(func):
+    def wrapper(self: NoteController | CourseController, *args, **kwargs):
+        try:
+            return func(self, *args, **kwargs)
+        except (NoteExistsError, CourseExistsError, InvalidNameError, CategoryExistsError) as e:
+            show_error_dialog(self.window, str(e))
+        except Exception as e:
+            show_error_dialog(self.window, f"Unexpected error: {e}")
+    return wrapper
 
 
 class NoteController(QObject):
@@ -44,15 +35,15 @@ class NoteController(QObject):
         self.window = window
         self.navbar = navbar
         self.viewer = viewer
-        self.notes_repo = NotesRepository(CONFIG.root_path / "Notes")
+        self.notes_repo = NotesRepository(CONFIG)
 
         self.handle_init_tree()
         self.connect_handlers()
 
     def connect_handlers(self):
-        self.navbar.new_note.connect(lambda: self.handle_new_note())
+        self.navbar.new_note.connect(lambda: self.handle_create("Note"))
         self.navbar.file_opened.connect(lambda f: self.handle_file_opened(f))
-        self.navbar.new_category.connect(lambda: self.handle_new_category())
+        self.navbar.new_category.connect(lambda: self.handle_create("Category"))
         self.navbar.delete.connect(lambda: self.handle_delete())
         self.navbar.rename.connect(lambda: self.handle_rename())
         self.navbar.load_item.connect(lambda item, cat: self.handle_load_item(item, cat))
@@ -70,47 +61,69 @@ class NoteController(QObject):
             item.setData(True, constants.LOADED_ROLE)
 
     def handle_init_tree(self):
+        self.navbar.root_item().setData(self.notes_repo.root_category, constants.DIR_ROLE)
         sub_categories = self.notes_repo.get_sub_categories(self.notes_repo.root_category)
         for child in sub_categories:
             self.navbar.root_item().appendRow(self.navbar._build_cat_item(child))
         for note in self.notes_repo.root_category.notes:
             self.navbar.root_item().appendRow(self.navbar._build_file_item(note))
 
+    @with_error_dialog
     def handle_rename(self):
-        item, idx = self._get_item_and_index()
+        item, idx = self.navbar._get_item_and_index()
         if item is None:
             return
         parent = item.parent() or self.navbar.root_item()
-        assert parent is not None
         dialog = NameDialog()
         if not dialog.exec():
             return
         name = dialog.get_data()
-        if (file := item.data(constants.FILE_ROLE)) is not None:
-            self.notes_repo.rename_note(file, name)
-            self.handle_load_item(parent, file.category)
-        elif (cat := item.data(constants.DIR_ROLE)) is not None:
-            self.notes_repo.rename_cat(cat, name)
-            self.handle_load_item(parent, cat.parent)
 
-    def handle_delete(self):
-        # file => course or note.
-        item, idx = self._get_item_and_index()
-        if item is None or idx is None:
-            return
-        parent = item.parent() or self.navbar.root_item()
-        if (dir := item.data(constants.DIR_ROLE)) is not None:
-            delete = self._delete_category(dir, idx)
-        elif (file := item.data(constants.FILE_ROLE)) is not None:
-            delete = self._delete_file(file, idx)
+        if (file := item.data(constants.FILE_ROLE)) is not None:
+            renamed_obj = self.notes_repo.rename_note(file, name)
+            target_category = None if renamed_obj is None else renamed_obj.category
+
+        elif (cat := item.data(constants.DIR_ROLE)) is not None:
+            renamed_obj = self.notes_repo.rename_cat(cat, name)
+            target_category = None if renamed_obj is None else renamed_obj.parent or self.notes_repo.root_category
         else:
             return
-        if parent is not None and parent.rowCount() == 0 and delete:
+        if target_category is not None:
+            self.handle_load_item(parent, target_category)
+
+    def _delete_item(self, item: Note | Category, idx: QModelIndex) -> bool:
+        delete = confirm_delete(self.window, item)
+        if not delete:
+            return False
+        del_map = {
+                Category: self.notes_repo.delete_category,
+                Note: self.notes_repo.delete_note
+                }
+        del_map[type(item)](item)
+        self.navbar.model.removeRow(idx.row(), idx.parent())
+        return True
+
+    @with_error_dialog
+    def handle_delete(self):
+        item, idx = self.navbar._get_item_and_index()
+        if item is None or idx is None:
+            raise NoItemSelected("Cannot delete, no item selected")
+        parent = item.parent() or self.navbar.root_item()
+        if (dir := item.data(constants.DIR_ROLE)) is not None:
+            delete = self._delete_item(dir, idx)
+        elif (file := item.data(constants.FILE_ROLE)) is not None:
+            delete = self._delete_item(file, idx)
+        else:
+            return
+        if parent is not None and parent.rowCount() == 0 and delete: # TODO why row count?
             self.navbar.tree.collapse(parent.index())
             parent.setData(False, constants.LOADED_ROLE)
 
-    def handle_new_category(self):
-        item, idx = self._get_item_and_index()
+    @with_error_dialog
+    def handle_create(self, item_type: Literal["Note"] | Literal["Category"]):
+        item, idx = self.navbar._get_item_and_index()
+
+        # Given item we determine parent_item in tree (depends on isExpanded()) and set cat to be parent category
         if item is None or idx is None:
             parent_item = self.navbar.root_item()
             cat = self.notes_repo.root_category
@@ -121,85 +134,39 @@ class NoteController(QObject):
             parent_item = item.parent() or self.navbar.root_item()
 
         elif isinstance(item.data(constants.DIR_ROLE), Category):
+            # If tree expanded around category item => parent in tree is selected item
             if self.navbar.tree.isExpanded(idx):
                 cat: Category = item.data(constants.DIR_ROLE)
                 parent_item = item
+            # If tree not expanded => parent in tree is selected items parent
             else:
                 parent_item = item.parent() or self.navbar.root_item()
                 cat: Category = parent_item.data(constants.DIR_ROLE)
         else:
             return
-        dialog = NameDialog("New Category")
-        if not dialog.exec():
-            return
-        name = dialog.get_data()
-        res = self.notes_repo.create_category(name, cat)
-        if res is None:
-            return
-        if parent_item is not None: # Should be impossible
-            parent_item.appendRow(self.navbar._build_cat_item(res))
-            self.navbar.tree.expand(parent_item.index())
 
-    def handle_new_note(self):
-        item, idx = self._get_item_and_index()
-        if idx is None or item is None:
-            self._add_to_tree(self.navbar.root_item(), self.notes_repo.root_category, load_viewer=True)
-
-        elif (obj := item.data(constants.FILE_ROLE)) is not None:
-            parent = item.parent() or self.navbar.root_item()
-            self._add_to_tree(parent, obj.category, load_viewer=True)
-            self.navbar.tree.expand(parent.index())
-
-        elif (obj := item.data(constants.DIR_ROLE)) is not None:
-            if self.navbar.tree.isExpanded(idx):
-                self._add_to_tree(item, obj, load_viewer=True)
-                self.navbar.tree.expand(idx)
-            else:
-                parent_item = item.parent() or self.navbar.root_item()
-                parent = parent_item.data(constants.DIR_ROLE)
-                self._add_to_tree(parent_item, obj.parent)
-
-                self.navbar.tree.expand(parent_item.index())
-
-    def _add_to_tree(self, parent: QStandardItem, cat: Category | None, load_viewer: bool = False) -> Literal[0] | Literal[1]:
-        # get params, creates note, adds new tab and tries to load new file
-        cat = cat if cat is not None else self.notes_repo.root_category
-        dialog = NewNoteDialog()
-        if dialog.exec():
+        if item_type == "Note":
+            dialog = NewNoteDialog()
+            if not dialog.exec(): return
             name, ftype = dialog.get_data()
             note = self.notes_repo.create_note(name, cat, ftype)
-            if note is None:
-                return 1
-            if parent is None:
-                return
-            tree_item = self.navbar._build_file_item(note)
-            parent.appendRow(tree_item) # kind of unessary
-            # add tab, focus tab, load viewer
-            if load_viewer:
-                self.viewer.add_svg_tab(focus=True)
-                self.navbar.file_opened.emit(note)
-                self.navbar.tree.setCurrentIndex(tree_item.index())
-            return 0
-        return 1
+            res_item = self.navbar._build_file_item(note)
 
-    def _delete_category(self, cat: Category, idx: QModelIndex) -> bool:
-        delete = confirm_delete(self.window, cat)
-        if not delete:
-            return False
-        self.notes_repo.delete_category(cat)
-        self.navbar.model.removeRow(idx.row(), idx.parent())
-        return True
+            self.viewer.add_svg_tab(focus=True)
+            self.navbar.file_opened.emit(note)
+            self.navbar.tree.setCurrentIndex(res_item.index())
+        else:
+            dialog = NameDialog()
+            if not dialog.exec(): return
+            name = dialog.get_data()
+            res = self.notes_repo.create_category(name, cat)
+            res_item = self.navbar._build_cat_item(res)
 
-    def _delete_file(self, file: SourceFile, idx: QModelIndex) -> bool:
-        delete = confirm_delete(self.window, file)
-        if not delete:
-            return False
-        if isinstance(file, Note):
-            self.notes_repo.delete_note(file)
-            self.navbar.model.removeRow(idx.row(), idx.parent())
-            return True
-        return False
+        if parent_item is not None: # Should be impossible
+            parent_item.appendRow(res_item)
+            self.navbar.tree.expand(parent_item.index())
 
+    # TODO deal with compilation errors
     def handle_file_opened(self, file: SourceFile):
         # No tabs => Add tab
         tmpdir = tempfile.TemporaryDirectory()
@@ -223,12 +190,6 @@ class NoteController(QObject):
         if all(p.exists() for p in paths):
             self.viewer.load_current_viewer([str(p) for p in paths], tmpdir=tmpdir, name=name)
 
-    def _get_item_and_index(self) -> tuple[QStandardItem | None, None | QModelIndex]:
-        idx = self.navbar.tree.currentIndex()
-        if not idx.isValid(): #TODO error msg for top level
-            return None, None
-        item = self.navbar.model.itemFromIndex(idx)
-        return item, idx
 
 
 class CourseController(QObject):
@@ -261,6 +222,7 @@ class CourseController(QObject):
         self.navbar.new_assignment.connect(lambda: self.handle_new_course())
         self.navbar.new_lecture.connect(lambda: self.handle_new_course())
 
+    @with_error_dialog
     def handle_new_course(self):
         dialog = NewCourseDialog()
         if dialog.exec():
@@ -278,7 +240,7 @@ class CourseController(QObject):
 
     def handle_delete(self):
         # file => course or note.
-        item, idx = self._get_item_and_index()
+        item, idx = self.navbar._get_item_and_index()
         if item is None or idx is None:
             return
         parent = item.parent() or self.navbar.root_item()
@@ -328,13 +290,6 @@ class CourseController(QObject):
         paths = path if isinstance(path, list) else [path]
         if all(p.exists() for p in paths):
             self.viewer.load_current_viewer([str(p) for p in paths], tmpdir=tmpdir, name=name)
-
-    def _get_item_and_index(self) -> tuple[QStandardItem | None, None | QModelIndex]:
-        idx = self.navbar.tree.currentIndex()
-        if not idx.isValid(): #TODO error msg for top level
-            return None, None
-        item = self.navbar.model.itemFromIndex(idx)
-        return item, idx
 
     def _delete_file(self, file: SourceFile, idx: QModelIndex) -> bool:
         delete = confirm_delete(self.window, file)

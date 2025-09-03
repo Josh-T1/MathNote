@@ -23,7 +23,6 @@ class Config:
                  log_level: str = "INFO",
                  iterm2_enabled: bool = False,
                  set_note_title: bool = True,
-                 template_files: dict[FileType, dict[str, Path]] | None=None ,
                  editor: str = "vim",
                  ):
         """
@@ -48,10 +47,11 @@ class Config:
         self.log_level = log_level
         self.iterm2_enabled = iterm2_enabled
         self.set_note_title = set_note_title
-        self.template_files = template_files if template_files is not None else {}
+        self.template_files = {}
         self.editor = editor
+        self._update_config()
 
-    def __post_init__(self):
+    def _update_config(self):
         """Updates default values with values specified in config file"""
         config_dir = self.config_dir()
         if not config_dir.is_dir():
@@ -76,7 +76,6 @@ class Config:
                 "note_macros",
                 "note_preamble"
                 ]
-
         for file_type, ext in {FileType.LaTeX: "tex", FileType.Typst: "typ"}.items():
             self.template_files[file_type] = {}
             for file_stem in files:

@@ -5,7 +5,7 @@ from typing import Protocol
 import argparse
 import sys
 
-from PyQt6.QtWidgets import QApplication, QWidget
+from PyQt6.QtWidgets import QApplication
 
 from .utils import load_json, dump_json
 from .config import Config
@@ -15,6 +15,11 @@ from .services import NotesRepository, CourseRepository
 from .noteviewer import MainWindow
 
 logger = logging.getLogger("mathnote")
+
+
+"""
+This code is fucked and needs to be re written
+"""
 
 class Command(Protocol):
     def cmd(self, namespace) -> None: ...
