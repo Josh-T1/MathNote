@@ -3,20 +3,21 @@ import tempfile
 from pathlib import Path
 from typing import Literal
 
-from PyQt6.QtCore import QFileSystemWatcher, QModelIndex, QObject, Qt
+from PyQt6.QtCore import QFileSystemWatcher, QModelIndex, QObject, QProcess, QTimer, Qt
 from PyQt6.QtGui import QStandardItem
 from PyQt6.QtWidgets import QMainWindow
 
 from . import constants
-from .navbar import CourseNavBar, NotesNavBar
+from .navbar import CourseNavBar, NavBarContainer, NotesNavBar
 from .dialog import NewCourseDialog, NewNoteDialog, NameDialog, show_error_dialog
 from .viewer import TabbedSvgViewer
+from .ui_components import confirm_delete
 from ..models import Category, Course, SourceFile, Note
 from ..utils import rendered_sorted_key
 from ..services import CompileOptions, compile_source, NotesRepository, CourseRepository
 from ..config import CONFIG
 from .._enums import OutputFormat
-from ..exceptions import NoItemSelected, NoteExistsError, CategoryExistsError, InvalidNameError, NoteExistsError, CourseExistsError
+from ..exceptions import CompilationError, NoItemSelected, NoteExistsError, CategoryExistsError, InvalidNameError, NoteExistsError, CourseExistsError
 
 
 def with_error_dialog(func):
@@ -36,8 +37,7 @@ class NoteController(QObject):
         self.navbar = navbar
         self.viewer = viewer
         self.notes_repo = NotesRepository(CONFIG)
-
-        self.handle_init_tree()
+        self._init_tree()
         self.connect_handlers()
 
     def connect_handlers(self):
@@ -60,7 +60,7 @@ class NoteController(QObject):
         if len(cat.notes) + len(subcategories) > 0:
             item.setData(True, constants.LOADED_ROLE)
 
-    def handle_init_tree(self):
+    def _init_tree(self):
         self.navbar.root_item().setData(self.notes_repo.root_category, constants.DIR_ROLE)
         sub_categories = self.notes_repo.get_sub_categories(self.notes_repo.root_category)
         for child in sub_categories:
@@ -80,10 +80,12 @@ class NoteController(QObject):
         name = dialog.get_data()
 
         if (file := item.data(constants.FILE_ROLE)) is not None:
+            assert isinstance(file, Note)
             renamed_obj = self.notes_repo.rename_note(file, name)
             target_category = None if renamed_obj is None else renamed_obj.category
 
         elif (cat := item.data(constants.DIR_ROLE)) is not None:
+            assert isinstance(cat, Category)
             renamed_obj = self.notes_repo.rename_cat(cat, name)
             target_category = None if renamed_obj is None else renamed_obj.parent or self.notes_repo.root_category
         else:
@@ -109,9 +111,13 @@ class NoteController(QObject):
         if item is None or idx is None:
             raise NoItemSelected("Cannot delete, no item selected")
         parent = item.parent() or self.navbar.root_item()
+
         if (dir := item.data(constants.DIR_ROLE)) is not None:
+            assert isinstance(dir, Category)
             delete = self._delete_item(dir, idx)
+
         elif (file := item.data(constants.FILE_ROLE)) is not None:
+            assert isinstance(file, Note)
             delete = self._delete_item(file, idx)
         else:
             return
@@ -122,18 +128,18 @@ class NoteController(QObject):
     @with_error_dialog
     def handle_create(self, item_type: Literal["Note"] | Literal["Category"]):
         item, idx = self.navbar._get_item_and_index()
-
         # Given item we determine parent_item in tree (depends on isExpanded()) and set cat to be parent category
         if item is None or idx is None:
             parent_item = self.navbar.root_item()
             cat = self.notes_repo.root_category
 
-        elif isinstance(item.data(constants.FILE_ROLE), Note):
-            note: Note = item.data(constants.FILE_ROLE)
+        elif (note := item.data(constants.FILE_ROLE)) is not None:
+            assert isinstance(note, Note)
             cat = note.category
             parent_item = item.parent() or self.navbar.root_item()
 
-        elif isinstance(item.data(constants.DIR_ROLE), Category):
+        elif (cat := item.data(constants.DIR_ROLE)) is not None:
+            assert isinstance(cat, Category)
             # If tree expanded around category item => parent in tree is selected item
             if self.navbar.tree.isExpanded(idx):
                 cat: Category = item.data(constants.DIR_ROLE)
@@ -166,7 +172,7 @@ class NoteController(QObject):
             parent_item.appendRow(res_item)
             self.navbar.tree.expand(parent_item.index())
 
-    # TODO deal with compilation errors
+    @with_error_dialog
     def handle_file_opened(self, file: SourceFile):
         # No tabs => Add tab
         tmpdir = tempfile.TemporaryDirectory()
@@ -181,15 +187,16 @@ class NoteController(QObject):
         # handle course. Example path: CourseName/main/main.ext
         else:
             file_name = file.path.parent.parent.stem
-        return_code = compile_source(file, options)
+        compilation_res = compile_source(file, options)
         svg_files = sorted(tmpdir_path.glob(f"{constants.OUTPUT_FILE_STEM}*.svg"), key=rendered_sorted_key)
+        if len(svg_files) == 0:
+            raise CompilationError(compilation_res[1])
         self._update_svg(svg_files, tmpdir, file_name)
 
     def _update_svg(self, path: Path | list[Path], tmpdir: tempfile.TemporaryDirectory, name: str | None=None):
         paths = path if isinstance(path, list) else [path]
         if all(p.exists() for p in paths):
             self.viewer.load_current_viewer([str(p) for p in paths], tmpdir=tmpdir, name=name)
-
 
 
 class CourseController(QObject):
@@ -211,6 +218,18 @@ class CourseController(QObject):
         main_item.setData(course.main_file, constants.FILE_ROLE)
         course_item.appendRow(main_item)
 
+        for dir_name in Course.source_file_directories:
+            if not (course.path / dir_name).is_dir():
+                continue
+            dir_item = QStandardItem(dir_name.name)
+            dir_item.setData(True, constants.COURSE_DIR)
+            course_item.appendRow(dir_item)
+            files = getattr(course, dir_name.name, [])
+            for source_file in files:
+                assert isinstance(source_file, SourceFile)
+                item = self.navbar._build_file_item(source_file)
+                dir_item.appendRow(item)
+
     def init_tree(self):
         for course in self.course_repo.courses().values():
             self.add_course(course)
@@ -225,11 +244,12 @@ class CourseController(QObject):
     @with_error_dialog
     def handle_new_course(self):
         dialog = NewCourseDialog()
-        if dialog.exec():
-            name, ftype, start_t, end_t, weekdays, start_d, end_d = dialog.get_data()
-            course = self.course_repo.create_course(name, ftype, start_t, end_t, weekdays, start_d, end_d)
-            if course is not None:
-                self.add_course(course)
+        if not dialog.exec():
+            return
+        name, ftype, start_t, end_t, weekdays, start_d, end_d = dialog.get_data()
+        course = self.course_repo.create_course(name, ftype, start_t, end_t, weekdays, start_d, end_d)
+        if course is not None:
+            self.add_course(course)
 
     def handle_rename(self):
         pass
@@ -238,11 +258,12 @@ class CourseController(QObject):
     def handle_new_assignment(self):
         pass
 
+    @with_error_dialog
     def handle_delete(self):
         # file => course or note.
         item, idx = self.navbar._get_item_and_index()
         if item is None or idx is None:
-            return
+            raise NoItemSelected("Cannot delete, no item selected")
         parent = item.parent() or self.navbar.root_item()
         # Test
         if item.data(constants.DIR_ROLE) is not None:
@@ -272,6 +293,7 @@ class CourseController(QObject):
         self.navbar.model.removeRow(idx.row(), idx.parent())
         return True
 
+    @with_error_dialog
     def handle_file_opened(self, file: SourceFile):
         # No tabs => Add tab
         tmpdir = tempfile.TemporaryDirectory()
@@ -280,10 +302,12 @@ class CourseController(QObject):
         options = CompileOptions(file.path, OutputFormat.SVG, multi_page=True)
         options.set_output_dir(tmpdir_path)
         options.set_output_file_stem(constants.OUTPUT_FILE_STEM)
-
+        # This does not work
         file_name = file.path.parent.parent.stem
-        return_code = compile_source(file, options)
+        compilation_res = compile_source(file, options)
         svg_files = sorted(tmpdir_path.glob(f"{constants.OUTPUT_FILE_STEM}*.svg"), key=rendered_sorted_key)
+        if len(svg_files) == 0:
+            raise CompilationError(compilation_res[1])
         self._update_svg(svg_files, tmpdir, file_name)
 
     def _update_svg(self, path: Path | list[Path], tmpdir: tempfile.TemporaryDirectory, name: str | None=None):
@@ -291,6 +315,7 @@ class CourseController(QObject):
         if all(p.exists() for p in paths):
             self.viewer.load_current_viewer([str(p) for p in paths], tmpdir=tmpdir, name=name)
 
+    # TODO: implement
     def _delete_file(self, file: SourceFile, idx: QModelIndex) -> bool:
         delete = confirm_delete(self.window, file)
         if not delete:
@@ -303,16 +328,38 @@ class CourseController(QObject):
         return False
 
 class LiveTypstController:
-    def __init__(self):
+    def __init__(self, navbar: NavBarContainer, viewer: TabbedSvgViewer):
+        self.navbar = navbar
+        self.viewer = viewer
         self.watcher = QFileSystemWatcher()
         self.watcher.addPath(constants.TYP_FILE_LIVE)
 
-#    def on_typ_changed(self):
-#        self.watcher.removePath(constants.TYP_FILE_LIVE)
-#        self.watcher.addPath(constants.TYP_FILE_LIVE)
-#        self.compile_typst(constants.TYP_FILE_LIVE)
+        self.process = None
 
-#    def compile_typst(self, path: str):
-#        self.process = QProcess()
-#        self.process.start("typst", ["compile", path, "--format", "svg"])
-#        self.process.finished.connect(lambda : self.update_svg(path))
+        self._debounce_timer = QTimer()
+        self._debounce_timer.setSingleShot(True)
+        self._debounce_timer.timeout.connect(lambda: self.compile_typst(constants.TYP_FILE_LIVE))
+
+    def connect_handlers(self):
+        self.navbar.preview.connect(lambda: self.handle_preview())
+
+    def handle_preview(self):
+        self.compile_typst(constants.TYP_FILE_LIVE)
+
+    def on_typ_changed(self):
+        if not self._debounce_timer.isActive():
+            self._debounce_timer.start(200)
+#
+    def compile_typst(self, path: str):
+        if self.process and self.process.state() != QProcess.ProcessState.NotRunning:
+            self.process.kill()  # Stop any ongoing compilation
+
+        self.process = QProcess()
+        self.process.finished.connect(lambda : self._update_svg())
+        self.process.start("typst", ["compile", path, "--format", "svg"])
+
+
+    def _update_svg(self):
+        svg_path = constants.TYP_FILE_LIVE.replace(".typ", ".svg")
+        self.viewer.load_current_viewer(svg_path)
+

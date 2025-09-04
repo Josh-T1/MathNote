@@ -8,7 +8,7 @@ from .navbar import CollapsedNavBar, CourseNavBar, ModeSelector, NavBarContainer
 from .builder_widget import DocumentBuilder
 from .viewer import TabbedSvgViewer
 from .style import MAIN_WINDOW_CSS
-from .controllers import NoteController, CourseController
+from .controllers import LiveTypstController, NoteController, CourseController
 from .search import SearchWidget
 from ..config import CONFIG
 from .._enums import FileType
@@ -41,6 +41,7 @@ class EventFilter(QObject):
 
         return super().eventFilter(a0, a1)
 
+# Get controllers tf out of here
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -64,8 +65,10 @@ class MainWindow(QMainWindow):
         courses_navbar = CourseNavBar()
         settings = SettingsNavBar(CONFIG)
         self.notes_controller = NoteController(self, notes_navbar, self.viewer)
+
         self.coures_controller = CourseController(self, courses_navbar, self.viewer)
         self.navbar = NavBarContainer(notes_navbar, courses_navbar, settings)
+        self.preview_controller = LiveTypstController(self.navbar, self.viewer)
         self.filter = EventFilter(self.navbar.search_widget)
         self.installEventFilter(self.filter)
         # Configure

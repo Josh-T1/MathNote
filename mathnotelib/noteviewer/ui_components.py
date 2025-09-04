@@ -74,7 +74,10 @@ class StandardItemModel(QStandardItemModel):
         super().__init__(parent=parent)
 
     def hasChildren(self, parent: QModelIndex=QModelIndex()) -> bool:
-        if parent.isValid() is False or parent.data(constants.LOADED_ROLE) is False:
+        if (parent.isValid() is False or # Delete?
+            parent.data(constants.DIR_ROLE) or
+            parent.data(constants.COURSE_DIR) is True
+            ):
             return True
         return super().hasChildren(parent)
 

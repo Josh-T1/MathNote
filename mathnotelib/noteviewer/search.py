@@ -11,17 +11,7 @@ from ..services import NotesRepository
 from ..config import CONFIG
 
 
-def main():
-    notes_dir = "/Users/joshuataylor/MathNote/Notes"
-    cmd = f"rg --line-number --no-heading '' {notes_dir} | fzf"
 
-    rg = subprocess.Popen(["rg", "--line-number", "--no-heading", "", notes_dir], stdout=subprocess.PIPE)
-    fzf = subprocess.Popen(["fzf"], stdin=rg.stdout)
-    if rg.stdout:
-        print("stdout")
-        rg.stdout.close()
-    out, _ = fzf.communicate()
-    return out
 
 
 class Container(QWidget):
@@ -106,45 +96,3 @@ class SearchWidget(QWidget):
         self.results.clear()
         for (score, query, n, text) in self.buffer:
             self.results.addItem(f"{n}:{text}")
-
-
-def get_files():
-    cf = CONFIG
-    notes_manager = NotesRepository(cf.root_path / "Notes")
-    notes = notes_manager.root_category.notes
-    return [str(note.path) for note in notes]
-
-def test(files):
-    buffer = []
-    patterns = ["d", "de", "def"]
-    with open("/Users/joshuataylor/out.txt", "a") as f:
-        for p in patterns:
-            f.write(f"============ {p} ===========\n")
-            args = ["rg", "--line-number", "--no-heading", p] + files
-            res = subprocess.run(args, capture_output=True)
-            if res.stdout is not None:
-                stream = res.stdout
-                text = stream.decode("utf-8")
-                for l in text.splitlines():
-                    file_path, line_num, text = l.split(":", 2)
-                    score = fuzz.WRatio(p, text)
-                    buffer.append((score, line_num, text))
-            buffer.sort(key=lambda x: x[0], reverse=True)
-
-            for i in range(min(len(buffer), 50)):
-                f.write(str(buffer[i]) + "\n")
-            buffer.clear()
-
-if __name__ == "__main__":
-    import sys
-    files = [
-            "/Users/joshuataylor/MathNote/Courses/math-617/main/lectures/lec_03.tex",
-            "/Users/joshuataylor/MathNote/Courses/math-617/main/lectures/lec_04.tex"
-            ]
-#    test(files)
-    app = QApplication(sys.argv)
-    w = Container(files)
-#    w = MSearchWidget(files)
-    w.show()
-    sys.exit(app.exec())
-

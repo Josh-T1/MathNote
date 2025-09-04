@@ -18,8 +18,9 @@ def number2filename(num: int, filetype: FileType):
         return 'lec_{0:02d}.typ'.format(num)
 
 
-
+# TODO: refactor this. Some directories are required while some are optional
 class Course:
+    source_file_directories = [Path("assignments"), Path("main/lectures"), Path("problems"), Path("projects")]
     def __init__(self,
                  path: Path,
                  assignments: list[Assignment] | None=None,
@@ -37,6 +38,9 @@ class Course:
         self.lectures = lectures if lectures is not None else []
         self._course_info: dict | None = None
 
+    def pretty_name(self) -> str:
+        return self.path.name.replace("-", " ")
+
     @property
     def name(self):
         return self.path.stem
@@ -46,6 +50,14 @@ class Course:
         if not self.lectures:
             return None
         return max([lecture.last_edit() for lecture in self.lectures])
+
+    def lecture_filename_pattern(self) -> str:
+        ext = ".tex" if FileType.LaTeX else ".typ"
+        return fr"^lec_\d{{2}}\{ext}$"
+
+    def assignment_filename_pattern(self) -> str:
+        ext = ".tex" if FileType.LaTeX else ".typ"
+        return fr"^{self.name}-A\d{{1}}\{ext}$"
 
     @property
     def course_info(self) -> dict:

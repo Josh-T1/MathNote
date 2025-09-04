@@ -3,6 +3,7 @@ import json
 import shutil
 import logging
 from datetime import datetime
+import re
 
 from ..services import get_header_footer
 from ..config import Config
@@ -211,23 +212,27 @@ class CourseRepository:
         main_file_path.write_text(header + body + footer)
 
 
-    def _load_assignments(self, course: Course) -> list[Assignment]:
-        assignments = []
+    def _load_assignments(self, course: Course, sort: bool=True) -> list[Assignment]:
+        assignments, ignored = [], []
         suffix = {".typ", ".tex"}
-        assignment_path = course.main_file.path.parent / "assignments"
+        assignment_path = course.path / "assignments"
         if not assignment_path.exists() or not assignment_path.is_dir():
             return []
 
-        for l in assignment_path.iterdir():
-            if not l.is_file():
+        for a in assignment_path.iterdir():
+            if not a.is_file():
                 continue
-            if l.suffix in suffix:
-                assignments.append(Lecture(l, course.main_file.path))
+            if re.search(course.assignment_filename_pattern(), a.name):
+                assignments.append(Assignment(a))
+            elif a.suffix in suffix:
+                ignored.append(a)
+        if sort:
+            assignments.sort(key=lambda a: a.number())
         return assignments
 
-    def _load_lectures(self, course: Course) -> list[Lecture]:
-        lectures = []
-        suffix = {".typ", ".tex"}
+    def _load_lectures(self, course: Course, sort: bool = True) -> list[Lecture]:
+        lectures, ignored = [], []
+        suffix = {".typ", ".tex"} #TODO: FileType.Unsupported will cause error
         lecture_path = course.main_file.path.parent / "lectures"
         if not lecture_path.exists() or not lecture_path.is_dir():
             return []
@@ -235,7 +240,11 @@ class CourseRepository:
         for l in lecture_path.iterdir():
             if not l.is_file():
                 continue
-            if l.suffix in suffix:
+            if re.search(course.lecture_filename_pattern(), l.name):
                 lectures.append(Lecture(l, course.main_file.path))
+            elif l.suffix in suffix:
+                ignored.append(l)
+        if sort:
+            lectures.sort(key=lambda lec: lec.number())
         return lectures
 

@@ -49,6 +49,9 @@ class Assignment(StandaloneSourceFile):
         else:
             return int(matches[-1])
 
+    def pretty_name(self) -> str:
+        return f"Assignment {self.number()}"
+
 class Lecture(ProjectSourceFile):
     """Represents course lecture"""
     def __post_init__(self):
@@ -62,7 +65,10 @@ class Lecture(ProjectSourceFile):
     @property
     def name(self) -> str:
         """ lecture file name. e.g lec_01.tex(typ) """
-        return self.path.name
+        return self.path.stem
+
+    def pretty_name(self) -> str:
+        return f"Lecture {self.number()}"
 
     def last_edit(self) -> float:
         """ Returns most recent edit in seconds """

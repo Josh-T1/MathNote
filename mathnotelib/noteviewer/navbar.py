@@ -39,8 +39,8 @@ class BaseNavBar(QWidget):
             return
 
         # TODO: handle failed compilation
-        if item.data(constants.FILE_ROLE) is not None:
-            file: SourceFile = item.data(constants.FILE_ROLE)
+        if (file := item.data(constants.FILE_ROLE)) is not None:
+            assert isinstance(file, SourceFile)
             self.file_opened.emit(file)
         # For any item with this role we must do 2 things:
         #   1. Check to see if we should expand or collapse tree around item
@@ -48,10 +48,10 @@ class BaseNavBar(QWidget):
         elif item.data(constants.COURSE_CONTAINER_ROLE) is not None:
             self._toggle_tree(index)
 
-        elif item.data(constants.DIR_ROLE) is not None:
+        elif (cat := item.data(constants.DIR_ROLE)) is not None:
+            assert isinstance(cat, Category)
             loaded = item.data(constants.LOADED_ROLE)
             if loaded is False:
-                cat: Category = item.data(constants.DIR_ROLE)
                 self.load_item.emit(item, cat)
             self._toggle_tree(index)
 
@@ -62,7 +62,6 @@ class BaseNavBar(QWidget):
         item = self.model.itemFromIndex(idx)
         return item, idx
 
-
     def _build_cat_item(self, cat: Category) -> QStandardItem:
         cat_item = QStandardItem(cat.name)
         cat_item.setFlags(cat_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
@@ -71,9 +70,11 @@ class BaseNavBar(QWidget):
         return cat_item
 
     def _build_file_item(self, file: SourceFile) -> QStandardItem:
-        note_item = QStandardItem(file.name)
+        func = getattr(file, "pretty_name", lambda: file.name)
+        note_item = QStandardItem(func())
         note_item.setFlags(note_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
         note_item.setData(file, constants.FILE_ROLE)
+        note_item.setToolTip(file.name)
         return note_item
 
 
@@ -282,6 +283,8 @@ class SettingsNavBar(QWidget):
 #        main_layout.addWidget(settings_label, alignment=Qt.AlignmentFlag.AlignTop)
 
 class NavBarContainer(QWidget):
+    preview = pyqtSignal()
+
     def __init__(self, notes_navbar: NotesNavBar, courses_navbar: CourseNavBar, settings_widget):
         super().__init__()
         self.tree_visible: bool = True
@@ -306,11 +309,13 @@ class NavBarContainer(QWidget):
         self.mode_selector = ModeSelector()
         self.menu_bar_layout = QHBoxLayout()
         self.launcher_widget = LauncherWidget()
+        self.live_preview_btn = QPushButton()
 
         #Configure
         self.settings_btn.setToolTip("Settings")
         self.minimize_btn.setToolTip("Minimize Navbar")
         self.notes_btn.setToolTip("Notes")
+        self.live_preview_btn.setToolTip("Live Preview")
         self.courses_btn.setToolTip("Courses")
         self.stack.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.stack.setContentsMargins(0, 0, 0, 0)
@@ -319,6 +324,8 @@ class NavBarContainer(QWidget):
                  (self.settings_btn, "settings_icon.png"),
                  (self.notes_btn, "notes.png"),
                  (self.courses_btn, "school.png"),
+                 (self.live_preview_btn, "preview.png")
+
                  ]
         for icon, icon_name in icons:
             icon.setIcon(QIcon(str(constants.ICON_PATH / icon_name)))
@@ -331,6 +338,7 @@ class NavBarContainer(QWidget):
         self.courses_btn.clicked.connect(lambda: self.stack.setCurrentWidget(self.courses_navbar))
         self.notes_btn.clicked.connect(lambda: self.stack.setCurrentWidget(self.notes_navbar))
         self.settings_btn.clicked.connect(lambda: self.stack.setCurrentWidget(self.settings_widget))
+        self.live_preview_btn.clicked.connect(lambda: self.preview.emit())
         # Add to layout
         for btn in icons:
             self.menu_bar_layout.addWidget(btn[0])
