@@ -1,11 +1,13 @@
 from __future__ import annotations
 import tempfile
 from pathlib import Path
-from typing import Literal
+from typing import Callable, Literal
 
 from PyQt6.QtCore import QFileSystemWatcher, QModelIndex, QObject, QProcess, QTimer, Qt
 from PyQt6.QtGui import QStandardItem
 from PyQt6.QtWidgets import QMainWindow
+
+from mathnotelib.models.source_file import Assignment, Lecture
 
 from . import constants
 from .navbar import CourseNavBar, NavBarContainer, NotesNavBar
@@ -19,6 +21,8 @@ from ..config import CONFIG
 from .._enums import OutputFormat
 from ..exceptions import CompilationError, NoItemSelected, NoteExistsError, CategoryExistsError, InvalidNameError, NoteExistsError, CourseExistsError
 
+
+# TODO: add input cleaning. Replace spaces with "_", remove ".ext" if they exist
 
 def with_error_dialog(func):
     def wrapper(self: NoteController | CourseController, *args, **kwargs):
@@ -80,12 +84,12 @@ class NoteController(QObject):
         name = dialog.get_data()
 
         if (file := item.data(constants.FILE_ROLE)) is not None:
-            assert isinstance(file, Note)
+            assert isinstance(file, Note), f"Tree item has unexpected type: '{type(file)}', expected 'Note'"
             renamed_obj = self.notes_repo.rename_note(file, name)
             target_category = None if renamed_obj is None else renamed_obj.category
 
         elif (cat := item.data(constants.DIR_ROLE)) is not None:
-            assert isinstance(cat, Category)
+            assert isinstance(cat, Category), f"Tree item has unexpected type: '{type(file)}', expected 'Note'"
             renamed_obj = self.notes_repo.rename_cat(cat, name)
             target_category = None if renamed_obj is None else renamed_obj.parent or self.notes_repo.root_category
         else:
@@ -113,14 +117,16 @@ class NoteController(QObject):
         parent = item.parent() or self.navbar.root_item()
 
         if (dir := item.data(constants.DIR_ROLE)) is not None:
-            assert isinstance(dir, Category)
+            assert isinstance(dir, Category), f"Tree item has unexpected type: '{type(dir)}', expected 'Category'"
+
             delete = self._delete_item(dir, idx)
 
         elif (file := item.data(constants.FILE_ROLE)) is not None:
-            assert isinstance(file, Note)
+            assert isinstance(file, Note), f"Tree item has unexpected type: '{type(file)}', expected 'Note'"
             delete = self._delete_item(file, idx)
         else:
             return
+
         if parent is not None and parent.rowCount() == 0 and delete: # TODO why row count?
             self.navbar.tree.collapse(parent.index())
             parent.setData(False, constants.LOADED_ROLE)
@@ -134,12 +140,13 @@ class NoteController(QObject):
             cat = self.notes_repo.root_category
 
         elif (note := item.data(constants.FILE_ROLE)) is not None:
-            assert isinstance(note, Note)
+            assert isinstance(note, Note), f"Tree item has unexpected type: '{type(note)}', expected 'Note'"
+
             cat = note.category
             parent_item = item.parent() or self.navbar.root_item()
 
         elif (cat := item.data(constants.DIR_ROLE)) is not None:
-            assert isinstance(cat, Category)
+            assert isinstance(cat, Category), f"Tree item has unexpected type: '{type(cat)}', expected 'Category'"
             # If tree expanded around category item => parent in tree is selected item
             if self.navbar.tree.isExpanded(idx):
                 cat: Category = item.data(constants.DIR_ROLE)
@@ -150,7 +157,7 @@ class NoteController(QObject):
                 cat: Category = parent_item.data(constants.DIR_ROLE)
         else:
             return
-
+        # Now that parent item in tre is set, we create relevant files/dir's and add to tree
         if item_type == "Note":
             dialog = NewNoteDialog()
             if not dialog.exec(): return
@@ -182,16 +189,12 @@ class NoteController(QObject):
         options.set_output_dir(tmpdir_path)
         options.set_output_file_stem(constants.OUTPUT_FILE_STEM)
 
-        if isinstance(file, Note):
-            file_name = file.name
-        # handle course. Example path: CourseName/main/main.ext
-        else:
-            file_name = file.path.parent.parent.stem
+        name_func: Callable[[], str] = getattr(file, "pretty_name", lambda: file.name)
         compilation_res = compile_source(file, options)
         svg_files = sorted(tmpdir_path.glob(f"{constants.OUTPUT_FILE_STEM}*.svg"), key=rendered_sorted_key)
         if len(svg_files) == 0:
             raise CompilationError(compilation_res[1])
-        self._update_svg(svg_files, tmpdir, file_name)
+        self._update_svg(svg_files, tmpdir, name_func())
 
     def _update_svg(self, path: Path | list[Path], tmpdir: tempfile.TemporaryDirectory, name: str | None=None):
         paths = path if isinstance(path, list) else [path]
@@ -218,15 +221,15 @@ class CourseController(QObject):
         main_item.setData(course.main_file, constants.FILE_ROLE)
         course_item.appendRow(main_item)
 
-        for dir_name in Course.source_file_directories:
-            if not (course.path / dir_name).is_dir():
+        for dir in Course.source_file_directories:
+            if not (course.path / dir).is_dir():
                 continue
-            dir_item = QStandardItem(dir_name.name)
-            dir_item.setData(True, constants.COURSE_DIR)
+            dir_item = QStandardItem(dir.name)
+            dir_item.setData(dir.name, constants.COURSE_DIR)
             course_item.appendRow(dir_item)
-            files = getattr(course, dir_name.name, [])
+            files = getattr(course, dir.name, [])
             for source_file in files:
-                assert isinstance(source_file, SourceFile)
+                assert isinstance(source_file, SourceFile), f"Course file has unexpected type '{type(source_file)}', expected 'SourceFile'"
                 item = self.navbar._build_file_item(source_file)
                 dir_item.appendRow(item)
 
@@ -238,8 +241,8 @@ class CourseController(QObject):
         self.navbar.file_opened.connect(lambda f: self.handle_file_opened(f))
         self.navbar.delete.connect(lambda: self.handle_delete())
         self.navbar.new_course.connect(lambda: self.handle_new_course())
-        self.navbar.new_assignment.connect(lambda: self.handle_new_course())
-        self.navbar.new_lecture.connect(lambda: self.handle_new_course())
+        self.navbar.new_assignment.connect(lambda: self.handle_new_assignment())
+        self.navbar.new_lecture.connect(lambda: self.handle_new_lecture())
 
     @with_error_dialog
     def handle_new_course(self):
@@ -251,16 +254,55 @@ class CourseController(QObject):
         if course is not None:
             self.add_course(course)
 
+    @with_error_dialog
     def handle_rename(self):
         pass
+
+    def _get_course(self, item: QStandardItem) -> tuple[Course, QStandardItem]:
+        parent = item
+        while parent:
+            if (course := parent.data(constants.COURSE_CONTAINER_ROLE)) is not None:
+                assert isinstance(course, Course), f"Tree item has unexpected type '{type(course)}', expected 'Course'"
+                return course, parent
+            parent = parent.parent()
+        raise Exception("Unexpected error: unable to determine course")
+
+    def _append_to_tree(self, item: QStandardItem, parent_item: QStandardItem, name: str):
+        for row in range(parent_item.rowCount()):
+            child = parent_item.child(row)
+            if child is not None and child.data(constants.COURSE_DIR) == name:
+                child.appendRow(item)
+                pass
+    @with_error_dialog
     def handle_new_lecture(self):
-        pass
+        item, _ = self.navbar._get_item_and_index()
+        if item is None:
+            raise NoItemSelected("No course selected")
+        course, course_item = self._get_course(item)
+        new_lecture = self.course_repo.create_lecture(course)
+        lecture_item = self.navbar._build_file_item(new_lecture)
+
+        parent_item = item.parent() or item
+        parent_item.appendRow(lecture_item)
+        self.navbar.tree.expand(parent_item.index())
+
+    @with_error_dialog
     def handle_new_assignment(self):
-        pass
+        item, _ = self.navbar._get_item_and_index()
+        if item is None:
+            raise NoItemSelected("No course selected")
+        course, course_item = self._get_course(item)
+        new_assignment = self.course_repo.create_assignment(course)
+        assignment_item = self.navbar._build_file_item(new_assignment)
+
+        parent_item = item.parent() or item
+        parent_item.appendRow(assignment_item)
+        self.navbar.tree.expand(parent_item.index())
+
 
     @with_error_dialog
     def handle_delete(self):
-        # file => course or note.
+        # TODO: prevent protected directories from begin deleted
         item, idx = self.navbar._get_item_and_index()
         if item is None or idx is None:
             raise NoItemSelected("Cannot delete, no item selected")
@@ -303,7 +345,11 @@ class CourseController(QObject):
         options.set_output_dir(tmpdir_path)
         options.set_output_file_stem(constants.OUTPUT_FILE_STEM)
         # This does not work
-        file_name = file.path.parent.parent.stem
+        if isinstance(file, Lecture) or isinstance(file, Assignment):
+            func = getattr(file, "pretty_name", lambda: file.name)
+            file_name = func()
+        else:
+            file_name = file.path.parent.parent.stem
         compilation_res = compile_source(file, options)
         svg_files = sorted(tmpdir_path.glob(f"{constants.OUTPUT_FILE_STEM}*.svg"), key=rendered_sorted_key)
         if len(svg_files) == 0:
@@ -328,27 +374,48 @@ class CourseController(QObject):
         return False
 
 class LiveTypstController:
+    DEBOUNCE = 20
     def __init__(self, navbar: NavBarContainer, viewer: TabbedSvgViewer):
         self.navbar = navbar
         self.viewer = viewer
+
+        self.watcher = None
+        self.process = None
+        self._debounce_timer = None
+
+        self.connect_handlers()
+
+    def start_live_preview(self):
+        if self.watcher is not None:
+            return
+
         self.watcher = QFileSystemWatcher()
         self.watcher.addPath(constants.TYP_FILE_LIVE)
-
-        self.process = None
+        self.watcher.fileChanged.connect(lambda: self.on_typ_changed())
 
         self._debounce_timer = QTimer()
         self._debounce_timer.setSingleShot(True)
         self._debounce_timer.timeout.connect(lambda: self.compile_typst(constants.TYP_FILE_LIVE))
 
-    def connect_handlers(self):
-        self.navbar.preview.connect(lambda: self.handle_preview())
+    def stop_live_preview(self):
+        if self.watcher:
+            self.watcher.removePath(constants.TYP_FILE_LIVE)
+            self.watcher.deleteLater()
+            self.watcher = None
+        if self.process and self.process.state() != QProcess.ProcessState.NotRunning:
+            self.process.kill()
+        self._debounce_timer = None
 
+    def connect_handlers(self):
+        self.navbar.preview.connect(lambda: self.start_live_preview())
+
+    #figure out how to quit on tab begin closed
     def handle_preview(self):
         self.compile_typst(constants.TYP_FILE_LIVE)
 
     def on_typ_changed(self):
-        if not self._debounce_timer.isActive():
-            self._debounce_timer.start(200)
+        if self._debounce_timer and not self._debounce_timer.isActive():
+            self._debounce_timer.start(self.DEBOUNCE)
 #
     def compile_typst(self, path: str):
         if self.process and self.process.state() != QProcess.ProcessState.NotRunning:

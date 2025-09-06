@@ -27,8 +27,7 @@ class CompileOptions:
         self._cwd = cwd
 
     def resolved_output_path(self) -> Path:
-        suffix = ".svg" if OutputFormat.SVG else ".pdf"
-        return self.resolved_output_dir() / f"{self.resolved_output_file_stem()}{suffix}"
+        return self.resolved_output_dir() / f"{self.resolved_output_file_stem()}{self.output_format.extension}"
 
     def resolved_output_file_stem(self):
         if self._output_file_stem is not None:

@@ -60,10 +60,9 @@ class NotesRepository:
             raise InvalidNameError("Name cannot be blank")
         if name.lower() == "resources":
             InvalidNameError("Failed to create note, 'resources' is a reserved name")
-        ext = ".tex" if note_type == FileType.LaTeX else ".typ"
 
         note_dir_path = parent.path / f"{name}.note"
-        note_path = note_dir_path / f"{name}{ext}"
+        note_path = note_dir_path / f"{name}{note_type.extension}"
         metadata_path = note_dir_path / "metadata.json"
         note_dir_path.mkdir()
         self._init_metadata(metadata_path)

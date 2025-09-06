@@ -11,11 +11,8 @@ from ..config import CONFIG, Config
 
 logger = logging.getLogger("mathnote")
 
-def number2filename(num: int, filetype: FileType):
-    if filetype == FileType.LaTeX:
-        return 'lec_{0:02d}.tex'.format(num)
-    else:
-        return 'lec_{0:02d}.typ'.format(num)
+def number2filename(num: int, filetype: FileType) -> str:
+    return f'lec_{num:02d}{filetype.extension}'
 
 
 # TODO: refactor this. Some directories are required while some are optional
@@ -30,10 +27,9 @@ class Course:
         """
         path: root path to course directory
         """
-        ext = ".tex" if filetype == FileType.LaTeX else ".typ"
         self.path = path
         self.filetype = filetype
-        self.main_file = StandaloneSourceFile(self.path / "main" / f"main{ext}")
+        self.main_file = StandaloneSourceFile(self.path / "main" / f"main{self.filetype.extension}")
         self.assignments = assignments if assignments is not None else []
         self.lectures = lectures if lectures is not None else []
         self._course_info: dict | None = None
@@ -52,12 +48,10 @@ class Course:
         return max([lecture.last_edit() for lecture in self.lectures])
 
     def lecture_filename_pattern(self) -> str:
-        ext = ".tex" if FileType.LaTeX else ".typ"
-        return fr"^lec_\d{{2}}\{ext}$"
+        return fr"^lec_\d{{2}}\{self.filetype.extension}$"
 
     def assignment_filename_pattern(self) -> str:
-        ext = ".tex" if FileType.LaTeX else ".typ"
-        return fr"^{self.name}-A\d{{1}}\{ext}$"
+        return fr"^{self.name}-A\d{{1}}\{self.filetype.extension}$"
 
     @property
     def course_info(self) -> dict:
@@ -107,7 +101,7 @@ class Course:
 
     def days(self):
         """ Weekdays zero indexed, starting with Monday """
-        weeday_int_map = {"Monday": 0, "Tuesday": 1, "Wednesday": 2, "Thursday": 3, "Friday": 4}
+        weeday_int_map = {"Monday": 0, "Tuesday": 1, "Wednesday": 2, "Thursday": 3, "Friday": 4, "Saturday": 5, "Sunday": 6}
         try:
             res = [int(weeday_int_map[day]) for day in self.course_info["weekdays"]]
         except KeyError:
@@ -125,6 +119,7 @@ class Course:
             return 0
         return ceil(lecture.number() / len(self.days()))
 
+    # adjust this
     def include_template(self) -> Callable[[str], str]:
         if self.filetype == FileType.LaTeX:
             template_func = lambda name: r'\input{lectures/' + name + "}\n"
@@ -134,7 +129,7 @@ class Course:
 
     def next_lecture_path(self) -> Path:
         num = 1 if not self.lectures else self.lectures[-1].number() + 1
-        new_lecture_path = self.main_file.path / "lectures" / number2filename(num, self.filetype)
+        new_lecture_path = self.main_file.path.parent / "lectures" / number2filename(num, self.filetype)
         return new_lecture_path
 
     # TODO
@@ -149,8 +144,7 @@ class Course:
 
     def next_assignment_path(self) -> Path:
         new_num = max([lec.number() for lec in self.lectures]) + 1
-        ext = ".tex" if self.filetype == FileType.LaTeX else ".typ"
-        filename = f"{self.name}-A{new_num}{ext}"
+        filename = f"{self.name}-A{new_num}{self.filetype.extension}"
         path = self.path / "assignments" / filename
         return path
 

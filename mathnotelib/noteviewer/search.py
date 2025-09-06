@@ -12,8 +12,6 @@ from ..config import CONFIG
 
 
 
-
-
 class Container(QWidget):
     def __init__(self, files):
         super().__init__()

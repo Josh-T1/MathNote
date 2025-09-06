@@ -151,7 +151,7 @@ class CourseRepository:
         lectures_dir = main_dir / "lectures"
         lectures_dir.mkdir()
 
-        shutil.copy(self.config.template_files[filetype]["main_template"], main_dir / "main.tex")
+        shutil.copy(self.config.template_files[filetype]["main_template"], main_dir / f"main{filetype.extension}")
         self._init_course_info(course_path, filetype, start_time, end_time, weekdays, start_date, end_date)
         course = Course(course_path)
         self.courses()[name] = course
@@ -191,15 +191,18 @@ class CourseRepository:
         return course_name in self.courses().keys()
 
 
-    def create_assignment(self, course: Course):
+    def create_assignment(self, course: Course) -> Assignment:
         new_path = course.next_assignment_path()
         assert not new_path.exists() and new_path.parent.exists()
         template_path = self.config.template_files[course.filetype]["assignment"]
         shutil.copy(template_path, new_path)
+        new_assignment = Assignment(new_path)
+        return new_assignment
 
-    def create_lecture(self, course: Course):
+    def create_lecture(self, course: Course) -> Lecture:
         # TODO: add template
         lecture_path = course.next_lecture_path()
+        print(lecture_path)
         main_file_path = course.main_file.path
         assert not lecture_path.exists() and lecture_path.parent.exists()
         lecture_path.touch()
@@ -210,6 +213,7 @@ class CourseRepository:
         template_func = course.include_template()
         body = ''.join([template_func(lecture.name) for lecture in course.lectures])
         main_file_path.write_text(header + body + footer)
+        return new_lecture
 
 
     def _load_assignments(self, course: Course, sort: bool=True) -> list[Assignment]:

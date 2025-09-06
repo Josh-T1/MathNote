@@ -1,4 +1,4 @@
-from typing import Callable
+from typing import Callable, Optional
 
 from PyQt6.QtGui import QIcon, QStandardItem
 from PyQt6.QtWidgets import (QComboBox, QFrame, QHBoxLayout, QLabel, QMenu, QPushButton, QSizePolicy,
@@ -55,7 +55,7 @@ class BaseNavBar(QWidget):
                 self.load_item.emit(item, cat)
             self._toggle_tree(index)
 
-    def _get_item_and_index(self) -> tuple[QStandardItem | None, None | QModelIndex]:
+    def _get_item_and_index(self) -> tuple[Optional[QStandardItem], Optional[QModelIndex]]:
         idx = self.tree.currentIndex()
         if not idx.isValid(): #TODO error msg for top level
             return None, None

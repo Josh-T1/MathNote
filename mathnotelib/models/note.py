@@ -46,6 +46,9 @@ class Note(SourceFile):
     metadata: Metadata
     category: Category
 
+    def pretty_name(self) -> str:
+        return self.name.replace("_", " ")
+
     @property
     def name(self) -> str:
         return self.path.stem

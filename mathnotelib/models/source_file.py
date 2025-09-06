@@ -16,8 +16,7 @@ class SourceFile:
     path: Path
 
     def filetype(self) -> FileType:
-        map = {".tex": FileType.LaTeX, ".typ": FileType.Typst}
-        return map.get(self.path.suffix, FileType.Unsupported)
+        return FileType.from_extension(self.path.suffix)
 
     @property
     def name(self) -> str:
