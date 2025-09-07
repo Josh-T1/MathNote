@@ -234,7 +234,7 @@ class CourseController(QObject):
                 dir_item.appendRow(item)
 
     def init_tree(self):
-        for course in self.course_repo.courses().values():
+        for course in self.course_repo.courses(sort=True).values():
             self.add_course(course)
 
     def connect_handlers(self):
@@ -267,23 +267,34 @@ class CourseController(QObject):
             parent = parent.parent()
         raise Exception("Unexpected error: unable to determine course")
 
-    def _append_to_tree(self, item: QStandardItem, parent_item: QStandardItem, name: str):
-        for row in range(parent_item.rowCount()):
-            child = parent_item.child(row)
-            if child is not None and child.data(constants.COURSE_DIR) == name:
-                child.appendRow(item)
-                pass
+    def _search_tree(self, item: QStandardItem, name: str) -> QStandardItem | None:
+        if item.data(constants.COURSE_DIR) == name:
+            return item
+        for row in range(item.rowCount()):
+            child = item.child(row)
+            if child is None:
+                continue
+            if child.data(constants.COURSE_DIR) == name:
+                return child
+            self._search_tree(child, name)
+        return None
+
+
     @with_error_dialog
     def handle_new_lecture(self):
         item, _ = self.navbar._get_item_and_index()
         if item is None:
             raise NoItemSelected("No course selected")
+
         course, course_item = self._get_course(item)
         new_lecture = self.course_repo.create_lecture(course)
         lecture_item = self.navbar._build_file_item(new_lecture)
+        parent_item = self._search_tree(course_item, "lectures")
 
-        parent_item = item.parent() or item
+        if parent_item is None:
+            raise Exception("Could not find parent in tree view from current selection")
         parent_item.appendRow(lecture_item)
+
         self.navbar.tree.expand(parent_item.index())
 
     @with_error_dialog
@@ -291,12 +302,16 @@ class CourseController(QObject):
         item, _ = self.navbar._get_item_and_index()
         if item is None:
             raise NoItemSelected("No course selected")
+
         course, course_item = self._get_course(item)
         new_assignment = self.course_repo.create_assignment(course)
         assignment_item = self.navbar._build_file_item(new_assignment)
 
-        parent_item = item.parent() or item
+        parent_item = self._search_tree(course_item, "assignments")
+        if parent_item is None:
+            raise Exception("Could not find parent in tree view from current selection")
         parent_item.appendRow(assignment_item)
+
         self.navbar.tree.expand(parent_item.index())
 
 

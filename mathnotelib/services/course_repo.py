@@ -27,6 +27,8 @@ class CourseRepository:
         self._initialized = True
         self._courses: dict[str, Course] = {}
 
+    def __repr__(self):
+        return f"<CourseRepository root={repr(self.course_root)}>"
     def __new__(cls, config: Config):
         path = config.root_path
         if path not in cls._instances:
@@ -35,10 +37,10 @@ class CourseRepository:
             instance._instances[path] = instance
         return cls._instances[path]
 
-    def courses(self) -> dict[str,Course]:
+    def courses(self, sort: bool=False) -> dict[str,Course]:
         """Returns dict with the key value pairs: (course name, course object)"""
         if not self._courses:
-            course_list = self.load_courses(_key=lambda course: (course.last_edit() is not None, course.last_edit()))
+            course_list = self.load_courses(sort=True)
             self._courses = {obj.name: obj for obj in course_list}
         return self._courses
 
@@ -48,7 +50,7 @@ class CourseRepository:
             return FileType.LaTeX
         return FileType.Typst
 
-    def load_courses(self, _key = lambda c: c.name) -> list[Course]:
+    def load_courses(self, sort: bool=False) -> list[Course]:
         """ Load coure objects from directories
 
         Args:
@@ -56,6 +58,12 @@ class CourseRepository:
 
         Returns: list of Course objects sorted by _key
         """
+        def _key(course: Course):
+            try:
+                num = int(course.name.split("-")[1])
+                return num
+            except Exception as e:
+                return 0
         courses = []
         course_directories = [x for x in self.course_root.iterdir() if x.is_dir() and (x / "course_info.json").is_file()]
         for dir in course_directories:
@@ -64,7 +72,9 @@ class CourseRepository:
             course.lectures = self._load_lectures(course)
             course.assignments = self._load_assignments(course)
             courses.append(course)
-        return list(sorted(courses, key=_key))
+        if sort:
+            courses.sort(key=_key)
+        return courses
 
     # TODO should these even be methods?
     def macros_path(self, note_type: FileType = FileType.Typst):
@@ -202,7 +212,6 @@ class CourseRepository:
     def create_lecture(self, course: Course) -> Lecture:
         # TODO: add template
         lecture_path = course.next_lecture_path()
-        print(lecture_path)
         main_file_path = course.main_file.path
         assert not lecture_path.exists() and lecture_path.parent.exists()
         lecture_path.touch()
@@ -211,7 +220,7 @@ class CourseRepository:
         # Update main file
         header, _, footer = get_header_footer(course.main_file.path)
         template_func = course.include_template()
-        body = ''.join([template_func(lecture.name) for lecture in course.lectures])
+        body = '\n'.join([template_func(lecture.name) for lecture in course.lectures]) + "\n"
         main_file_path.write_text(header + body + footer)
         return new_lecture
 

@@ -30,6 +30,9 @@ class NotesRepository:
             cls._instances[path] = instance
         return cls._instances[path]
 
+    def __repr__(self) -> str:
+        return f"<NotesRepository root={repr(self.repo_root)}>"
+
     def build_root_category(self) -> Category:
         """Loads and returns Category object representing root of notes repository"""
         metadata = self.load_metadata(self.repo_root / "cat-metadata.json")

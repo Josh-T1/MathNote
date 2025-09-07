@@ -202,8 +202,9 @@ class HBar(QWidget):
 class PdfWindow(QWidget):
     def __init__(self, widget):
         super().__init__()
-        self.initUi()
         self.parent_widget = widget
+        self.initUi()
+
 
 
     def initUi(self):

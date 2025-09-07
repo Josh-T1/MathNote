@@ -1,4 +1,3 @@
-from enum import Enum, auto
 from typing import Callable
 from math import ceil
 from pathlib import Path
@@ -7,7 +6,6 @@ import json
 import logging
 
 from .source_file import Assignment, FileType, Lecture, StandaloneSourceFile
-from ..config import CONFIG, Config
 
 logger = logging.getLogger("mathnote")
 
@@ -18,6 +16,7 @@ def number2filename(num: int, filetype: FileType) -> str:
 # TODO: refactor this. Some directories are required while some are optional
 class Course:
     source_file_directories = [Path("assignments"), Path("main/lectures"), Path("problems"), Path("projects")]
+
     def __init__(self,
                  path: Path,
                  assignments: list[Assignment] | None=None,
@@ -122,20 +121,20 @@ class Course:
     # adjust this
     def include_template(self) -> Callable[[str], str]:
         if self.filetype == FileType.LaTeX:
-            template_func = lambda name: r'\input{lectures/' + name + "}\n"
+            template_func = lambda name: r'\input{lectures/' + name + self.filetype.extension + "}\n"
         else:
-            template_func = lambda name: f'#include "{name}"'
+            template_func = lambda name: f'#include "lectures/{name}{self.filetype.extension}"'
         return template_func
 
     def next_lecture_path(self) -> Path:
-        num = 1 if not self.lectures else self.lectures[-1].number() + 1
+        num = max([lec.number() for lec in self.lectures], default=0) + 1
         new_lecture_path = self.main_file.path.parent / "lectures" / number2filename(num, self.filetype)
         return new_lecture_path
 
-    # TODO
     def new_lecture_template(self) -> str:
         return ""
 
+    #remove these?
     def add_lecture(self, lecture: Lecture):
         self.lectures.append(lecture)
 
@@ -143,7 +142,7 @@ class Course:
         self.assignments.append(assignment)
 
     def next_assignment_path(self) -> Path:
-        new_num = max([lec.number() for lec in self.lectures]) + 1
+        new_num = max([a.number() for a in self.assignments], default=0) + 1
         filename = f"{self.name}-A{new_num}{self.filetype.extension}"
         path = self.path / "assignments" / filename
         return path
@@ -154,12 +153,4 @@ class Course:
         return self.path == other.path
 
     def __repr__(self) -> str:
-        return f"{self.__class__}(path={self.path}, lectures={self.lectures})"
-    #TODO: delete, make sure I never use this first
-    def __contains__(self, other) -> bool:
-        if not isinstance(other, Lecture):
-            return False
-        for lecture in self.lectures:
-            if lecture == other:
-                return True
-        return False
+        return f"{self.__class__.name}(path={self.path}, lectures={self.lectures}, assignments={self.assignments})"

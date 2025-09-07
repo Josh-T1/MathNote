@@ -17,12 +17,11 @@ from ..pipeline import FlashcardBuilderStage, CleanStage, DataGenerator, Process
 
 logger = logging.getLogger("mathnote")
 
-
 class FlashcardCache:
     def __init__(self, cache_dir: Path):
         super().__init__()
         self.cache_dir = cache_dir
-        self._cache: dict[str, str] = {}
+        self._cache: dict[str, str] = self._load_cache()
         self._section_names: Optional[list[str]] = None
 
     @property
@@ -33,11 +32,29 @@ class FlashcardCache:
     def section_names(self, section_names: list[SectionNamesDescriptor]) -> None:
         self._section_names = sorted([section_name.value for section_name in section_names])
 
-    @property
-    def cache(self) -> dict[str, str]:
-        if not self._cache:
-            self._cache = self._load_cache()
-        return self._cache
+    def keys(self):
+        """Return cache keys."""
+        return self._cache.keys()
+
+    def values(self):
+        """Return cache values."""
+        return self._cache.values()
+
+    def items(self):
+        """Return cache items."""
+        return self._cache.items()
+
+    def get(self, key: str, default=None):
+        """Get cache value with default."""
+        return self._cache.get(key, default)
+
+    def clear(self) -> None:
+        """Clear the cache."""
+        self._cache.clear()
+
+    def update(self, other: dict[str, str]) -> None:
+        """Update cache with another dictionary."""
+        self._cache.update(other)
 
     def _load_cache(self) -> dict[str, str]:
         cache = {}
@@ -45,6 +62,52 @@ class FlashcardCache:
             if file.is_file():
                 cache[file.name] = str(file)
         return cache
+
+    def __eq__(self, other) -> bool:
+        if not isinstance(other, FlashcardCache):
+            return NotImplemented
+        return (self.cache_dir == other.cache_dir and
+                self._cache == other._cache and
+                self._section_names == other._section_names)
+    def __hash__(self):
+        return hash((self.cache_dir, tuple((sorted(self._cache.items()))) if self._cache else ()))
+
+    def __getitem__(self, key: str) -> str:
+        """Get cached file path by filename."""
+        try:
+            return self._cache[key]
+        except KeyError:
+            raise KeyError(f"No cached file found for key: {key}")
+
+    def __delitem__(self, key: str) -> None:
+        """Remove a cache entry."""
+        try:
+            del self._cache[key]
+        except KeyError:
+            raise KeyError(f"No cached file found for key: {key}")
+
+    def __len__(self) -> int:
+        return len(self._cache)
+
+    def __setitem__(self, key: str, value: str) -> None:
+        self._cache[key] = value
+
+
+    def __contains__(self, key: str) -> bool:
+        return key in self._cache
+
+    def __bool__(self) -> bool:
+        return bool(self._cache)
+
+    def __lt__(self, other) -> bool:
+        if not isinstance(other, FlashcardCache):
+            return NotImplemented
+        return len(self._cache) < len(other._cache)
+
+    def __repr__(self) -> str:
+        return f"FlashcardCache(cache_dir={self.cache_dir!r})"
+
+
 
 
 class FlashcardModel:
@@ -55,10 +118,10 @@ class FlashcardModel:
         -- Params --
         compiler: manages compilation of flash cards, type TexCompilationManager
         """
-        self.cache_dir = Path(__file__).parent.resolve() / "cache_dir"
+        self.cache_dir = Path(__file__).parent.resolve() / "cache_tex"
         self.compiler = compiler
         self.flashcards: Deque[Flashcard] = deque()
-        self.flashcard_cache = FlashcardCache(self.cache_dir / "flashcards")
+        self.flashcard_cache = FlashcardCache(self.cache_dir / "pdf")
         self.compiled_flashcards: FlashcardDoubleLinkedList = FlashcardDoubleLinkedList()
         self.flashcard_lock = threading.RLock()
         self.thread_stop_event = threading.Event()

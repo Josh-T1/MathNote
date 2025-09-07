@@ -43,7 +43,7 @@ class FlashcardController:
 
     def handle_update_filters(self):
         text = self.view.course_combo().currentText()
-        course: Course | None = self.course_repo.get_course(text)
+        course = self.course_repo.get_course(text)
         if course is None:
             raise ValueError("Course directory not found")
         day_per_week = max(len(course.days()), 2) # defualt to 2 if not set in course_info.json

@@ -74,7 +74,7 @@ class BaseNavBar(QWidget):
         note_item = QStandardItem(func())
         note_item.setFlags(note_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
         note_item.setData(file, constants.FILE_ROLE)
-        note_item.setToolTip(file.name)
+        note_item.setToolTip(func())
         return note_item
 
 
@@ -124,6 +124,8 @@ class CourseNavBar(BaseNavBar):
         self.new_lecture_btn.setToolTip("New Lecture")
         self.trash_btn.setToolTip("Delete")
         self.new_assignment_btn.setToolTip("New Assignment")
+
+        self.new_assignment_btn.clicked.connect(self.new_assignment.emit)
         self.new_course_btn.clicked.connect(self.new_course.emit)
         self.new_lecture_btn.clicked.connect(self.new_lecture.emit)
         self.trash_btn.clicked.connect(self.delete.emit)
