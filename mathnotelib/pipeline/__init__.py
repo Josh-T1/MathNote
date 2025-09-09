@@ -1,5 +1,5 @@
 from .pipeline import (MainSectionFinder, ProofSectionFinder, ProcessingPipeline, FlashcardBuilderStage,
-                       SectionBuilderStage, CleanStage, DataGenerator, TrackedText)
+                       SectionBuilderStage, CleanStage, DataGenerator, TrackedText, FlashcardFormatStage)
 from .core import get_hack_macros, load_macros
 
 __all__ = [
@@ -13,4 +13,5 @@ __all__ = [
         "TrackedText",
         "get_hack_macros",
         "load_macros",
+        "FlashcardFormatStage"
         ]

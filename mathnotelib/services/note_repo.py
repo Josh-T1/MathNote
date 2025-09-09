@@ -91,20 +91,21 @@ class NotesRepository:
         Raises:
             NoteExistsError: raised if a note under new_parent_cat with name new_name (up to capatilization) already exists
         """
+        # check to ensure old != new
         old_cat, old_dir = note.category, note.path.parent
         old_cat.notes.remove(note)
         parent_cat = old_cat if new_parent_cat is None else new_parent_cat
+        target_dir = parent_cat.path / f"{new_name}.note"
 
-        new_dir_ = parent_cat.path / f"{new_name}.note"
-        moved_path_ = parent_cat.path / f"{new_name}.note" /f"{note.name}{note.path.suffix}"
+        moved_path_ = target_dir /f"{note.name}{note.path.suffix}"
 
 
-        if any(new_name.upper() == note.name.upper() for note in parent_cat.notes) or new_dir_.exists():
+        if any(new_name.upper() == note.name.upper() for note in parent_cat.notes) or target_dir.exists():
             raise NoteExistsError(
                     f"Renaming {note.name} to {new_name} failed.\nA note with the same name (up to capatilization) already exists under the category {parent_cat.name}"
                     )
 
-        new_dir = old_dir.rename(new_dir_)
+        new_dir = old_dir.rename(target_dir)
         new_path_ = new_dir / f"{new_name}{note.path.suffix}"
         new_path = moved_path_.rename(new_path_)
         new_note = Note(new_path, note.metadata, parent_cat)
@@ -255,4 +256,78 @@ class NotesRepository:
     def reload_category(self, category: Category):
         notes = self._get_notes(category)
         category.notes = notes
+
+    @staticmethod
+    def note_to_path(note: Note) -> list[str]:
+        parent, name = note.category, note.name
+        path = [name]
+        while parent is not None:
+            path.append(parent.name)
+            parent = parent.parent
+        path.reverse()
+        return path
+
+    @staticmethod
+    def category_to_path(cat: Category) -> list[str]:
+        parent, name = cat.parent, cat.name
+        path = [name]
+        while parent is not None:
+            path.append(parent.name)
+            parent = parent.parent
+        path.reverse()
+        return path
+
+
+    def path_to_category(self, path: list[str]) -> Category:
+        if len(path) < 2:
+            raise ValueError("Invalid path, must contain parent category name and target category name")
+
+        *category_names, target_cat_name = path
+        parent = self.root_category
+        if parent.name != category_names[0]:
+            raise ValueError(f"Invalid root element in path: {path}")
+        for cat_name in category_names[1:]:
+            subcategories = self.get_sub_categories(parent)
+            for cat in subcategories:
+                if cat.name == cat_name:
+                    parent = cat
+                    break
+            else:
+                raise ValueError(f"Could not determine Category from path: {path}")
+        for cat in self.get_sub_categories(parent):
+            if cat.name == target_cat_name:
+                return cat
+
+        raise ValueError(f"Could not determine Category from path: {path}")
+
+
+    def path_to_note(self, path: list[str]) -> Note:
+        if len(path) < 2:
+            raise ValueError("Invalid path, must contain root category name and note name")
+
+        *category_names, note_name = path
+        parent = self.root_category
+        if parent.name != category_names[0]:
+            raise ValueError(f"Invalid root element in path: {path}")
+        for cat_name in category_names[1:]:
+            subcategories = self.get_sub_categories(parent)
+            for cat in subcategories:
+                if cat.name == cat_name:
+                    parent = cat
+                    break
+            else:
+                raise ValueError(f"Could not determine Note from path: {path}")
+        for note in parent.notes:
+            if note.name == note_name:
+                return note
+
+        raise ValueError(f"Could not determine Note from path: {path}")
+
+
+        # check this works on every iteration ++ check that note actually exsts under paretn
+
+
+
+
+
 

@@ -40,6 +40,32 @@ class DataGenerator:
             yield return_value
 
 
+
+class FlashcardFormatStage(Stage[list[Flashcard], list[Flashcard]]):
+    @staticmethod
+    def _format_card(card: Flashcard):
+        """ If card has a blank question section or its question is equal to the theorem number
+        replace question with 'answer' field (answer in this case is the theorem statement) and
+        replace answer with proof """
+        has_alpha = any(char.isalpha() for char in card.question)
+        has_proof = hasattr(card, SectionNames.PROOF.name)
+        if (len(card.question) == 0 or not has_alpha) and has_proof:
+            prefix = card.question if card.question else None
+            card.question = card.answer
+            card.pdf_question_path = card.pdf_answer_path
+            if prefix is not None:
+                card.answer = prefix + getattr(card, SectionNames.PROOF.name)
+            else:
+                card.answer = getattr(card, SectionNames.PROOF.name)
+            card.pdf_answer_path = getattr(card, f"pdf_{SectionNames.PROOF.name}_path")
+            delattr(card, SectionNames.PROOF.name)
+            delattr(card, f"pdf_{SectionNames.PROOF.name}_path")
+
+    def process(self, data: list[Flashcard]) -> list[Flashcard]:
+        for card in data:
+            self._format_card(card)
+        return data
+
 class CleanStage(Stage[TrackedText, TrackedText]):
     """
     Stage for cleaning LaTeX/Typst code, i.e., remove comments and user defined macros

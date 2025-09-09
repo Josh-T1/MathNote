@@ -1,9 +1,9 @@
 from typing import Callable, Optional
 
 from PyQt6.QtGui import QIcon, QStandardItem
-from PyQt6.QtWidgets import (QComboBox, QFrame, QHBoxLayout, QLabel, QMenu, QPushButton, QSizePolicy,
+from PyQt6.QtWidgets import (QAbstractItemView, QComboBox, QFrame, QHBoxLayout, QLabel, QMenu, QPushButton, QSizePolicy,
                              QSpacerItem, QStackedWidget, QTreeView, QVBoxLayout, QWidget)
-from PyQt6.QtCore import  QModelIndex, QPoint, pyqtSignal, Qt
+from PyQt6.QtCore import  QModelIndex, QPoint, pyqtBoundSignal, pyqtSignal, Qt
 
 from .style import ICON_CSS, LABEL_CSS, SEARCH_CSS, SWITCH_CSS, TITLE_LABEL_CSS, TREE_VIEW_CSS
 from . import constants
@@ -21,6 +21,7 @@ class BaseNavBar(QWidget):
         super().__init__()
         self.model = StandardItemModel()
         self.tree = QTreeView()
+        self.tree.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self._root_item = self.model.invisibleRootItem()
 
     def root_item(self) -> QStandardItem:
@@ -64,7 +65,11 @@ class BaseNavBar(QWidget):
 
     def _build_cat_item(self, cat: Category) -> QStandardItem:
         cat_item = QStandardItem(cat.name)
-        cat_item.setFlags(cat_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+        flags = cat_item.flags()
+        flags &= ~Qt.ItemFlag.ItemIsEditable
+        flags |= Qt.ItemFlag.ItemIsDropEnabled
+        flags |= Qt.ItemFlag.ItemIsDragEnabled
+        cat_item.setFlags(flags)
         cat_item.setData(cat, constants.DIR_ROLE)
         cat_item.setData(False, constants.LOADED_ROLE)
         return cat_item
@@ -72,7 +77,11 @@ class BaseNavBar(QWidget):
     def _build_file_item(self, file: SourceFile) -> QStandardItem:
         func = getattr(file, "pretty_name", lambda: file.name)
         note_item = QStandardItem(func())
-        note_item.setFlags(note_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+        flags = note_item.flags()
+        flags &= ~Qt.ItemFlag.ItemIsEditable
+        flags &= ~Qt.ItemFlag.ItemIsDropEnabled
+        flags |= Qt.ItemFlag.ItemIsDragEnabled
+        note_item.setFlags(flags)
         note_item.setData(file, constants.FILE_ROLE)
         note_item.setToolTip(func())
         return note_item
@@ -143,10 +152,15 @@ class NotesNavBar(BaseNavBar):
     new_category = pyqtSignal()
     delete = pyqtSignal()
     rename = pyqtSignal()
+    move_item = pyqtSignal(dict, QModelIndex)
 
     def __init__(self):
         super().__init__()
         self.initUI()
+        self.model.move_signal = self.move_item
+#        self.tree.setAcceptDrops(True)
+#        self.tree.setDropIndicatorShown(True)
+
 
     def initUI(self):
         main_layout = QVBoxLayout()
@@ -177,6 +191,11 @@ class NotesNavBar(BaseNavBar):
         self.tree.expanded.connect(self._expand_callback)
         self.tree.setStyleSheet(TREE_VIEW_CSS)
         self.tree.clicked.connect(self._item_clicked_callback)
+        self.tree.setDragEnabled(True)
+        self.tree.setAcceptDrops(True)
+        self.tree.setDropIndicatorShown(True)
+        self.tree.setDefaultDropAction(Qt.DropAction.MoveAction)
+
         if (header := self.tree.header()) is not None:
             header.hide()
 #            header.setText()

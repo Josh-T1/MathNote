@@ -29,6 +29,7 @@ class CourseRepository:
 
     def __repr__(self):
         return f"<CourseRepository root={repr(self.course_root)}>"
+
     def __new__(cls, config: Config):
         path = config.root_path
         if path not in cls._instances:
@@ -40,10 +41,11 @@ class CourseRepository:
     def courses(self, sort: bool=False) -> dict[str,Course]:
         """Returns dict with the key value pairs: (course name, course object)"""
         if not self._courses:
-            course_list = self.load_courses(sort=True)
+            course_list = self.load_courses(sort=sort)
             self._courses = {obj.name: obj for obj in course_list}
         return self._courses
 
+    #TODO: this should not exist-resolve method this vs course_info.json["filetype"] method
     def _get_course_type(self, path: Path) -> FileType:
         # TODO: check file first + what does it mean for course.filetype = FileType.LaTeX? Lectures only? hard overide for assignments?
         if (path / "main" / "main.tex").is_file():

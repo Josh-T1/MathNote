@@ -51,6 +51,28 @@ class NoteController(QObject):
         self.navbar.delete.connect(lambda: self.handle_delete())
         self.navbar.rename.connect(lambda: self.handle_rename())
         self.navbar.load_item.connect(lambda item, cat: self.handle_load_item(item, cat))
+        self.navbar.move_item.connect(lambda data, parent_idx: self.handle_move_item(data, parent_idx))
+
+    @with_error_dialog
+    def handle_move_item(self, data: dict, parent_idx: QModelIndex):
+        item_type, path = data["type"], data["path"]
+        parent = self.navbar.model.itemFromIndex(parent_idx) or self.navbar.root_item()
+        parent_cat = parent.data(constants.DIR_ROLE)
+        if parent_cat is None:
+            raise Exception("Missing data from tree item")
+
+        if item_type == "Note":
+            note = self.notes_repo.path_to_note(path)
+            old_parent = note.category
+            self.notes_repo.rename_note(note, note.name, parent_cat)
+        else:
+            category = self.notes_repo.path_to_category(path)
+            old_parent = category.parent
+            assert old_parent is not None, "Attempting to move root category" # Is this necessary? should be impossible
+
+            self.notes_repo.rename_cat(category, category.name, parent_cat)
+        valid = self.navbar.model.complete_move()
+        self.handle_load_item(parent, parent_cat)
 
     def handle_load_item(self, item: QStandardItem, cat: Category):
         item.removeRows(0, item.rowCount())

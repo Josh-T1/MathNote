@@ -6,26 +6,47 @@ import threading
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QStandardItem, QStandardItemModel
-from PyQt6.QtWidgets import QApplication, QListView
+from PyQt6.QtWidgets import QApplication, QListView, QMessageBox, QWidget
 
 from mathnotelib.models.courses import Course
 
 from .window import FlashcardMainWindow
-from .flashcard_model import FlashcardModel
-from ..exceptions import FlashcardNotFoundException, LaTeXCompilationError
+from .flashcard_model import FlashcardSession
+from ..exceptions import EndofFlashcards, FlashcardNotFoundException, LaTeXCompilationError, MissingFlashcardAttributeError
 from ..services import CourseRepository, open_file_with_editor, open_pdf
 from ..models import SectionNames, SectionNamesDescriptor
 from ..config import Config
 
 logger = logging.getLogger("mathnote")
 
+def show_error_dialog(window: QWidget, msg: str):
+    dialog = QMessageBox(window)
+    dialog.setIcon(QMessageBox.Icon.Critical)
+    dialog.setWindowTitle("Error")
+    dialog.setText(msg)
+    dialog.setStandardButtons(QMessageBox.StandardButton.Ok)
+    dialog.exec()
+
+def with_error_dialog(func):
+    def wrapper(self, *args, **kwargs):
+        try:
+            return func(self, *args, **kwargs)
+#        except (FlashcardNotFoundException) as e:
+#            show_error_dialog(self.window, str(e))
+#        except LaTeXCompilationError as e:
+#            if len(text_attr) > 1000:
+#                text_attr = text_attr[:1001]
+        except Exception as e:
+            show_error_dialog(self.window, f"Unexpected error: {e}")
+    return wrapper
 
 class FlashcardController:
-    def __init__(self, view: FlashcardMainWindow, model: FlashcardModel, config: Config) -> None:
-        self.model = model
+    def __init__(self, view: FlashcardMainWindow, session: FlashcardSession, config: Config) -> None:
+        self.session = session
         self.view = view
         self.course_repo = CourseRepository(config)
         self.flashcards = []
+
         self._setBindings()
         self._populate_view()
 
@@ -63,17 +84,12 @@ class FlashcardController:
         courses = self.course_repo.courses().keys()
         self.view.course_combo().addItems(courses)
 
-    def run(self, app: QApplication | None):
-        logger.debug(f"Calling {self.run}")
-        if app is not None:
-            self.view.show()
-            self.model.compile_thread.start()
-            sys.exit(app.exec())
-        else:
-            self.model.compile_thread.start()
-            self.view.show()
+#    def run(self):
+#        logger.debug(f"Calling {self.run}")
+#        self.session.start()
+#        self.view.show()
 
-    def handle_dynamic_data(self):
+    def toggle_proof_btn(self):
         """ Flashcards must have a question and answer, however they may have other optional fields such as a proof or note
         This methods handles behaviour associated with the optional fields
         """
@@ -82,65 +98,41 @@ class FlashcardController:
         else:
             self.view.show_proof_button().setHidden(True)
 
-    def close(self):
-        logger.info(f"Closing app")
-        self.model.compile_thread.stop()
+#    def close(self):
+#        logger.info(f"Closing app")
+#        self.session.stop()
 
+    @with_error_dialog
     def display_card(self, text_attr_name: str, path_attr_name: str):
-        card = self.model.current_card
+        card = self.session.current_card
         if not card:
-            self.view.set_error_message("No flashcard has been loaded")
-            return
+            raise EndofFlashcards("End of flashcards has been reached")
         text_attr = getattr(card, text_attr_name, None)
         path_attr =  getattr(card, path_attr_name, None) # TODO path_attr can be the value None, confusing to debug
         if text_attr is None or path_attr is None:
-            logger.error(f"Flashcard does not have attr: {text_attr_name} or {path_attr_name}")
-            self.view.set_error_message(f"Something went wrong: flashcard missing attribute(s) {text_attr_name} {path_attr_name}")
-            return
-        try:
-            self.view.plot_tex(path_attr, text_attr)
-        except LaTeXCompilationError as e:
-            if len(text_attr) > 1000:
-                text_attr = text_attr[:1001]
-            logging.warning(f"Failed to compile card: {self.model.current_card} with tex: {text_attr}, {e}")
+            raise MissingFlashcardAttributeError(f"Flashcard missing attr: {text_attr_name} or {path_attr_name}")
+        self.view.plot_tex(path_attr, text_attr)
 
-            self.view.set_error_message(f"Failed to compile flashcard question. Raw truncated latex: {text_attr}")
-
+    @with_error_dialog
     def show_next_flashcard(self):
         logger.debug(f"Calling {self.show_next_flashcard}")
-        try:
-            self.model.next_flashcard()
-            self.handle_dynamic_data()
-            self.view.flashcard_type_label().setText(f"Section: {self.model.current_card.section_name.lower()}")
-            #  TODO create some general method for handling additional info
-        except FlashcardNotFoundException as e:
-            logger.error(f"Failed to show next flashcard question, {e}")
-            self.view.set_error_message(str(e))
-        except LaTeXCompilationError as e:
-            logger.error(f"Failed to compile next flashcard question, {e}")
-            self.view.set_error_message(str(e))
+        card = self.session.next_flashcard()
+        self.toggle_proof_btn()
+        self.view.flashcard_type_label().setText(f"Section: {card.section_name.lower()}")
         self.display_card("question", "pdf_question_path")
 
-
+    @with_error_dialog
     def show_prev_flashcard(self):
         logger.debug(f"Calling {self.show_prev_flashcard}")
-        try:
-            self.model.prev_flashcard()
-            self.handle_dynamic_data()
-        except FlashcardNotFoundException as e:
-            logger.error(f"Failed to show next flashcard question, {e}")
-            self.view.set_error_message(str(e))
-        except LaTeXCompilationError as e:
-            logger.error(f"Failed to compile prev flashcard question, {e}")
-            self.view.set_error_message(str(e))
+        self.session.prev_flashcard()
+        self.toggle_proof_btn()
         self.display_card("question", "pdf_question_path")
 
     def show_flashcard_info(self):
-        if self.model.current_card is None:
+        if self.session.current_card is None:
             message = "No flashcards have been loaded"
         else:
-            tracked_string = self.model.current_card.question if self.view.document == self.model.current_card.pdf_question_path else self.model.current_card.answer
-
+            tracked_string = self.session.current_card.question if self.view.document == self.session.current_card.pdf_question_path else self.session.current_card.answer
             if len(tracked_string) >= 300:
                 tracked_string = tracked_string[:301]
             message = f"Source: {tracked_string.source}. Latex: {str(tracked_string)}"
@@ -149,7 +141,7 @@ class FlashcardController:
     def create_flashcards_from_file(self, path: Path, shuffle=False):
         section_names = [member for member in SectionNames]
         logger.info(f"Creating flashcards from {path}")
-        load_thread = threading.Thread(target=self.model.load_flashcards, args=(section_names, [path], shuffle))
+        load_thread = threading.Thread(target=self.session.load_flashcards, args=(section_names, [path], shuffle))
         load_thread.start()
 
     def create_flashcards(self):
@@ -163,7 +155,7 @@ class FlashcardController:
             return
         paths = [lecture.path for lecture in course.lectures if course.get_week(lecture) in weeks]
         logger.info(f"Creating flashcards from {len(paths)} paths")
-        load_thread = threading.Thread(target=self.model.load_flashcards, args=(section_names, paths, random))
+        load_thread = threading.Thread(target=self.session.load_flashcards, args=(section_names, paths, random))
         load_thread.start()
 
     def get_flashcard_pipeline_config(self) -> tuple[str, list[SectionNamesDescriptor], set[int], bool]:
@@ -200,13 +192,13 @@ class FlashcardController:
         return checked_items
 
     # TODO
-    def _get_pdf_source(self) -> str | None:
-        card = self.model.current_card
+    def _get_pdf_source(self) -> Path | None:
+        card = self.session.current_card
         if card is None:
             return
         tracked_string = card.question if self.view.document == card.pdf_question_path else card.answer
         source = tracked_string.source
-        return str(source)
+        return source
 
     def open_main(self):
         course_name, *_ = self.get_flashcard_pipeline_config()
@@ -217,7 +209,7 @@ class FlashcardController:
     def launch_iterm(self):
         source = self._get_pdf_source()
         if source is not None:
-            open_file_with_editor(source)
+            open_file_with_editor(str(source))
 
 
 

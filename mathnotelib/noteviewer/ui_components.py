@@ -1,13 +1,20 @@
-from typing import Callable
+import collections
+import json
+from typing import Callable, Iterable, Optional
+from PyQt6 import QtCore
 from PyQt6.QtGui import QIcon, QStandardItemModel
 from PyQt6.QtWidgets import QButtonGroup, QHBoxLayout, QLabel, QMessageBox, QPushButton, QVBoxLayout, QWidget
-from PyQt6.QtCore import QModelIndex, Qt
+from PyQt6.QtCore import QDataStream, QIODevice, QMimeData, QModelIndex, Qt, pyqtBoundSignal
+
+from mathnotelib.models.note import Note
+from mathnotelib.services.course_repo import CourseRepository
+from mathnotelib.services.note_repo import NotesRepository
 
 from .style import ICON_CSS, LABEL_CSS, SWITCH_CSS
 from . import constants
 from ..config import CONFIG
-from ..flashcard import FlashcardMainWindow, FlashcardModel, FlashcardController
-from ..services import CompilationManager
+from ..flashcard import FlashcardMainWindow, FlashcardSession, FlashcardController
+from ..services import FlashcardCompiler
 from ..models import SourceFile, Course, Category
 
 
@@ -69,9 +76,122 @@ class ModeSelector(QWidget):
     def connect_mode_btn(self, callback: Callable[[str], None]):
         self.btn_group.buttonClicked.connect(lambda btn: callback(btn.text()))
 
+
+def build_dragged_tree(indexes: list[QModelIndex]):
+    index_set = set(indexes)
+    root = None
+    for idx in indexes:
+        parent = idx.parent()
+        while parent.isValid() and parent in index_set:
+            parent = parent.parent()
+
+        if parent not in index_set:
+            root = idx
+        else:
+            root = parent
+    return root
+
+def get_indexes_from_mime_data(mime_data: QMimeData, model: QStandardItemModel):
+    """
+    Reconstruct QModelIndex objects from a QMimeData object for a given model.
+    Returns a list of QModelIndex.
+    """
+    indexes = []
+
+    if not mime_data.hasFormat("application/x-qabstractitemmodeldatalist"):
+        return indexes
+
+    data = mime_data.data("application/x-qabstractitemmodeldatalist")
+    stream = QDataStream(data, QIODevice.OpenModeFlag.ReadOnly)
+
+    while not stream.atEnd():
+        row = stream.readInt32()
+        col = stream.readInt32()
+        role_count = stream.readInt32()
+        # read roles but we don't need them here if just reconstructing index
+        for _ in range(role_count):
+            stream.readInt32()  # role
+            stream.readQVariant()  # value
+
+        # Reconstruct QModelIndex for this row/col in model
+        index = model.index(row, col)
+        indexes.append(index)
+    return indexes
+
+
 class StandardItemModel(QStandardItemModel):
     def __init__(self, parent=None):
+        self.move_signal: None | pyqtBoundSignal = None
         super().__init__(parent=parent)
+        self.pending: dict | None=None
+        self.drag_source = {}
+
+    def mimeData(self, indexes: Iterable[QtCore.QModelIndex]) -> Optional[QtCore.QMimeData]:
+        mime_data = super().mimeData(indexes)
+        idx = list(indexes)[0]
+        self.drag_source["row"] = idx.row()
+        self.drag_source["parent"] = idx.parent()
+
+        item = self.itemFromIndex(idx)
+        if item is None:
+            return super().mimeData(indexes)
+
+
+        maybe_note = item.data(constants.FILE_ROLE)
+        maybe_cat = item.data(constants.DIR_ROLE)
+
+        if isinstance(maybe_cat, Category) and mime_data:
+            data = {
+                    "path": NotesRepository.category_to_path(maybe_cat),
+                    "type": "Category",
+                    }
+            serialized = json.dumps(data).encode('utf-8')
+            mime_data.setData("application/x-note-paths", serialized)
+            return mime_data
+
+        if isinstance(maybe_note, Note) and mime_data:
+            data = {
+                    "path": NotesRepository.note_to_path(maybe_note),
+                    "type": "Note",
+                    }
+            serialized = json.dumps(data).encode('utf-8')
+            mime_data.setData("application/x-note-paths", serialized)
+        return mime_data
+
+    def dropMimeData(self, data: Optional[QtCore.QMimeData], action: QtCore.Qt.DropAction, row: int, column: int, parent: QtCore.QModelIndex) -> bool:
+        if self.move_signal is not None and data is not None and data.hasFormat("application/x-note-paths"):
+            json_bytes = data.data("application/x-note-paths")
+            json_string = json_bytes.data().decode('utf-8')
+            d = json.loads(json_string)
+            self.pending = {
+                    "data": data,
+                    "action": action,
+                    "row": row,
+                    "column": column,
+                    "parent": parent
+                    }
+            self.move_signal.emit(d, parent)
+            return False
+        return super().dropMimeData(data, action, row, column, parent)
+
+    def complete_move(self) -> bool:
+        if self.pending:
+            pending = self.pending
+            self.pending = None
+            result = super().dropMimeData(
+                    pending["data"],
+                    pending["action"],
+                    pending["row"],
+                    pending["column"],
+                    pending["parent"]
+                    )
+            if result and self.drag_source['parent'].isValid():
+                self.removeRow(self.drag_source['row'], self.drag_source['parent'])
+            elif result:
+                self.removeRow(self.drag_source['row'])
+            return result
+
+        return False
 
     def hasChildren(self, parent: QModelIndex=QModelIndex()) -> bool:
         if (parent.isValid() is False or # Delete?
@@ -80,6 +200,7 @@ class StandardItemModel(QStandardItemModel):
             ):
             return True
         return super().hasChildren(parent)
+
 
 # TODO add vim_btn iff users have set editor to vim
 class LauncherWidget(QWidget):

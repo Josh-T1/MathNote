@@ -1,5 +1,5 @@
 from .compiler import CompileOptions, compile_source, open_pdf
-from .compilation_manager import CompilationManager
+from .flashcard_compiler import FlashcardCompiler
 from .parse import get_header_footer
 from .note_repo import NotesRepository
 from .course_repo import CourseRepository
@@ -12,7 +12,7 @@ __all__ = [
         "get_header_footer",
         "NotesRepository",
         "CourseRepository",
-        "CompilationManager",
+        "FlashcardCompiler",
         "open_cmd",
         "open_file_with_editor",
         "open_pdf"

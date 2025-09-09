@@ -26,6 +26,10 @@ class Category:
     notes: list["Note"]
     parent: Optional['Category'] = None
 
+    def __eq__(self, other):
+        if not isinstance(other, Category):
+            return False
+        return self.path == other.path
     def __post_init__(self):
         assert self.path.exists() and self.path.is_dir()
 
@@ -48,6 +52,11 @@ class Note(SourceFile):
 
     def pretty_name(self) -> str:
         return self.name.replace("_", " ")
+
+    def __eq__(self, other):
+        if not isinstance(other, Note):
+            return False
+        return other.name == self.name and self.category == other.category
 
     @property
     def name(self) -> str:

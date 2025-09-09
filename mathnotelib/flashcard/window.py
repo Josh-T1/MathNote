@@ -247,6 +247,7 @@ class PdfWindow(QWidget):
                 self.pdf_viewer.setZoomFactor(ZOOM_FACTOR)
         return load_status
 
+    # TODO
     def plot_tex(self, pdf_path: str, tex: str):
         """
         -- Params --
