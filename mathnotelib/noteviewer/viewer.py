@@ -34,9 +34,31 @@ class ZMultiPageViewer(QGraphicsView):
         self._hide_timer = QTimer()
         self._hide_timer.setSingleShot(True)
         self._hide_timer.timeout.connect(self._hide_scrollbars)
-
+        self._restore_data = None
         self._pending_items: list = []
         self.tmpdir: tempfile.TemporaryDirectory | None = None
+
+    def _restore(self):
+        if self._restore_data is None:
+            return
+        self.setTransform(self._restore_data["transform"])
+        if (hbar := self.horizontalScrollBar()) is not None:
+            hbar.setValue(self._restore_data["scroll_pos"][0])
+        if (vbar := self.verticalScrollBar()) is not None:
+            vbar.setValue(self._restore_data["scroll_pos"][1])
+        self._restore_data = None
+
+    def _set_restore_vals(self):
+        h_val, v_val = 0, 0 # does this make sense?
+        if (hscroll_bar := self.horizontalScrollBar()) is not None:
+            h_val = hscroll_bar.value()
+        if (vscroll_bar := self.verticalScrollBar()) is not None:
+            v_val = vscroll_bar.value()
+        self._restore_data = {
+                "zoom": self._zoom,
+                "scroll_pos": (h_val, v_val),
+                "transform": self.transform()
+                }
 
     def _create_overlay(self):
         # TODO: finish
@@ -77,37 +99,43 @@ class ZMultiPageViewer(QGraphicsView):
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
-    def load(self, svg_paths: list[str] | str, tmpdir: tempfile.TemporaryDirectory | None):
+    def load(self,
+             svg_paths: list[str] | str,
+             tmpdir: tempfile.TemporaryDirectory | None,
+             preserve_state: bool=False,
+             ):
+        if preserve_state:
+            self._set_restore_vals()
         self._scene.clear()
         self.reset_zoom()
         self._y_offset = 0
         self.tmpdir = tmpdir
         paths = svg_paths if isinstance(svg_paths, list) else [svg_paths]
-        load_num = min(len(paths), self.BATCH_SIZE)
-        for path in paths[:load_num]:
+        for path in paths:
             self.append_item(path)
+        if preserve_state:
+#            QTimer.singleShot(10, lambda: self._restore())
+            self._restore()
 
-        if len(paths) > self.BATCH_SIZE:
-            self._pending_items = paths[self.BATCH_SIZE:]
-            self._timer.timeout.connect(self._load_pending)
-            self._timer.start(30)
 
-    def _load_pending(self):
-        if len(self._pending_items) == 0:
-            self._timer.stop()
-            if self.tmpdir:
-                self.tmpdir.cleanup()
-                self.tmpdir = None
-            return
-        item = self._pending_items.pop(0)
-        self.append_item(item)
+
+
+#    def _load_pending(self):
+#        if len(self._pending_items) == 0:
+#            self._timer.stop()
+#            if self.tmpdir:
+#                self.tmpdir.cleanup()
+#                self.tmpdir = None
+#            return
+#        item = self._pending_items.pop(0)
+#        self.append_item(item)
 
     def append_item(self, path: str):
         if len(items := self._scene.items()) > 0:
             prev_item = items[-1]
             prev_bounds = prev_item.boundingRect()
             prev_scale_y = constants.VIEWER_HEIGHT / prev_bounds.height()
-            self._y_offset += 20 * prev_scale_y
+#            self._y_offset += 10 * prev_scale_y
 
         item = QGraphicsSvgItem(path)
         item.setPos(0, self._y_offset)
@@ -310,11 +338,12 @@ class TabbedSvgViewer(QWidget):
                             svg_paths: list[str] | str,
                             tmpdir: tempfile.TemporaryDirectory | None=None,
                             name: str | None=None,
+                            preserve_state: bool=False
                             ):
         current_viewer = self.stack.currentWidget()
         if not isinstance(current_viewer, ZMultiPageViewer):
             return
-        current_viewer.load(svg_paths, tmpdir)
+        current_viewer.load(svg_paths, tmpdir, preserve_state=preserve_state)
         idx = self.stack.indexOf(current_viewer)
         if name is None:
             return

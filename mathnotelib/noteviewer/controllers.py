@@ -8,6 +8,7 @@ from PyQt6.QtGui import QStandardItem
 from PyQt6.QtWidgets import QMainWindow
 
 from mathnotelib.models.source_file import Assignment, Lecture
+from mathnotelib.services.compiler import compile_typst
 
 from . import constants
 from .navbar import CourseNavBar, NavBarContainer, NotesNavBar
@@ -417,7 +418,7 @@ class LiveTypstController:
         self.viewer = viewer
 
         self.watcher = None
-        self.process = None
+#        self.process = None
         self._debounce_timer = None
 
         self.connect_handlers()
@@ -439,8 +440,8 @@ class LiveTypstController:
             self.watcher.removePath(constants.TYP_FILE_LIVE)
             self.watcher.deleteLater()
             self.watcher = None
-        if self.process and self.process.state() != QProcess.ProcessState.NotRunning:
-            self.process.kill()
+#        if self.process and self.process.state() != QProcess.ProcessState.NotRunning:
+#            self.process.kill()
         self._debounce_timer = None
 
     def connect_handlers(self):
@@ -455,15 +456,30 @@ class LiveTypstController:
             self._debounce_timer.start(self.DEBOUNCE)
 #
     def compile_typst(self, path: str):
-        if self.process and self.process.state() != QProcess.ProcessState.NotRunning:
-            self.process.kill()  # Stop any ongoing compilation
+#        if self.process and self.process.state() != QProcess.ProcessState.NotRunning:
+#            self.process.kill()  # Stop any ongoing compilation
 
-        self.process = QProcess()
-        self.process.finished.connect(lambda : self._update_svg())
-        self.process.start("typst", ["compile", path, "--format", "svg"])
+        tmpdir = tempfile.TemporaryDirectory()
+        tmpdir_path = Path(tmpdir.name)
+
+        options = CompileOptions(Path(path), OutputFormat.SVG, multi_page=True)
+        options.set_output_dir(tmpdir_path)
+        options.set_output_file_stem(constants.OUTPUT_FILE_STEM)
+
+        compilation_res = compile_typst(Path(path), options)
+        svg_files = sorted(tmpdir_path.glob(f"{constants.OUTPUT_FILE_STEM}*.svg"), key=rendered_sorted_key)
+        if len(svg_files) == 0:
+            raise CompilationError(compilation_res[1])
+        self._update_svg(svg_files, tmpdir, "live")
+
+    def _update_svg(self,
+                    path: Path | list[Path],
+                    tmpdir: tempfile.TemporaryDirectory,
+                    name: str | None=None,
+                    ):
+        paths = path if isinstance(path, list) else [path]
+        if all(p.exists() for p in paths):
+            self.viewer.load_current_viewer([str(p) for p in paths], tmpdir=tmpdir, name=name, preserve_state=True)
 
 
-    def _update_svg(self):
-        svg_path = constants.TYP_FILE_LIVE.replace(".typ", ".svg")
-        self.viewer.load_current_viewer(svg_path)
 

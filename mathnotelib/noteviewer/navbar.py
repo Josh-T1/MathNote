@@ -21,6 +21,7 @@ class BaseNavBar(QWidget):
         super().__init__()
         self.model = StandardItemModel()
         self.tree = QTreeView()
+        self.tree.setIndentation(10)
         self.tree.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self._root_item = self.model.invisibleRootItem()
 
@@ -319,7 +320,7 @@ class NavBarContainer(QWidget):
         main_layout.setContentsMargins(5, 8, 5, 8)
         main_layout.setSpacing(4)
         self.setLayout(main_layout)
-        self.setFixedWidth(200)
+        self.setFixedWidth(250)
         #Init widgets
         self.stack = QStackedWidget()
         self.search_widget = SearchWidget()

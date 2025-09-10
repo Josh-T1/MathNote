@@ -5,7 +5,7 @@ import subprocess
 
 from ..models import SourceFile, StandaloneSourceFile
 from .filesystem import open_cmd
-from .._enums import FileType, LatexmkReturnCode, OutputFormat
+from .._enums import FileType, OutputFormat
 
 
 @dataclass
@@ -13,14 +13,17 @@ class CompileOptions:
     filepath: Path
     output_format: OutputFormat
     multi_page: bool = True
+    root: Path | None=None
     _output_file_stem: str | None=None
     _output_dir: Path | None=None
     _cwd: Path | None=None
 
     def set_output_file_stem(self, stem: str):
+        # check for "."
         self._output_file_stem = stem
 
     def set_output_dir(self, dir: Path):
+        # ensure valid dir?
         self._output_dir = dir
 
     def set_cwd(self, cwd: Path):
@@ -59,6 +62,7 @@ def open_pdf(source: StandaloneSourceFile, lazy: bool=True) -> int:
     return result.returncode
 
 
+#TODO delete
 Stderr = str
 Stdout = str
 CompilationResult = tuple[int, Stderr, Stdout]
@@ -73,7 +77,11 @@ def compile_source(source: SourceFile, options: CompileOptions) -> CompilationRe
     return res
 
 def compile_typst(filepath: Path, options: CompileOptions) -> CompilationResult:
-    cmd = ["typst", "compile", "--format", options.output_format.value, str(filepath)]
+    cmd = ["typst", "compile", "--format", options.output_format.value]
+    if options.root is not None:
+        cmd.extend(["--root", str(options.root)])
+
+    cmd.append(str(filepath))
     if options.output_format == OutputFormat.SVG and options.multi_page:
         cmd.append(f"{options.resolved_output_dir() / options.resolved_output_file_stem()}-{{p}}.svg")
     elif options.output_format == OutputFormat.SVG:
