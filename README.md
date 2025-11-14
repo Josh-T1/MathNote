@@ -1,7 +1,6 @@
 # MathNote
-![gui](assets/gui.png)
-![flashcard](assets/flashcard.png)
-
+<img src="assets/gui.png" alt="flashcard" width="800" height="600"/>
+<img src="assets/flashcard.png" alt="flashcard" width="600"/>
 
 MathNote is a LaTeX/Typst note taking tool, used to:
 1. Maintain course notes in a structured format
