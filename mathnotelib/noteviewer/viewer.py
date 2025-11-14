@@ -41,6 +41,7 @@ class ZMultiPageViewer(QGraphicsView):
     def _restore(self):
         if self._restore_data is None:
             return
+        self._zoom = self._restore_data["zoom"]
         self.setTransform(self._restore_data["transform"])
         if (hbar := self.horizontalScrollBar()) is not None:
             hbar.setValue(self._restore_data["scroll_pos"][0])

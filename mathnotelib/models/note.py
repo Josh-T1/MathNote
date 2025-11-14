@@ -33,6 +33,9 @@ class Category:
     def __post_init__(self):
         assert self.path.exists() and self.path.is_dir()
 
+    def pretty_name(self) -> str:
+        return self.name.replace("_", " ").replace("-", " ")
+
     @property
     def name(self) -> str:
         return self.path.stem
@@ -51,7 +54,7 @@ class Note(SourceFile):
     category: Category
 
     def pretty_name(self) -> str:
-        return self.name.replace("_", " ")
+        return self.name.replace("_", " ").replace("-", " ")
 
     def __eq__(self, other):
         if not isinstance(other, Note):

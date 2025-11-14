@@ -249,6 +249,8 @@ class CourseController(QObject):
                 continue
             dir_item = QStandardItem(dir.name)
             dir_item.setData(dir.name, constants.COURSE_DIR)
+            dir_item.setFlags(main_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+
             course_item.appendRow(dir_item)
             files = getattr(course, dir.name, [])
             for source_file in files:
@@ -418,9 +420,7 @@ class LiveTypstController:
         self.viewer = viewer
 
         self.watcher = None
-#        self.process = None
         self._debounce_timer = None
-
         self.connect_handlers()
 
     def start_live_preview(self):
@@ -454,7 +454,8 @@ class LiveTypstController:
     def on_typ_changed(self):
         if self._debounce_timer and not self._debounce_timer.isActive():
             self._debounce_timer.start(self.DEBOUNCE)
-#
+
+    @with_error_dialog
     def compile_typst(self, path: str):
 #        if self.process and self.process.state() != QProcess.ProcessState.NotRunning:
 #            self.process.kill()  # Stop any ongoing compilation
@@ -468,8 +469,10 @@ class LiveTypstController:
 
         compilation_res = compile_typst(Path(path), options)
         svg_files = sorted(tmpdir_path.glob(f"{constants.OUTPUT_FILE_STEM}*.svg"), key=rendered_sorted_key)
-        if len(svg_files) == 0:
-            raise CompilationError(compilation_res[1])
+        if len(svg_files) == 0: #TODO seems like live compile breaks this
+            return
+
+#            raise CompilationError(compilation_res[1])
         self._update_svg(svg_files, tmpdir, "live")
 
     def _update_svg(self,

@@ -1,17 +1,20 @@
 import collections
 import json
+from pathlib import Path
 from typing import Callable, Iterable, Optional
 from PyQt6 import QtCore
 from PyQt6.QtGui import QIcon, QStandardItemModel
 from PyQt6.QtWidgets import QButtonGroup, QHBoxLayout, QLabel, QMessageBox, QPushButton, QVBoxLayout, QWidget
 from PyQt6.QtCore import QDataStream, QIODevice, QMimeData, QModelIndex, Qt, pyqtBoundSignal
 
+from mathnotelib._enums import FileType
 from mathnotelib.models.note import Note
 from mathnotelib.services.course_repo import CourseRepository
 from mathnotelib.services.note_repo import NotesRepository
 
 from .style import ICON_CSS, LABEL_CSS, SWITCH_CSS
 from . import constants
+from ..pipeline import load_macros, get_hack_macros
 from ..config import CONFIG
 from ..flashcard import FlashcardMainWindow, FlashcardSession, FlashcardController
 from ..services import FlashcardCompiler
@@ -242,9 +245,11 @@ class LauncherWidget(QWidget):
 
     # TODO ensure that we wait for flashcards to terminate properly
     def launch_flashcards(self):
-        self.compilation_manager = CompilationManager()
-        self.flashcard_model = FlashcardModel(self.compilation_manager)
+        macros_path = Path(CONFIG.template_files[FileType.LaTeX]["note_macros"])
+        preamble = Path(CONFIG.template_files[FileType.LaTeX]["note_preamble"])
+        self.compilation_manager = FlashcardCompiler(macros_path, preamble)
+        self.flashcard_model = FlashcardSession(self.compilation_manager)
         self._window = FlashcardMainWindow()
         self.controller = FlashcardController(self._window, self.flashcard_model, CONFIG) #type: ignore
         self._window.setCloseCallback(self.controller.close)
-        self.controller.run(None)
+        self.controller.run()

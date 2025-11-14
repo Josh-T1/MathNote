@@ -34,7 +34,7 @@ class Course:
         self._course_info: dict | None = None
 
     def pretty_name(self) -> str:
-        return self.path.name.replace("-", " ")
+        return self.path.name.replace("-", " ").replace("_", " ")
 
     @property
     def name(self):

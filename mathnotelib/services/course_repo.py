@@ -206,7 +206,7 @@ class CourseRepository:
     def create_assignment(self, course: Course) -> Assignment:
         new_path = course.next_assignment_path()
         assert not new_path.exists() and new_path.parent.exists()
-        template_path = self.config.template_files[course.filetype]["assignment"]
+        template_path = self.config.template_files[course.filetype]["assignment_template"]
         shutil.copy(template_path, new_path)
         new_assignment = Assignment(new_path)
         return new_assignment

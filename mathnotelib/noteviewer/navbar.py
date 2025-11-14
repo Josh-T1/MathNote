@@ -47,7 +47,7 @@ class BaseNavBar(QWidget):
         # For any item with this role we must do 2 things:
         #   1. Check to see if we should expand or collapse tree around item
         #   2. Check if subcategories and notes have been load. If not, load data and populate rows.
-        elif item.data(constants.COURSE_CONTAINER_ROLE) is not None:
+        elif item.data(constants.COURSE_CONTAINER_ROLE) is not None or item.data(constants.COURSE_DIR) is not None:
             self._toggle_tree(index)
 
         elif (cat := item.data(constants.DIR_ROLE)) is not None:
@@ -65,7 +65,8 @@ class BaseNavBar(QWidget):
         return item, idx
 
     def _build_cat_item(self, cat: Category) -> QStandardItem:
-        cat_item = QStandardItem(cat.name)
+        func = getattr(cat, "pretty_name", lambda: cat.name)
+        cat_item = QStandardItem(func())
         flags = cat_item.flags()
         flags &= ~Qt.ItemFlag.ItemIsEditable
         flags |= Qt.ItemFlag.ItemIsDropEnabled

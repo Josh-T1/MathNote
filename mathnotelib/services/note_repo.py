@@ -57,6 +57,7 @@ class NotesRepository:
 
         name: note name, stem of .tex/typ file path (no suffix)
         """
+        name = name.replace(" ", "-")
         if name.upper() in {note.name.upper() for note in parent.notes}:
             raise NoteExistsError(f"Failed to create note '{name}'. It's equal (up to capatilization) to existing note")
         if not name:
@@ -202,6 +203,7 @@ class NotesRepository:
         Returns:
             new category
         """
+        name = name.replace(" ", "-")
         if not name:
             raise InvalidNameError("Name cannot be left blank")
         sub_categories = self.get_sub_categories(parent)

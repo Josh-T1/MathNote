@@ -84,10 +84,10 @@ class FlashcardController:
         courses = self.course_repo.courses().keys()
         self.view.course_combo().addItems(courses)
 
-#    def run(self):
-#        logger.debug(f"Calling {self.run}")
-#        self.session.start()
-#        self.view.show()
+    def run(self):
+        logger.debug(f"Calling {self.run}")
+        self.session.start()
+        self.view.show()
 
     def toggle_proof_btn(self):
         """ Flashcards must have a question and answer, however they may have other optional fields such as a proof or note
@@ -98,9 +98,9 @@ class FlashcardController:
         else:
             self.view.show_proof_button().setHidden(True)
 
-#    def close(self):
-#        logger.info(f"Closing app")
-#        self.session.stop()
+    def close(self):
+        logger.info(f"Closing app")
+        self.session.stop()
 
     @with_error_dialog
     def display_card(self, text_attr_name: str, path_attr_name: str):

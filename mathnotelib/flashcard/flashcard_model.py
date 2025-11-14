@@ -18,6 +18,7 @@ from ..pipeline import FlashcardBuilderStage, CleanStage, DataGenerator, Process
 
 logger = logging.getLogger("mathnote")
 
+
 class FlashcardCache:
     def __init__(self, cache_dir: Path, cache_size: int=200):
         super().__init__()
@@ -47,6 +48,7 @@ class FlashcardCache:
                 del self._cache[key]
             except OSError as e:
                 logger.warning(f"Failed to remove cached file {path}: {e}")
+
 
     @staticmethod
     def get_hash(tex: str, hash_length: int = 8) -> str:
@@ -277,6 +279,7 @@ class FlashcardSession:
 
         return counter
 
+
     def _get_all_flashcard_paths(self):
         paths = []
         for node in self.compiled_flashcards:
@@ -286,6 +289,9 @@ class FlashcardSession:
             if card.pdf_question_path:
                 paths.append(card.pdf_question_path)
         return paths
+
+    def stop(self):
+        self._compile_thread.stop()
 
     # TODO: prevent other methods from calling?
     def _compile(self, event: threading.Event, compile_num=2):
