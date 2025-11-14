@@ -1,5 +1,5 @@
 # MathNote
-![GUI](assets/gui.png)
+![gui](assets/gui.png)
 ![flashcard](assets/flashcard.png)
 
 
