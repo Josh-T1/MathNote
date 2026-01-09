@@ -1,13 +1,13 @@
 from functools import reduce
 import logging
-from typing import Optional, Union, Generator, List, Generic, get_args, get_origin, TypeVar
+from typing import Optional, Union, Generator, Generic, get_args, get_origin, TypeVar
 from collections.abc import Iterable
 from pathlib import Path
 from abc import abstractmethod, ABC
 
-from ..models import SectionNames, SectionNamesDescriptor, Flashcard, langauage_char_registry, Section, TrackedText
+from ..models import Flashcard, langauage_char_registry, Section, TrackedText
 from .._enums import FileType
-
+from ..config import CONFIG
 
 logger = logging.getLogger("mathnote")
 
@@ -40,7 +40,6 @@ class DataGenerator:
             yield return_value
 
 
-
 class FlashcardFormatStage(Stage[list[Flashcard], list[Flashcard]]):
     @staticmethod
     def _format_card(card: Flashcard):
@@ -48,23 +47,24 @@ class FlashcardFormatStage(Stage[list[Flashcard], list[Flashcard]]):
         replace question with 'answer' field (answer in this case is the theorem statement) and
         replace answer with proof """
         has_alpha = any(char.isalpha() for char in card.question)
-        has_proof = hasattr(card, SectionNames.PROOF.name)
+        has_proof = hasattr(card, "PROOF")
         if (len(card.question) == 0 or not has_alpha) and has_proof:
             prefix = card.question if card.question else None
             card.question = card.answer
             card.pdf_question_path = card.pdf_answer_path
             if prefix is not None:
-                card.answer = prefix + getattr(card, SectionNames.PROOF.name)
+                card.answer = prefix + getattr(card, "PROOF")
             else:
-                card.answer = getattr(card, SectionNames.PROOF.name)
-            card.pdf_answer_path = getattr(card, f"pdf_{SectionNames.PROOF.name}_path")
-            delattr(card, SectionNames.PROOF.name)
-            delattr(card, f"pdf_{SectionNames.PROOF.name}_path")
+                card.answer = getattr(card, "PROOF")
+            card.pdf_answer_path = getattr(card, f"pdf_PROOF_path")
+            delattr(card, "PROOF")
+            delattr(card, f"pdf_PROOF_path")
 
     def process(self, data: list[Flashcard]) -> list[Flashcard]:
         for card in data:
             self._format_card(card)
         return data
+
 
 class CleanStage(Stage[TrackedText, TrackedText]):
     """
@@ -187,7 +187,6 @@ class SectionFinder(ABC):
     def _content_inside_paren(text: TrackedText, paren: tuple[str, str]) -> TrackedText:
         """ It is assume the tex string passed starts paren[0] and for every opening paren we have a matching close paren """
         paren_stack = []
-
         if str(text[0]) != paren[0]:
             raise ValueError(f"String passed does not begin with '{paren[0]}'. Text: {text[:50]}, {text.source}") # }}} <= keep lsp happy
 
@@ -200,41 +199,46 @@ class SectionFinder(ABC):
                 return text[1:index]
         raise ValueError("Invalid string")
 
-class SubSectionFinder(SectionFinder):
-    def __init__(self, parents):
-        super().__init__()
-        self.parents = parents
 
-class ProofSectionFinder(SubSectionFinder):
-    def __init__(self, names: SectionNamesDescriptor | list[SectionNamesDescriptor], parent_names: list[SectionNamesDescriptor]):
-        super().__init__([parent.name for parent in parent_names])
-        self.section_name_members = names if isinstance(names, list) else [names]
+class SubSectionFinder(SectionFinder):
+    def __init__(self, name: str, parent_names: list[str]):
+        self.name = name
+        self.parents = {k:d for (k, d) in CONFIG.section_names.items() if k in parent_names}
+        self.name_ptrn = CONFIG.section_names[self.name]
 
     def find_section(self, text: TrackedText) -> tuple[Section, int] | tuple[None, int]:
         char_map = langauage_char_registry[text.filetype()]
+
         title_paren = (char_map.arg_open_delim, char_map.arg_close_delim)
         body_paren = (char_map.opt_arg_open_delim, char_map.opt_arg_close_delim)
 
         is_section, member = self.is_section(text, char_map.cmd_prefix)
         if not is_section or member is None:
             return None, 0
+        open_paren_index = len(member[1]) + 1
+        if text[open_paren_index] == title_paren[0]:
+            header = self._content_inside_paren(text[open_paren_index:], title_paren)
+            end_title_index = open_paren_index + len(header) +1 # open_paren_index includes \\name{, len(title) includes {title}_, -1 to get back to }
+        else:
+            header = TrackedText("", source=text.source)
+            end_title_index = open_paren_index -1 if text.filetype() == FileType.Typst else open_paren_index + 1
 
-        open_paren_index = len(member.value) + 1
-        header = self._content_inside_paren(text[open_paren_index:], title_paren)
+#        header = self._content_inside_paren(text[open_paren_index:], title_paren)
         # index relative to whole text block
-        end_title_index = open_paren_index + len(header) +1 # first_curly_brace_index includes \\name{, len(title) includes {title}_, -1 to get back to }
+#        end_title_index = open_paren_index + len(header) +1 # first_curly_brace_index includes \\name{, len(title) includes {title}_, -1 to get back to }
         content = self._content_inside_paren(text[end_title_index +1:], body_paren)
         end_content_index = end_title_index + len(content) + 1 # +1 to make non inclusive. ie text[end_content_index] == a closing paren
-        section: Section = {"name": member.name, "content": content, "header": header}
+        section: Section = {"name": member[0], "content": content, "header": header}
         return section, end_content_index
 
-
-    def is_section(self, text: TrackedText, cmd_prefix: str) -> tuple[bool, SectionNamesDescriptor] | tuple[bool, None]:
+    # Should this be ...?
+    def is_section(self, text: TrackedText, cmd_prefix: str) -> tuple[bool, tuple[str, str]] | tuple[bool, None]:
         if len(text) < 2 or str(text[0]) != cmd_prefix:
             return (False, None)
-        for member in self.section_name_members:
-            if text[1:].startswith(member.value):
-                return (True, member)
+#        for name, d in self.parents.items():
+        ptrn = self.name_ptrn[text.filetype().value]
+        if text[1:].startswith(ptrn):
+            return (True, (self.name, ptrn))
         return (False, None)
 
 
@@ -252,12 +256,12 @@ class MainSectionFinder(SectionFinder):
             content
             ]
     """
-    def __init__(self, names: list[SectionNamesDescriptor] | SectionNamesDescriptor):
+    def __init__(self, names: list[str]):
         """
         -- Params --
-        names: list of section names. Should probably convert to list[SectionNames]
+        names: dict of form {Section name: section pattern,...}. e.g., {"DEFINITION": "defin"}
         """
-        self.possible_names = names if isinstance(names, list) else [names]
+        self.names = {n: d for (n, d) in CONFIG.section_names.items() if n in names}
 
     def find_section(self, text: TrackedText) -> tuple[Section, int] | tuple[None, int]:
         char_map = langauage_char_registry[text.filetype()]
@@ -268,32 +272,41 @@ class MainSectionFinder(SectionFinder):
         if not is_section or member is None:
             return None, 0
         # text[len(self.name + 1)] is openening bracket character
+        # Handle 2 cases: 1. Unamed section, 2. Named section
+        open_paren_index = len(member[1]) + 1
 
-        open_paren_index = len(member.value) + 1
-        header = self._content_inside_paren(text[open_paren_index:], title_paren)
-        end_title_index = open_paren_index + len(header) +1 # open_paren_index includes \\name{, len(title) includes {title}_, -1 to get back to }
+        if str(text[open_paren_index]) == title_paren[0]:
+            header = self._content_inside_paren(text[open_paren_index:], title_paren)
+            end_title_index = open_paren_index + len(header) +1 # open_paren_index includes \\name{, len(title) includes {title}_, -1 to get back to }
+        else:
+            header = TrackedText("", source=text.source)
+            end_title_index = open_paren_index - 1
+
+
         content = self._content_inside_paren(text[end_title_index +1:], body_paren)
-
         end_content_index = end_title_index + len(content) + 1 # +1 to make non inclusive. ie text[end_content_index] == a closing paren
-        section: Section = {"name": member.name, "content": content, "header": header}
+        section: Section = {"name": member[0], "content": content, "header": header}
+
         return section, end_content_index
 
 
-    def is_section(self, text: TrackedText, cmd_prefix: str) -> tuple[bool, SectionNamesDescriptor | None]:
-        """ We make the assumtion the only text that starts with a section name and is followd by closing curly brace
+    def is_section(self, text: TrackedText, cmd_prefix: str) -> tuple[bool, tuple[str, str] | None]:
+        """ We make the assumtion the only text that starts with a section name and is followed by closing curly brace
         is a valid MainSection """
         if len(text) < 2 or str(text[0]) != cmd_prefix:
             return (False, None)
 
-        for member in self.possible_names:
-            if text[1:].startswith(member.value):
-                return (True, member)
+        for name, d in self.names.items():
+            ptrn = d[text.filetype().value]
+            if text[1:].startswith(ptrn):
+                return (True, (name, ptrn))
         return (False, None)
+
 
 class SectionBuilderStage(Stage[TrackedText, list[Section]]):
     def __init__(self):
         self.char_map = None
-        self.main_section_finder = MainSectionFinder(list(SectionNames))
+        self.main_section_finder = MainSectionFinder(list(CONFIG.section_names.keys())) # TODO: really we want all keys?
 
     def _index_of_line_end(self, text: TrackedText) -> int:
         """
@@ -335,7 +348,7 @@ class SectionBuilderStage(Stage[TrackedText, list[Section]]):
 
             if section is None:
                 if unamed_section is None:
-                    unamed_section = {"name": SectionNames.UNNAMED, "content": data[counter], "header": TrackedText("")}
+                    unamed_section = {"name": "UNAMED", "content": data[counter], "header": TrackedText("")}
                 else:
                     unamed_section["content"] = unamed_section["content"] + data[counter]
                 counter += 1
@@ -346,16 +359,16 @@ class SectionBuilderStage(Stage[TrackedText, list[Section]]):
                 unamed_section = None
 
             if data.filetype() == FileType.Typst: # TODO clean this up
-                section["header"] = section["header"].replace("name: ", "").replace('"', "")
+                section["header"] = section["header"].replace("title: ", "").replace('"', "")
             counter += end_index + 1  # This sets counter equal to last character in command, +1 to move to character after command
             sections.append(section)
         return sections
 
 
-class FlashcardBuilderStage(Stage[TrackedText, List[Flashcard]]):
-    def __init__(self, main_section_finder: MainSectionFinder, sub_section_finders: list[SubSectionFinder] | None = None) -> None:
-        self.main_section_finder = main_section_finder
-        self.sub_section_finders = [] if sub_section_finders is None else sub_section_finders
+class FlashcardBuilderStage(Stage[TrackedText, list[Flashcard]]):
+    def __init__(self, names: list[str]):
+        self.main_section_finder = MainSectionFinder(names)
+        self.sub_section_finders = []
         self.char_map = None
 
     def _index_of_line_end(self, text: TrackedText) -> int:
@@ -378,7 +391,7 @@ class FlashcardBuilderStage(Stage[TrackedText, List[Flashcard]]):
 
         flashcards: list[Flashcard] = []
         counter: int = 0
-        parent_section: Optional[str] = None
+        parent_section: str | None = None
 
         while counter < len(data): # check this is what i want
 
@@ -407,7 +420,8 @@ class FlashcardBuilderStage(Stage[TrackedText, List[Flashcard]]):
             parent_section = section["name"] # the command title. e.g \defin{...}{...}
 
             if data.filetype() == FileType.Typst: # TODO clean this up
-                section["header"] = section["header"].replace("name: ", "").replace('"', "")
+                section["header"] = section["header"].replace("title: ", "").replace('"', "")
+
             flashcards.append(
                     Flashcard(section["name"], section["header"], section["content"])
                     )
@@ -422,8 +436,8 @@ class FlashcardBuilderStage(Stage[TrackedText, List[Flashcard]]):
         logger.debug(f"Returning {repr(chunk_flashcards)}")
         return chunk_flashcards
 
-    def add_subsection_finder(self, subsection_finder: SubSectionFinder):
-        self.sub_section_finders.append(subsection_finder)
+    def add_subsection_finder(self, sub_section_name: str, parents: list[str]):
+        self.sub_section_finders.append(SubSectionFinder(sub_section_name, parents))
 
 #    def re_format_flashcards(self, flashcards: list[Flashcard]):
 #        for flashcard in flashcards:
@@ -459,7 +473,7 @@ class ProcessingPipeline(Generic[Output]):
     def __iter__(self) -> Generator[list[Output], None, None]:
         valid = get_origin(self.last_output_type) == list and get_args(self.last_output_type) == (Flashcard,)
         if not valid:
-            raise TypeError(f"Invalid pipeline: expected last stage output type to be List[Flashcard], got {self.last_output_type}")
+            raise TypeError(f"Invalid pipeline: expected last stage output type to be list[Flashcard], got {self.last_output_type}")
 
         for chunk in self.data_iterable:
             if chunk is None:

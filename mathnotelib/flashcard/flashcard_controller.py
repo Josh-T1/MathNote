@@ -8,14 +8,11 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QStandardItem, QStandardItemModel
 from PyQt6.QtWidgets import QApplication, QListView, QMessageBox, QWidget
 
-from mathnotelib.models.courses import Course
-
 from .window import FlashcardMainWindow
 from .flashcard_model import FlashcardSession
-from ..exceptions import EndofFlashcards, FlashcardNotFoundException, LaTeXCompilationError, MissingFlashcardAttributeError
+from ..exceptions import EndofFlashcards, FlashcardNotFoundException, LaTeXCompilationError, MissingFlashcardAttributeError, TypstCompilationError
 from ..services import CourseRepository, open_file_with_editor, open_pdf
-from ..models import SectionNames, SectionNamesDescriptor
-from ..config import Config
+from ..config import CONFIG, Config
 
 logger = logging.getLogger("mathnote")
 
@@ -31,13 +28,14 @@ def with_error_dialog(func):
     def wrapper(self, *args, **kwargs):
         try:
             return func(self, *args, **kwargs)
-#        except (FlashcardNotFoundException) as e:
-#            show_error_dialog(self.window, str(e))
-#        except LaTeXCompilationError as e:
-#            if len(text_attr) > 1000:
-#                text_attr = text_attr[:1001]
+        except (FlashcardNotFoundException) as e:
+            show_error_dialog(self.view, str(e))
+        except LaTeXCompilationError as e:
+            show_error_dialog(self.view, str(e))
+        except TypstCompilationError as e:
+            show_error_dialog(self.view, str(e))
         except Exception as e:
-            show_error_dialog(self.window, f"Unexpected error: {e}")
+            show_error_dialog(self.view, f"Unexpected error: {e}")
     return wrapper
 
 class FlashcardController:
@@ -46,7 +44,6 @@ class FlashcardController:
         self.view = view
         self.course_repo = CourseRepository(config)
         self.flashcards = []
-
         self._setBindings()
         self._populate_view()
 
@@ -93,7 +90,7 @@ class FlashcardController:
         """ Flashcards must have a question and answer, however they may have other optional fields such as a proof or note
         This methods handles behaviour associated with the optional fields
         """
-        if hasattr(self.model.current_card, SectionNames.PROOF.name): #type: ignore (fix?)
+        if hasattr(self.session.current_card, "PROOF"):
             self.view.show_proof_button().setHidden(False)
         else:
             self.view.show_proof_button().setHidden(True)
@@ -111,10 +108,10 @@ class FlashcardController:
         path_attr =  getattr(card, path_attr_name, None) # TODO path_attr can be the value None, confusing to debug
         if text_attr is None or path_attr is None:
             raise MissingFlashcardAttributeError(f"Flashcard missing attr: {text_attr_name} or {path_attr_name}")
-        self.view.plot_tex(path_attr, text_attr)
+        self.view.display_flashcard(path_attr, text_attr)
 
     @with_error_dialog
-    def show_next_flashcard(self):
+    def show_next_flashcard(self, checked: bool = False):
         logger.debug(f"Calling {self.show_next_flashcard}")
         card = self.session.next_flashcard()
         self.toggle_proof_btn()
@@ -133,13 +130,12 @@ class FlashcardController:
             message = "No flashcards have been loaded"
         else:
             tracked_string = self.session.current_card.question if self.view.document == self.session.current_card.pdf_question_path else self.session.current_card.answer
-            if len(tracked_string) >= 300:
-                tracked_string = tracked_string[:301]
-            message = f"Source: {tracked_string.source}. Latex: {str(tracked_string)}"
+            message = f"Source: {tracked_string.source}"
         self.view.flashcard_info_button().set_message(message)
 
+    # Why do we default to all sections?
     def create_flashcards_from_file(self, path: Path, shuffle=False):
-        section_names = [member for member in SectionNames]
+        section_names = [member for member in CONFIG.section_names.keys()]
         logger.info(f"Creating flashcards from {path}")
         load_thread = threading.Thread(target=self.session.load_flashcards, args=(section_names, [path], shuffle))
         load_thread.start()
@@ -158,7 +154,7 @@ class FlashcardController:
         load_thread = threading.Thread(target=self.session.load_flashcards, args=(section_names, paths, random))
         load_thread.start()
 
-    def get_flashcard_pipeline_config(self) -> tuple[str, list[SectionNamesDescriptor], set[int], bool]:
+    def get_flashcard_pipeline_config(self) -> tuple[str, dict[str, dict[str, str]], set[int], bool]:
         """ Retreives user config from widgets. We need to do error checking... what if no boxes are checked """
         random = self.view.random_checkbox().isChecked()
         course_name = self.view.course_combo().currentText()
@@ -174,9 +170,9 @@ class FlashcardController:
         # Clean checked section params
         section_names_pretty = [item.text().upper() for item in checked_sections]
         if "ALL" in [section.upper() for section in section_names_pretty]:
-            section_names = [member for member in SectionNames]
+            section_names = CONFIG.section_names
         else:
-            section_names = [member for member in SectionNames if member.name in section_names_pretty]
+            section_names = {k: d for (k, d) in CONFIG.section_names.items() if k in section_names_pretty} # TODO: what is pretty
 #            section_names = [getattr(SectionNames, section_pretty).value for section_pretty in section_names_pretty if hasattr(SectionNames, section_pretty)]
         return course_name, section_names, weeks, random
 

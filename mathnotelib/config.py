@@ -1,4 +1,3 @@
-from dataclasses import dataclass, field
 from pathlib import Path
 import json
 import shutil
@@ -19,11 +18,12 @@ class Config:
 
     def __init__(self,
                  macro_names: list[str] | None=None,
-                 section_names: dict[str, str] | None=None,
+#                 section_names: dict[str, str] | None=None,
                  log_level: str = "INFO",
                  iterm2_enabled: bool = False,
                  set_note_title: bool = True,
                  editor: str = "vim",
+                 root_path: Path | None = None,
                  ):
         """
         Args:
@@ -40,25 +40,44 @@ class Config:
         if getattr(self, "_initizialized", False):
             return
         self._initizialized = True
-        self.root_path = Path.home() / "MathNote"
+
+        if isinstance(root_path, Path) and root_path.is_dir:
+            self.root_path = root_path
+        else:
+            self.root_path = Path.home() / "MathNote"
+
         self.templates_path = Path(__file__).parent / "templates"
         self.macro_names = macro_names if macro_names is not None else []
-        self.section_names = section_names if section_names is not None else {}
+#        self.section_names = section_names if section_names is not None else {}
         self.log_level = log_level
         self.iterm2_enabled = iterm2_enabled
         self.set_note_title = set_note_title
-        self.template_files = {}
+        self.template_files: dict[FileType, dict[str, Path]] = {}
         self.editor = editor
+
+        self.typst_packages: list[str] = []
+        self.latex_packages: list[str] = []
+        # tmp - add to config
+        self.section_names: dict[str, dict[str, str]] = {
+                "DEFINITION": {FileType.LaTeX.value: "defin", FileType.Typst.value: "definition"},
+                "THEOREM": {FileType.LaTeX.value: "theo", FileType.Typst.value: "theorem"},
+                "PROOF": {FileType.LaTeX.value: "pf", FileType.Typst.value: "proof"},
+                "COROLLARY": {FileType.LaTeX.value: "corollary", FileType.Typst.value: "corollary"},
+                "LEMMA": {FileType.LaTeX.value: "lemma", FileType.Typst.value: "proposition"},
+                "PROPOSITION": {FileType.LaTeX.value: "proposition", FileType.Typst.value: "proposition"},
+                "UNAMED": {FileType.LaTeX.value: "unamed", FileType.Typst.value: "unamed"},
+                }
         self._update_config()
 
     def _update_config(self):
-        """Updates default values with values specified in config file"""
+        """ Updates default values with values specified in config file """
         config_dir = self.config_dir()
         if not config_dir.is_dir():
-            return
+            raise EnvironmentError("Environment was incorrectly initialized, missing config directory")
+
         config_path = config_dir / "config.json"
         if not config_path.is_file():
-            return
+            raise EnvironmentError("Environment was incorrectly initialized, missing config file")
 
         with open(config_path, 'r') as f:
             data = json.load(f)
@@ -88,6 +107,7 @@ class Config:
 
     @classmethod
     def config_dir(cls):
+        # TODO allow for root_dir?
         """
         Returns:
             platform-specific user config directory
@@ -95,7 +115,7 @@ class Config:
             OSError: if operating system is unsupported
         """
         if os.name == "nt":
-            config_dir = Path(os.getenv("APPDATA")) / "MathNote"
+            config_dir = Path(os.getenv("APPDATA")) / ".config" / "MathNote"
         elif os.name == "posix":
             config_dir = Path.home() / ".config" / "MathNote"
         else:
@@ -115,6 +135,14 @@ class Config:
             shutil.copy(preamble_path, self.templates_path / file_type.value / f"preamble{ext}")
             shutil.copy(note_macros_path, self.templates_path / file_type.value / f"note_macros{ext}")
             shutil.copy(note_preamble_path, self.templates_path / file_type.value / f"note_preamble{ext}")
+
+    def build_directories(self):
+        #TODO: build cache dir
+        return
+
+    @staticmethod
+    def cache_dir():
+        return Config.config_dir() / "cache"
 
 
 CONFIG = Config()

@@ -2,7 +2,7 @@ from .note import Note, Category, Metadata
 from .courses import Course
 from .source_file import (SourceFile, ProjectSourceFile, Lecture, Assignment, TrackedText,
                           langauage_char_registry, LanguageChars, StandaloneSourceFile)
-from .flashcard import Flashcard, Section, SectionNames, SectionNamesDescriptor, FlashcardDoubleLinkedList
+from .flashcard import Flashcard, Section, FlashcardDoubleLinkedList
 
 __all__ = [
         "Note",

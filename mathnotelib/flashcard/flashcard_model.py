@@ -10,160 +10,20 @@ from collections import deque
 
 from mathnotelib._enums import FileType
 
-from ..models import SectionNames, SectionNamesDescriptor, Flashcard, FlashcardDoubleLinkedList
+from ..models import Flashcard, FlashcardDoubleLinkedList
 from ..config import CONFIG
 from ..services import FlashcardCompiler
 from ..utils import StoppableThread
-from ..pipeline import FlashcardBuilderStage, CleanStage, DataGenerator, ProcessingPipeline, MainSectionFinder, ProofSectionFinder, get_hack_macros, FlashcardFormatStage
+from ..pipeline import FlashcardBuilderStage, CleanStage, DataGenerator, ProcessingPipeline, MainSectionFinder, get_hack_macros, FlashcardFormatStage
 
 logger = logging.getLogger("mathnote")
 
 
-class FlashcardCache:
-    def __init__(self, cache_dir: Path, cache_size: int=200):
-        super().__init__()
-        self.cache_root = cache_dir
-        self.cache_pdf = self.cache_root / "pdf"
-        self.cache_size = cache_size
-        self._cache: dict[str, Path] = self._load_cache()
-        self._section_names: Optional[list[str]] = None
-        self._ignore_hashes = {"empty"} # TODO
 
-        # Idk about this
-        if not self.cache_root.is_dir():
-            logger.debug(f"{self.cache_root} does not exists. Creating directory...")
-            self.cache_root.mkdir()
-        if not self.cache_pdf.is_dir():
-            logger.debug(f"{self.cache_pdf} does not exists. Creating directory...")
-            self.cache_pdf.mkdir()
-
-    def cleanup_cache(self):
-        if len(self._cache) <= self.cache_size:
-            return
-        file_by_age = sorted(self._cache.items(), key=lambda item: item[1].stat().st_mtime)
-
-        for key, path in file_by_age:
-            try:
-                path.unlink()
-                del self._cache[key]
-            except OSError as e:
-                logger.warning(f"Failed to remove cached file {path}: {e}")
-
-
-    @staticmethod
-    def get_hash(tex: str, hash_length: int = 8) -> str:
-        """ Gets has value of tex and returns truncated has
-        TODO: Figure out the probablity of colllision.
-
-        -- Params --
-        hash_length: has will be truncated to satisfy len(hash_truncated) = hash_length
-        tex: string containing latex
-        """
-        hash = hashlib.sha256(tex.encode('utf-8')).hexdigest()
-        trucated_hash = hash[:hash_length]
-        return trucated_hash
-
-    # TODO
-    def list_cache_by_oldest(self) -> OrderedDict[str, Path]:
-        """ List cached files by oldest edit ignoring cached files for default messages """
-        cache_paths = {hash: Path(filepath) for hash, filepath in self._cache.items() if hash + ".pdf" not in self._ignore_hashes}
-        cache_paths_sorted = OrderedDict(sorted(cache_paths.items(), key=lambda item_pair: item_pair[1].stat().st_mtime, reverse=True))
-        return cache_paths_sorted
-
-
-    @property
-    def section_names(self) -> Optional[list[str]]:
-        return self._section_names
-
-    @section_names.setter
-    def section_names(self, section_names: list[SectionNamesDescriptor]) -> None:
-        self._section_names = sorted([section_name.value for section_name in section_names])
-
-    def keys(self):
-        """Return cache keys."""
-        return self._cache.keys()
-
-    def values(self):
-        """Return cache values."""
-        return self._cache.values()
-
-    def items(self):
-        """Return cache items."""
-        return self._cache.items()
-
-    def get(self, key: str, default=None):
-        """Get cache value with default."""
-        return self._cache.get(key, default)
-
-    def clear(self) -> None:
-        """Clear the cache."""
-        self._cache.clear()
-
-    def update(self, other: dict[str, Path]) -> None:
-        """Update cache with another dictionary."""
-        self._cache.update(other)
-
-    def _load_cache(self) -> dict[str, Path]:
-        cache = dict()
-        for file in self.cache_pdf.iterdir():
-            if file.is_file():
-                cache[file.name] = file
-        return cache
-
-    def __eq__(self, other) -> bool:
-        if not isinstance(other, FlashcardCache):
-            return NotImplemented
-        return (self.cache_root == other.cache_root and
-                self._cache == other._cache and
-                self._section_names == other._section_names)
-    def __hash__(self):
-        return hash((self.cache_root, tuple((sorted(self._cache.items()))) if self._cache else ()))
-
-    def __getitem__(self, key: str) -> Path:
-        """Get cached file path by filename."""
-        try:
-            return self._cache[key]
-        except KeyError:
-            raise KeyError(f"No cached file found for key: {key}")
-
-    def __delitem__(self, key: str) -> None:
-        """Remove a cache entry."""
-        try:
-            filepath = self._cache[key]
-            del self._cache[key]
-            filepath.unlink()
-        except KeyError:
-            raise KeyError(f"No cached file found for key: {key}")
-        except OSError:
-            raise OSError(f"Failed to remove cached file with key: {key}")
-
-    def __len__(self) -> int:
-        return len(self._cache)
-
-    def __setitem__(self, key: str, value: Path) -> None:
-        self._cache[key] = value
-
-        if len(self._cache) > self.cache_size * 1.2:
-            self.cleanup_cache()
-
-
-    def __contains__(self, key: str) -> bool:
-        return key in self._cache
-
-    def __bool__(self) -> bool:
-        return bool(self._cache)
-
-    def __lt__(self, other) -> bool:
-        if not isinstance(other, FlashcardCache):
-            return NotImplemented
-        return len(self._cache) < len(other._cache)
-
-    def __repr__(self) -> str:
-        return f"FlashcardCache(cache_dir={self.cache_root!r})"
 
 # build into stage
 
-
+# Global state?
 class FlashcardSession:
     def __init__(self, compiler: FlashcardCompiler) -> None:
         """
@@ -171,7 +31,6 @@ class FlashcardSession:
         compiler: manages compilation of flash cards, type TexCompilationManager
         """
         self.cache_dir = Path(__file__).parent.resolve() / "cache_tex"
-        self.cache = FlashcardCache(self.cache_dir)
         self.compiler = compiler
         self.flashcards: Deque[Flashcard] = deque()
         self.compiled_flashcards: FlashcardDoubleLinkedList = FlashcardDoubleLinkedList()
@@ -217,7 +76,7 @@ class FlashcardSession:
         with self.flashcard_lock:
             self.compiled_flashcards.append(card)
 
-    def load_flashcards(self, section_names: list[SectionNamesDescriptor], paths: list[Path], shuffle=True) -> None:
+    def load_flashcards(self, section_names: list[str], paths: list[Path], shuffle=True) -> None:
         r""" Load flash cards with raw tex. Threadsafe... hopefully as I run it on its own thread. Even though this
         is bound by CPU, threading allows for the compilation and generation process to alternate (not sure if this is actually true)
         -- Params --
@@ -236,14 +95,12 @@ class FlashcardSession:
 
         data_iterable = DataGenerator(paths)
         # TODO fix get_hack_macros
-        #clean_data_stage = CleanStage(self.macros | get_hack_macros())
-        build_stage = FlashcardBuilderStage(MainSectionFinder(section_names))
+#        clean_data_stage = CleanStage(self.macros | get_hack_macros())
+        build_stage = FlashcardBuilderStage(section_names)
         format_stage = FlashcardFormatStage()
 
-        build_stage.add_subsection_finder(ProofSectionFinder(
-            SectionNames.PROOF, [SectionNames.THEOREM, SectionNames.PROPOSITION, SectionNames.LEMMA, SectionNames.COROLLARY]
-            )
-            )
+        # TODO why?
+        build_stage.add_subsection_finder("PROOF", ["THEOREM", "PROPOSITION", "LEMMA", "COROLLARY"])
         pipeline = ProcessingPipeline(data_iterable)
 #        pipeline.add_stage(clean_data_stage)
         pipeline.add_stage(build_stage)

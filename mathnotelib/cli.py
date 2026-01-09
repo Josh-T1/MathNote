@@ -19,6 +19,8 @@ def _initialize_config_tree():
     """ Initialize .config/MathNote directory with required subdirectories and files """
     user_config_dir.mkdir()
     (user_config_dir / "logs").mkdir()
+    CONFIG.cache_dir().mkdir()
+    (CONFIG.cache_dir() / "pdf").mkdir()
     template_path = CONFIG.templates_path / "config_template.json"
     dest = user_config_dir / "config.json"
     shutil.copy(template_path, dest)

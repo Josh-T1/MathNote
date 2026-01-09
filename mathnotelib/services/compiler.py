@@ -163,24 +163,4 @@ def compile_latex(filepath: Path, options: CompileOptions):
     return (result_2.returncode, result_2.stderr.decode("utf-8", errors="replace"), result_2.stdout.decode("utf-8", errors="replace"))
 
 
-def latex_template(tex: str) -> str:
-    """ Flashcard contents are compiled with the following template """
-    return fr"""
-\documentclass[preview, border=0.1in]{{standalone}}
-\usepackage{{amsmath,amsfonts,amsthm,amssymb,mathtools}}
-\usepackage{{mathrsfs}}
-\begin{{document}}
-{tex}
-\end{{document}}"""
-
-# TODO
-def typst_template(typ: str) -> str:
-    return fr"""
-#set page(
-        width: auto,
-        height: auto,
-        margin: 5pt
-        )
-{typ}
-"""
 

@@ -1,14 +1,10 @@
 import re
-import logging
 from pathlib import Path
 
 """
 TODO
 1. Get macro names dynamically
 """
-
-logger = logging.getLogger("mathnote")
-
 
 #def find_math_mode(tex: str):
 #    """ This has erros. For some reason it matches double backslash """
@@ -34,7 +30,6 @@ def load_macros(macros_path: Path, macro_names: list[str]) -> dict[str,dict]:
             }
     returns: dict of the form {cmd_name: {args: #, tex_cmd: ""}}
     """
-    logger.debug(f"Calling load_macros with macros_path={macros_path}, macros_names:{macro_names}")
     macros = dict()
     document = Path(macros_path).read_text().splitlines()
     pattern = r'\\newcommand\{(.*?)\}\[(.*?)\]'

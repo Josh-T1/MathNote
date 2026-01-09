@@ -7,12 +7,18 @@ import sys
 
 from PyQt6.QtWidgets import QApplication
 
+from mathnotelib.services.flashcard_compiler import FlashcardCache
+
 from .utils import load_json, dump_json
 from .config import Config
 from .models import Course
 from ._enums import FileType
 from .services import NotesRepository, CourseRepository
 from .noteviewer import MainWindow
+
+from .flashcard import FlashcardMainWindow, FlashcardController, FlashcardSession, FlashcardCompiler
+from mathnotelib import config
+
 
 logger = logging.getLogger("mathnote")
 
@@ -39,19 +45,20 @@ class NoteViewer(Command):
 
 class FlashcardCommand(Command):
     """ Command for generating flashcards from latex files """
-    _app = None
-    _window = None
-    _model = None
-    _compilation_manager = None
-    _controller = None
-    _config = None
+    # should these really be class level?
 
     def __init__(self, project_config: Config):
         self.config = project_config
-        self._ensure_import()
         self._has_dependecies()
+        self._app: QApplication = QApplication(sys.argv)
+        self._window = FlashcardMainWindow()
+        self._cache = FlashcardCache(self.config.cache_dir()) #Fix
+        self._compiler = FlashcardCompiler(self._cache)
+        self._session = FlashcardSession(self._compiler)
+        self._controller = FlashcardController(self._window, self._session, self.config)
+        self._compiler = None
 
-    #TODO
+    #TODO: Delete, we dont cover cases properly
     @staticmethod
     def _has_dependecies() -> None:
         # TODO
@@ -74,32 +81,16 @@ class FlashcardCommand(Command):
         if len(failed) != 0:
             exit()
 
-    @classmethod
-    def _ensure_import(cls):
-        if cls._app is None or cls._window is None or cls._model is None or cls._compilation_manager is None or cls._controller is None:
-            from PyQt6.QtWidgets import QApplication
-            from .flashcard import FlashcardModel, FlashcardMainWindow, FlashcardController
-            from .services import CompilationManager
-            cls._app = QApplication([])
-            cls._window = FlashcardMainWindow
-            cls._model = FlashcardModel
-            cls._compilation_manager = CompilationManager
-            cls._controller = FlashcardController
 
     def cmd(self, namespace: argparse.Namespace):
-        assert self._compilation_manager is not None
-        assert self._model is not None
-        compilation_manager = self._compilation_manager()
-        flashcard_model = self._model(compilation_manager)
-        window = self._window() #type: ignore
-        controller = self._controller(window, flashcard_model, self.config) #type: ignore
         if (file := self.build_file(namespace)) is not None:
-            controller.create_flashcards_from_file(file)
+            self._controller.create_flashcards_from_file(file)
 #            controller.create_flashcards_from_file(file, 'All')
-        window.setCloseCallback(controller.close)
-        controller.run(self._app)
-        if not flashcard_model.compile_thread.stopped(): # Cant remember if I actually need this
-            flashcard_model.compile_thread.wait_for_stop()
+        self._window.setCloseCallback(self._controller.close)
+        self._controller.run()
+#        if not flashcard_model.compile_thread.stopped(): # Cant remember if I actually need this
+#            flashcard_model.compile_thread.wait_for_stop()
+        sys.exit(self._app.exec())
 
     def build_file(self, namespace: argparse.Namespace) -> Path | None:
         if namespace.file is None:

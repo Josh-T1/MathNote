@@ -11,8 +11,8 @@ from PyQt6.QtGui import QColor, QPalette, QStandardItem, QStandardItemModel
 
 from ..exceptions import LaTeXCompilationError
 from ..config import CONFIG
-from ..models import Course
-from ..services import CourseRepository
+from ..models import TrackedText
+from .._enums import FileType
 
 logger = logging.getLogger("mathnote")
 
@@ -225,37 +225,35 @@ class PdfWindow(QWidget):
         # Add widgets
         self.pdf_layout.addWidget(self.pdf_viewer)
 
-    def _load_pdf(self, pdf_path: str, tex: str) -> QPdfDocument.Error:
+    def _load_pdf(self, pdf_path: str, markdown: TrackedText) -> QPdfDocument.Error:
         """ Loads pdf into pdf_viewer and set viewer settings
         -- Params --
         pdf_path: (str) absolute path to pdf
         returns: QPdfDocument.Error
         """
-        if pdf_path is None:
-            return QPdfDocument.Error.FileNotFound
-
         pdf_document = QPdfDocument(self)
         load_status = pdf_document.load(pdf_path)
 
         if load_status == QPdfDocument.Error.None_:
             self.document = pdf_path
             self.pdf_viewer.setDocument(pdf_document)
-            if len(tex) > 100:
-                self.pdf_viewer.setZoomMode(QPdfView.ZoomMode.FitToWidth)
-            else:
+            # TODO: Latex does can not generate files with fixed width and auto height so we use this hack
+            if len(markdown) < 100 and markdown.filetype() == FileType.LaTeX:
                 self.pdf_viewer.setZoomMode(QPdfView.ZoomMode.Custom)
                 self.pdf_viewer.setZoomFactor(ZOOM_FACTOR)
+            else:
+                self.pdf_viewer.setZoomMode(QPdfView.ZoomMode.FitToWidth)
         return load_status
 
     # TODO
-    def plot_tex(self, pdf_path: str, tex: str):
+    def display_flashcard(self, pdf_path: str, markdown: TrackedText):
         """
         -- Params --
         pdf_path: absolute path to pdf
         return: load status
         """
 #        target = card.pdf_question_path if question else card.pdf_answer_path # I dont like this. Plot tex should only take in filepath?
-        load_status = self._load_pdf(pdf_path, tex)
+        load_status = self._load_pdf(pdf_path, markdown)
         if load_status != QPdfDocument.Error.None_:
             self.document = None
             raise LaTeXCompilationError(f"Failed to compile card: {pdf_path}. Load status: {load_status}")
@@ -301,8 +299,8 @@ class FlashcardMainWindow(QMainWindow):
             self.close_callback()
         a0.accept()
 
-    def plot_tex(self, path, tex):
-        self.pdf_window.plot_tex(path, tex)
+    def display_flashcard(self, path, markdown: TrackedText):
+        self.pdf_window.display_flashcard(path, markdown)
 
     def set_error_message(self, msg: str):
         """ Creates a pop up with message = msg """

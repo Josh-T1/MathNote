@@ -245,11 +245,16 @@ class LauncherWidget(QWidget):
 
     # TODO ensure that we wait for flashcards to terminate properly
     def launch_flashcards(self):
-        macros_path = Path(CONFIG.template_files[FileType.LaTeX]["note_macros"])
-        preamble = Path(CONFIG.template_files[FileType.LaTeX]["note_preamble"])
-        self.compilation_manager = FlashcardCompiler(macros_path, preamble)
-        self.flashcard_model = FlashcardSession(self.compilation_manager)
-        self._window = FlashcardMainWindow()
-        self.controller = FlashcardController(self._window, self.flashcard_model, CONFIG) #type: ignore
-        self._window.setCloseCallback(self.controller.close)
-        self.controller.run()
+        return
+#        macros_path = Path(CONFIG.template_files[FileType.LaTeX]["note_macros"])
+#        preamble = Path(CONFIG.template_files[FileType.LaTeX]["note_preamble"])
+#        self.compilation_manager = FlashcardCompiler()
+#        self.flashcard_model = FlashcardSession(self.compilation_manager)
+#        self._window = FlashcardMainWindow()
+#        self.controller = FlashcardController(self._window, self.flashcard_model, CONFIG) #type: ignore
+#        self._window.setCloseCallback(self.controller.close)
+#        self.controller.run()
+
+
+
+
