@@ -1,34 +1,29 @@
 from dataclasses import dataclass, field
-from typing import Iterator, TypedDict
+from pathlib import Path
+from typing import Generic, Iterator, TypeVar
 
 from .source_file import TrackedText, FileType
 from ..exceptions import FlashcardNotFoundException
-from ..config import CONFIG
 
-# TODO: .proof
+
+@dataclass
+class Section:
+    name: str # TODO make Enum
+    content: TrackedText
+    pdf_path: Path | None = None
+    title: TrackedText | None = None
+    title_pdf: Path | None = None
+
+
+
 @dataclass
 class Flashcard:
-    section_name: str
-    question: TrackedText
-    answer: TrackedText
-    pdf_answer_path: None | str = None
-    pdf_question_path: None | str = None
-    additional_info: dict[str, TrackedText] = field(default_factory=dict)
+    main_section: Section
+    proof_section: Section | None = None
     seen: bool = False
 
     def filetype(self) -> FileType:
-        return self.question.filetype()
-
-    def add_info(self, name: str, info: TrackedText) -> None:
-        self.additional_info[name] = info
-
-    def __repr__(self) -> str:
-        question = "..." if self.question else 'None'
-        answer = "..." if self.answer else 'None'
-        return f"Flashcard(question={question}, answer={answer}, pdf_answer_path={self.pdf_question_path}, pdf_question_path={self.pdf_answer_path}, file_type={self.filetype()})"
-
-    def __str__(self) -> str:
-        return f"Flashcard(question={self.question}, answer={self.answer}, pdf_answer_path={self.pdf_question_path}, pdf_question_path={self.pdf_answer_path})"
+        return self.main_section.content.filetype()
 
 
 class Node:
@@ -36,6 +31,7 @@ class Node:
         self.data = data
         self.next: Node | None = None
         self.prev: Node | None = None
+
 
 class FlashcardDoubleLinkedList:
     """ Container for Flashcards """
@@ -128,13 +124,3 @@ class FlashcardDoubleLinkedList:
         while current:
             yield current
             current = current.next
-
-
-# We would prefer to have name as enum (containing all section names), however users may define new sections in config file. Look at ImmutableMeta in mathnotelib.utils
-# Using SectionNames/SectionNamesDescriptor is hack, not really sure how to fix this
-class Section(TypedDict):
-    name: str # TODO make Enum
-    content: TrackedText
-    header: TrackedText
-
-

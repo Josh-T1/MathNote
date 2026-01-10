@@ -14,11 +14,9 @@ from ..models import Flashcard, FlashcardDoubleLinkedList
 from ..config import CONFIG
 from ..services import FlashcardCompiler
 from ..utils import StoppableThread
-from ..pipeline import FlashcardBuilderStage, CleanStage, DataGenerator, ProcessingPipeline, MainSectionFinder, get_hack_macros, FlashcardFormatStage
+from ..pipeline import FlashcardBuilderStage, CleanStage, DataGenerator, ProcessingPipeline
 
 logger = logging.getLogger("mathnote")
-
-
 
 
 # build into stage
@@ -95,16 +93,13 @@ class FlashcardSession:
 
         data_iterable = DataGenerator(paths)
         # TODO fix get_hack_macros
-#        clean_data_stage = CleanStage(self.macros | get_hack_macros())
+        clean_data_stage = CleanStage(CONFIG.macros())
         build_stage = FlashcardBuilderStage(section_names)
-        format_stage = FlashcardFormatStage()
-
         # TODO why?
         build_stage.add_subsection_finder("PROOF", ["THEOREM", "PROPOSITION", "LEMMA", "COROLLARY"])
         pipeline = ProcessingPipeline(data_iterable)
-#        pipeline.add_stage(clean_data_stage)
+        pipeline.add_stage(clean_data_stage)
         pipeline.add_stage(build_stage)
-        pipeline.add_stage(format_stage)
         for flash_cards in pipeline:
             if shuffle:
                 random.shuffle(flash_cards)
@@ -135,17 +130,6 @@ class FlashcardSession:
             counter+=1
 
         return counter
-
-
-    def _get_all_flashcard_paths(self):
-        paths = []
-        for node in self.compiled_flashcards:
-            card = node.data
-            if card.pdf_answer_path:
-                paths.append(card.pdf_answer_path)
-            if card.pdf_question_path:
-                paths.append(card.pdf_question_path)
-        return paths
 
     def stop(self):
         self._compile_thread.stop()

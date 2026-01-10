@@ -19,7 +19,5 @@ __all__ = [
         "LanguageChars",
         "Flashcard",
         "Section",
-        "SectionNames",
-        "SectionNamesDescriptor",
-        "FlashcardDoubleLinkedList"
+        "FlashcardDoubleLinkedList",
         ]

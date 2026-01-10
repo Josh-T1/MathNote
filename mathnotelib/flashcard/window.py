@@ -1,6 +1,6 @@
-import math
 import logging
 from collections.abc import Callable
+from pathlib import Path
 
 from PyQt6.QtWidgets import (QCheckBox, QComboBox, QHBoxLayout, QLabel, QListView, QMessageBox, QSizePolicy, QSpacerItem, QVBoxLayout,
                              QWidget, QPushButton, QMainWindow, QSpacerItem, QSizePolicy, QScrollArea)
@@ -16,8 +16,8 @@ from .._enums import FileType
 
 logger = logging.getLogger("mathnote")
 
-ZOOM_FACTOR = 3
 
+ZOOM_FACTOR = 3
 
 class InfoButton(QWidget):
     clicked = pyqtSignal()
@@ -57,8 +57,6 @@ class VConfigBar(QWidget):
     def __init__(self):
         super().__init__()
         self.initUi()
-
-
 
     def initUi(self):
         self.config_layout = QVBoxLayout()
@@ -137,15 +135,17 @@ class HButtonBar(QWidget):
         # Create widgets
         self.next_flashcard_button = QPushButton("Next", self)
         self.prev_flashcard_button = QPushButton("Prev", self)
-        self.show_answer_button = QPushButton("Show Answer", self)
-        self.show_question_button = QPushButton("Show Question", self)
-        self.show_proof_button = QPushButton("Show Proof", self)
+        self.show_answer_button = QPushButton("Answer", self)
+        self.show_question_button = QPushButton("Question", self)
+        self.show_proof_button = QPushButton("Proof", self)
 
         # Configure widgets
         self.show_proof_button.setHidden(True)
-        self.prev_flashcard_button.setFixedSize(75, 30)
-        self.next_flashcard_button.setFixedSize(75, 30)
-
+        self.prev_flashcard_button.setFixedSize(75, 35)
+        self.next_flashcard_button.setFixedSize(75, 35)
+        self.show_proof_button.setFixedSize(85, 35)
+        self.show_question_button.setFixedSize(85, 35)
+        self.show_answer_button.setFixedSize(85, 35)
         # Add widgets
         self.bar_layout.addStretch()
         self.bar_layout.addWidget(self.prev_flashcard_button)
@@ -225,14 +225,14 @@ class PdfWindow(QWidget):
         # Add widgets
         self.pdf_layout.addWidget(self.pdf_viewer)
 
-    def _load_pdf(self, pdf_path: str, markdown: TrackedText) -> QPdfDocument.Error:
+    def _load_pdf(self, pdf_path: Path, markdown: TrackedText) -> QPdfDocument.Error:
         """ Loads pdf into pdf_viewer and set viewer settings
         -- Params --
         pdf_path: (str) absolute path to pdf
         returns: QPdfDocument.Error
         """
         pdf_document = QPdfDocument(self)
-        load_status = pdf_document.load(pdf_path)
+        load_status = pdf_document.load(str(pdf_path))
 
         if load_status == QPdfDocument.Error.None_:
             self.document = pdf_path
@@ -246,7 +246,7 @@ class PdfWindow(QWidget):
         return load_status
 
     # TODO
-    def display_flashcard(self, pdf_path: str, markdown: TrackedText):
+    def display_pdf(self, pdf_path: Path, markdown: TrackedText):
         """
         -- Params --
         pdf_path: absolute path to pdf
@@ -299,8 +299,8 @@ class FlashcardMainWindow(QMainWindow):
             self.close_callback()
         a0.accept()
 
-    def display_flashcard(self, path, markdown: TrackedText):
-        self.pdf_window.display_flashcard(path, markdown)
+    def display_pdf(self, path: Path, markdown: TrackedText):
+        self.pdf_window.display_pdf(path, markdown)
 
     def set_error_message(self, msg: str):
         """ Creates a pop up with message = msg """

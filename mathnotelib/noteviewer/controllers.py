@@ -15,7 +15,7 @@ from .navbar import CourseNavBar, NavBarContainer, NotesNavBar
 from .dialog import NewCourseDialog, NewNoteDialog, NameDialog, show_error_dialog
 from .viewer import TabbedSvgViewer
 from .ui_components import confirm_delete
-from ..models import Category, Course, SourceFile, Note
+from ..models import Category, Course, SourceFile, Note, NotesRepository
 from ..utils import rendered_sorted_key
 from ..services import CompileOptions, compile_source, NotesRepository, CourseRepository
 from ..config import CONFIG

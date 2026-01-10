@@ -14,7 +14,6 @@ from .._enums import FileType, OutputFormat
 logger = logging.getLogger(__name__)
 
 
-
 # TODO make package dynamic
 def latex_template(tex: str) -> str:
     """ Flashcard contents are compiled with the following template """
@@ -93,7 +92,6 @@ class FlashcardCache:
         cache_paths = {hash: Path(filepath) for hash, filepath in self._cache.items() if hash + ".pdf" not in self._ignore_hashes}
         cache_paths_sorted = OrderedDict(sorted(cache_paths.items(), key=lambda item_pair: item_pair[1].stat().st_mtime, reverse=True))
         return cache_paths_sorted
-
 
     def keys(self):
         """Return cache keys."""
@@ -189,18 +187,14 @@ class FlashcardCompiler:
 
     def compile_card(self, card: Flashcard) -> None:
         """ Attemps to compile flashcard question/answer latex. If compilation fails """
-        card.pdf_question_path = self._compile_tracked_text(card.question)
-        card.pdf_answer_path = self._compile_tracked_text(card.answer)
+        if card.main_section.title is not None:
+            card.main_section.title_pdf = self._compile_tracked_text(card.main_section.title)
 
-        # TODO: should I delete second if statement?
-        for member_name, content in card.additional_info.items():
-#            if SectionNames.is_name(member_name):
-            path = self._compile_tracked_text(content)
-            setattr(card, f"pdf_{member_name}_path", path)
-            setattr(card, f"{member_name}", content)
+        card.main_section.pdf_path = self._compile_tracked_text(card.main_section.content)
+        if card.proof_section is not None:
+            card.proof_section.pdf_path = self._compile_tracked_text(card.proof_section.content)
 
-
-    def _compile_tracked_text(self, text: TrackedText):
+    def _compile_tracked_text(self, text: TrackedText) -> Path | None:
         source = text.source
         ext = text.filetype().extension
         if text.filetype() == FileType.LaTeX:
@@ -212,7 +206,7 @@ class FlashcardCompiler:
 
         if (file := self.cache.get(string)):
             logger.debug(f"Getting file {text.source} from cache")
-            return str(file) # should probabily be Path
+            return file # should probabily be Path
 
         with tempfile.TemporaryDirectory() as tmpdir:
             source_file_path = Path(tmpdir) / f"temp{ext}"
@@ -230,6 +224,6 @@ class FlashcardCompiler:
 
             logger.info(f"Successfully generated pdf")
             new_path = pdf_file_path.rename(self.cache.cache_pdf / f"{self.cache.hash_markdown(string)}.pdf").resolve()
-        return str(new_path)
+        return new_path
 
 
