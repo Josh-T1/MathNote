@@ -1,20 +1,16 @@
-import hashlib
-import os
 import random
 import threading
 import time
 import logging
 from pathlib import Path
-from typing import Optional, Deque, OrderedDict
+from typing import Optional, Deque
 from collections import deque
-
-from mathnotelib._enums import FileType
 
 from ..models import Flashcard, FlashcardDoubleLinkedList
 from ..config import CONFIG
 from ..services import FlashcardCompiler
 from ..utils import StoppableThread
-from ..pipeline import FlashcardBuilderStage, CleanStage, DataGenerator, ProcessingPipeline
+from ..services import FlashcardBuilderStage, CleanStage, DataGenerator, ProcessingPipeline
 
 logger = logging.getLogger("mathnote")
 

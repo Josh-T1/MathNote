@@ -174,7 +174,9 @@ class FlashcardController:
             self.view.set_error_message(f"Invalid selection course={course}, section names={section_names}. You must select a course name and at least one section")
             logger.debug(f"Invalid selection (course={course}, section_names={section_names}) for generating flashcards")
             return
-        paths = [lecture.path for lecture in course.lectures if course.get_week(lecture) in weeks]
+        # fix
+#        paths = [lecture.path for lecture in course.lectures if course.get_week(lecture) in weeks]
+        paths = [lecture.path for lecture in course.lectures]
         logger.info(f"Creating flashcards from {len(paths)} paths")
         load_thread = threading.Thread(target=self.session.load_flashcards, args=(section_names, paths, random))
         load_thread.start()

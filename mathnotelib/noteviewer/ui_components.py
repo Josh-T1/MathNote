@@ -1,23 +1,15 @@
-import collections
 import json
-from pathlib import Path
 from typing import Callable, Iterable, Optional
 from PyQt6 import QtCore
 from PyQt6.QtGui import QIcon, QStandardItemModel
 from PyQt6.QtWidgets import QButtonGroup, QHBoxLayout, QLabel, QMessageBox, QPushButton, QVBoxLayout, QWidget
 from PyQt6.QtCore import QDataStream, QIODevice, QMimeData, QModelIndex, Qt, pyqtBoundSignal
 
-from mathnotelib._enums import FileType
 from mathnotelib.models.note import Note
-from mathnotelib.services.course_repo import CourseRepository
 from mathnotelib.services.note_repo import NotesRepository
 
 from .style import ICON_CSS, LABEL_CSS, SWITCH_CSS
 from . import constants
-from ..pipeline import load_macros, get_hack_macros
-from ..config import CONFIG
-from ..flashcard import FlashcardMainWindow, FlashcardSession, FlashcardController
-from ..services import FlashcardCompiler
 from ..models import SourceFile, Course, Category
 
 

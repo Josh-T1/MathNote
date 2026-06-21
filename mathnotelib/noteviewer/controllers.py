@@ -15,9 +15,9 @@ from .navbar import CourseNavBar, NavBarContainer, NotesNavBar
 from .dialog import NewCourseDialog, NewNoteDialog, NameDialog, show_error_dialog
 from .viewer import TabbedSvgViewer
 from .ui_components import confirm_delete
-from ..models import Category, Course, SourceFile, Note, NotesRepository
+from ..models import Category, Course, SourceFile, Note
 from ..utils import rendered_sorted_key
-from ..services import CompileOptions, compile_source, NotesRepository, CourseRepository
+from ..services import CompileOptions, compile_source, NotesRepository, CourseRepository, NotesRepository
 from ..config import CONFIG
 from .._enums import OutputFormat
 from ..exceptions import CompilationError, NoItemSelected, NoteExistsError, CategoryExistsError, InvalidNameError, NoteExistsError, CourseExistsError
@@ -415,6 +415,7 @@ class CourseController(QObject):
 
 class LiveTypstController:
     DEBOUNCE = 20
+
     def __init__(self, navbar: NavBarContainer, viewer: TabbedSvgViewer):
         self.navbar = navbar
         self.viewer = viewer
@@ -423,8 +424,9 @@ class LiveTypstController:
         self._debounce_timer = None
         self.connect_handlers()
 
-    def start_live_preview(self):
+    def toggle_live_preview(self):
         if self.watcher is not None:
+            self.stop_live_preview()
             return
 
         self.watcher = QFileSystemWatcher()
@@ -445,13 +447,14 @@ class LiveTypstController:
         self._debounce_timer = None
 
     def connect_handlers(self):
-        self.navbar.preview.connect(lambda: self.start_live_preview())
+        self.navbar.preview.connect(lambda: self.toggle_live_preview())
 
     #figure out how to quit on tab begin closed
     def handle_preview(self):
         self.compile_typst(constants.TYP_FILE_LIVE)
 
     def on_typ_changed(self):
+        # TODO: deal with active tabs
         if self._debounce_timer and not self._debounce_timer.isActive():
             self._debounce_timer.start(self.DEBOUNCE)
 
