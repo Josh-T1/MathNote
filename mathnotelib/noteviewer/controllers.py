@@ -13,7 +13,7 @@ from mathnotelib.services.compiler import compile_typst
 from . import constants
 from .navbar import CourseNavBar, NavBarContainer, NotesNavBar
 from .dialog import NewCourseDialog, NewNoteDialog, NameDialog, show_error_dialog
-from .viewer import TabbedSvgViewer
+from .viewer import TabWidget, TabbedSvgViewer, ZMultiPageViewer
 from .ui_components import confirm_delete
 from ..models import Category, Course, SourceFile, Note
 from ..utils import rendered_sorted_key
@@ -188,7 +188,7 @@ class NoteController(QObject):
             note = self.notes_repo.create_note(name, cat, ftype)
             res_item = self.navbar._build_file_item(note)
 
-            self.viewer.add_svg_tab(focus=True)
+            self.viewer.addTab(note.path, focus=True)
             self.navbar.file_opened.emit(note)
             self.navbar.tree.setCurrentIndex(res_item.index())
         else:
@@ -217,12 +217,12 @@ class NoteController(QObject):
         svg_files = sorted(tmpdir_path.glob(f"{constants.OUTPUT_FILE_STEM}*.svg"), key=rendered_sorted_key)
         if len(svg_files) == 0:
             raise CompilationError(compilation_res[1])
-        self._update_svg(svg_files, tmpdir, name_func())
+        self._update_svg(svg_files, tmpdir, file)
 
-    def _update_svg(self, path: Path | list[Path], tmpdir: tempfile.TemporaryDirectory, name: str | None=None):
+    def _update_svg(self, path: Path | list[Path], tmpdir: tempfile.TemporaryDirectory, source: SourceFile | None=None):
         paths = path if isinstance(path, list) else [path]
         if all(p.exists() for p in paths):
-            self.viewer.load_current_viewer([str(p) for p in paths], tmpdir=tmpdir, name=name)
+            self.viewer.load_current_viewer([str(p) for p in paths], tmpdir=tmpdir, source=source)
 
 
 class CourseController(QObject):
@@ -385,21 +385,18 @@ class CourseController(QObject):
         options.set_output_dir(tmpdir_path)
         options.set_output_file_stem(constants.OUTPUT_FILE_STEM)
         # This does not work
-        if isinstance(file, Lecture) or isinstance(file, Assignment):
-            func = getattr(file, "pretty_name", lambda: file.name)
-            file_name = func()
-        else:
-            file_name = file.path.parent.parent.stem
+        # TODO: remove, now redundant
+
         compilation_res = compile_source(file, options)
         svg_files = sorted(tmpdir_path.glob(f"{constants.OUTPUT_FILE_STEM}*.svg"), key=rendered_sorted_key)
         if len(svg_files) == 0:
             raise CompilationError(compilation_res[1])
-        self._update_svg(svg_files, tmpdir, file_name)
+        self._update_svg(svg_files, tmpdir, file)
 
-    def _update_svg(self, path: Path | list[Path], tmpdir: tempfile.TemporaryDirectory, name: str | None=None):
+    def _update_svg(self, path: Path | list[Path], tmpdir: tempfile.TemporaryDirectory, source: SourceFile | None=None):
         paths = path if isinstance(path, list) else [path]
         if all(p.exists() for p in paths):
-            self.viewer.load_current_viewer([str(p) for p in paths], tmpdir=tmpdir, name=name)
+            self.viewer.load_current_viewer([str(p) for p in paths], tmpdir=tmpdir, source=source)
 
     # TODO: implement
     def _delete_file(self, file: SourceFile, idx: QModelIndex) -> bool:
@@ -413,79 +410,102 @@ class CourseController(QObject):
 #            return True
         return False
 
+
+
+
 class LiveTypstController:
     DEBOUNCE = 20
 
+    # How do I update files which I type to but are not currently live?
     def __init__(self, navbar: NavBarContainer, viewer: TabbedSvgViewer):
         self.navbar = navbar
         self.viewer = viewer
 
-        self.watcher = None
-        self._debounce_timer = None
-        self.connect_handlers()
-
-    def toggle_live_preview(self):
-        if self.watcher is not None:
-            self.stop_live_preview()
-            return
-
-        self.watcher = QFileSystemWatcher()
-        self.watcher.addPath(constants.TYP_FILE_LIVE)
-        self.watcher.fileChanged.connect(lambda: self.on_typ_changed())
+        self.live_file: SourceFile | None = None
 
         self._debounce_timer = QTimer()
         self._debounce_timer.setSingleShot(True)
-        self._debounce_timer.timeout.connect(lambda: self.compile_typst(constants.TYP_FILE_LIVE))
+        self._debounce_timer.timeout.connect(self.compile_typst)
 
-    def stop_live_preview(self):
-        if self.watcher:
-            self.watcher.removePath(constants.TYP_FILE_LIVE)
-            self.watcher.deleteLater()
-            self.watcher = None
-#        if self.process and self.process.state() != QProcess.ProcessState.NotRunning:
-#            self.process.kill()
-        self._debounce_timer = None
+        self.watcher = QFileSystemWatcher()
+        self.watcher.fileChanged.connect(lambda path: self.on_typ_changed(path))
+
+        self.connect_handlers()
+
+
+    def toggle_live_preview(self) -> bool:
+        # TODO: Have some debugging here
+        path: None | Path = None
+        is_live: None | bool = None
+
+        layout = self.viewer.tab_bar.main_layout
+
+        for i in range(layout.count()):
+            item = layout.itemAt(i)
+            if item is None:
+                continue
+            tab = item.widget()
+            if not isinstance(tab, TabWidget):
+                continue
+
+            source_file = tab.source_file
+            if not tab.is_focused or source_file is None:
+                continue
+            path = source_file.path
+            is_live = tab.is_live
+
+        if path is None or is_live is None:
+            return False
+        if is_live:
+            self.watcher.removePath(str(path))
+        else:
+            self.watcher.addPath(str(path))
+        return True
+
 
     def connect_handlers(self):
-        self.navbar.preview.connect(lambda: self.toggle_live_preview())
+        self.navbar.preview.connect(self.toggle_live_preview)
+        self.navbar.preview.connect(self.viewer.tab_bar.toggle_live)
+#        self.toolbar
 
-    #figure out how to quit on tab begin closed
-    def handle_preview(self):
-        self.compile_typst(constants.TYP_FILE_LIVE)
-
-    def on_typ_changed(self):
+    def on_typ_changed(self, path: str):
         # TODO: deal with active tabs
+        tab = self.viewer.tab_bar.get_focused_tab()
+        if tab is None:
+            return
+        self.live_file = tab.source_file
+        if self.live_file is None or str(self.live_file.path) != path or not tab.is_live:
+            return
+
         if self._debounce_timer and not self._debounce_timer.isActive():
             self._debounce_timer.start(self.DEBOUNCE)
 
     @with_error_dialog
-    def compile_typst(self, path: str):
+    def compile_typst(self):
 #        if self.process and self.process.state() != QProcess.ProcessState.NotRunning:
 #            self.process.kill()  # Stop any ongoing compilation
-
+        if self.live_file is None:
+            return
         tmpdir = tempfile.TemporaryDirectory()
         tmpdir_path = Path(tmpdir.name)
 
-        options = CompileOptions(Path(path), OutputFormat.SVG, multi_page=True)
+        options = CompileOptions(self.live_file.path, OutputFormat.SVG, multi_page=True)
         options.set_output_dir(tmpdir_path)
         options.set_output_file_stem(constants.OUTPUT_FILE_STEM)
 
-        compilation_res = compile_typst(Path(path), options)
+        compilation_res = compile_typst(Path(self.live_file.path), options)
         svg_files = sorted(tmpdir_path.glob(f"{constants.OUTPUT_FILE_STEM}*.svg"), key=rendered_sorted_key)
         if len(svg_files) == 0: #TODO seems like live compile breaks this
             return
 
 #            raise CompilationError(compilation_res[1])
-        self._update_svg(svg_files, tmpdir, "live")
+        self._update_svg(svg_files, tmpdir, self.live_file)
 
     def _update_svg(self,
                     path: Path | list[Path],
                     tmpdir: tempfile.TemporaryDirectory,
-                    name: str | None=None,
+                    source: SourceFile | None=None,
                     ):
         paths = path if isinstance(path, list) else [path]
         if all(p.exists() for p in paths):
-            self.viewer.load_current_viewer([str(p) for p in paths], tmpdir=tmpdir, name=name, preserve_state=True)
-
-
-
+            self.viewer.load_current_viewer([str(p) for p in paths], tmpdir=tmpdir, source=source, preserve_state=True)

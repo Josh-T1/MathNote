@@ -13,6 +13,8 @@ from .search import SearchWidget
 from ..config import CONFIG
 from .._enums import FileType
 
+from .constants import VIEWER_HEIGHT, VIEWER_WIDTH
+
 class EventFilter(QObject):
     def __init__(self, search_widget: SearchWidget):
         super().__init__()
@@ -55,7 +57,7 @@ class MainWindow(QMainWindow):
         self.main_layout = QHBoxLayout(self.widget)
         self.setCentralWidget(self.widget)
         self.main_layout.setSpacing(0)
-        self.main_layout.setContentsMargins(0, 0, 0, 0)
+        self.main_layout.setContentsMargins(0, 0, 0, 12)
         # Init widgets
         self.viewer = TabbedSvgViewer()
         self.minimal_nav_bar = CollapsedNavBar()
@@ -73,8 +75,10 @@ class MainWindow(QMainWindow):
         self.installEventFilter(self.filter)
         # Configure
         self.setStyleSheet(MAIN_WINDOW_CSS)
-#        self.viewer.setFixedSize(800, 1000)
-        self.viewer.add_svg_tab()
+
+        self.viewer.setMinimumSize(VIEWER_WIDTH, VIEWER_HEIGHT)
+        self.viewer.addTab(focus=True)
+
         self.minimal_nav_bar.connect_toggle_button(self._toggle_nav_callback)
         self.navbar.connect_toggle_button(self._toggle_nav_callback)
         self.doc_builder_widget.setFixedWidth(200)
@@ -83,10 +87,15 @@ class MainWindow(QMainWindow):
         # Add to layout
         self.main_layout.addWidget(self.navbar, alignment=Qt.AlignmentFlag.AlignLeft)
         self.main_layout.addWidget(self.minimal_nav_bar)
-        self.main_layout.addWidget(self.viewer, alignment=Qt.AlignmentFlag.AlignCenter)
+        self.main_layout.addWidget(self.viewer)
         self.main_layout.addWidget(self.doc_builder_widget, alignment=Qt.AlignmentFlag.AlignRight)
+
+        self.setMinimumWidth(
+                self.navbar.width() + self.viewer.width() + self.minimal_nav_bar.width()
+                )
 
     def _toggle_nav_callback(self):
         self._nav_minimal = not self._nav_minimal
         self.navbar.setVisible(not self._nav_minimal)
         self.minimal_nav_bar.setVisible(self._nav_minimal)
+

@@ -42,24 +42,29 @@ class ModeSelector(QWidget):
         self.initUI()
 
     def initUI(self):
-        self.btn_preview = QPushButton("Preview")
-        self.btn_editor = QPushButton("Editor")
-        self.btn_label = QLabel("Document Mode")
-        self.btn_label.setStyleSheet(LABEL_CSS)
         main_layout = QVBoxLayout()
         btn_widget = QWidget()
         btn_layout = QHBoxLayout()
         btn_layout.setSpacing(0)
         btn_layout.setContentsMargins(0, 0, 0, 0)
-        self.btn_group = QButtonGroup(self)
-        self.btn_group.setExclusive(True)
 
+        self.btn_preview = QPushButton("Preview")
+        self.btn_editor = QPushButton("Editor")
+        self.btn_label = QLabel("Document Mode")
+        self.btn_group = QButtonGroup(self)
+
+
+
+        self.btn_label.setStyleSheet(LABEL_CSS)
+        self.btn_group.setExclusive(True)
         for btn in (self.btn_editor, self.btn_preview):
+
             btn.setCheckable(True)
             btn.setFlat(True)
             btn.setStyleSheet(SWITCH_CSS)
             btn.setFixedHeight(constants.LABEL_HEIGHT)
             btn_layout.addWidget(btn)
+
             self.btn_group.addButton(btn)
 
         self.btn_preview.setChecked(True)

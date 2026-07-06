@@ -8,7 +8,7 @@ ICON_SIZE = QSize(30, 30)
 OUTPUT_FILE_STEM = "rendered"
 TYP_FILE_LIVE = "/tmp/live.typ"
 SVG_FILE_LIVE = "/tmp/live.svg"
-VIEWER_HEIGHT = 985
+VIEWER_HEIGHT = 950 # Old 985
 VIEWER_WIDTH = 800
 LABEL_HEIGHT = 30
 

@@ -1,15 +1,22 @@
+import functools
+from pathlib import Path
 import tempfile
 from typing import Callable
+from functools import partial
 
-from PyQt6.QtGui import QBrush, QIcon, QMouseEvent, QTransform, QWheelEvent
-from PyQt6.QtWidgets import (QWIDGETSIZE_MAX, QApplication, QFrame, QGestureEvent, QGraphicsScene, QGraphicsView, QHBoxLayout,
-                             QLabel, QLineEdit, QListWidget, QMainWindow, QPinchGesture, QPushButton, QSizePolicy, QStackedWidget, QVBoxLayout, QWidget)
+from PyQt6.QtGui import QBrush, QColor, QIcon, QMouseEvent, QPainter, QTransform, QWheelEvent
+from PyQt6.QtWidgets import (QWIDGETSIZE_MAX, QApplication, QFrame, QGestureEvent, QGraphicsEllipseItem, QGraphicsScene, QGraphicsView, QHBoxLayout,
+                             QLabel, QLayout, QLineEdit, QListWidget, QMainWindow, QPinchGesture, QPushButton, QSizePolicy, QStackedWidget, QVBoxLayout, QWidget)
 from PyQt6.QtCore import QEvent, QFileSystemWatcher, QModelIndex, QProcess, QSize, QTimer, pyqtSignal, Qt
 from PyQt6.QtSvgWidgets import QGraphicsSvgItem, QSvgWidget
 from PyQt6 import QtCore
 
+from mathnotelib.models.source_file import Assignment, Lecture, SourceFile
+
 from .style import CLOSE_TAB_BTN_CSS, ICON_CSS, PAGE_INPUT_CSS, TAB_BTN_CSS, TAB_BTN_EMPTY_CSS, TAB_WIDGET_CSS
 from . import constants
+
+
 
 class ZMultiPageViewer(QGraphicsView):
     EDGE_THRESHOLD = 20
@@ -68,12 +75,9 @@ class ZMultiPageViewer(QGraphicsView):
         self.page_input.setFixedSize(QSize(80, 30))
         self.page_input.setStyleSheet(PAGE_INPUT_CSS)
         self.page_input.setAlignment(Qt.AlignmentFlag.AlignHCenter)
-        self.page_input.returnPressed.connect(self._jump_to_page)
+#        self.page_input.returnPressed.connect(self._jump_to_page)
         x, y = (constants.VIEWER_WIDTH - self.page_input.width()) // 2, 2
         self.page_input.move(x, y)
-
-    def _jump_to_page(self):
-        pass
 
     def wheelEvent(self, event: QWheelEvent | None) -> None:
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
@@ -197,6 +201,127 @@ class ZMultiPageViewer(QGraphicsView):
         self._zoom = 1
 
 
+class LiveIcon(QWidget):
+    def __init__(self, diameter=100, parent=None):
+        super().__init__(parent)
+        self.diameter = diameter
+        self.setFixedSize(diameter, diameter)
+        self.focused = True
+        self.live = False
+
+        self.not_live_color = QColor("grey")
+        self.focused_color = QColor("red")
+        self.un_focused_color = QColor("grey")
+
+    def paintEvent(self, event):
+        if self.live:
+            color = self.focused_color if self.focused else self.un_focused_color
+        else:
+            color = self.not_live_color
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setBrush(QBrush(color))
+        painter.setPen(Qt.PenStyle.SolidLine)
+        painter.drawEllipse(0, 0, self.diameter, self.diameter)
+
+class TabWidget(QWidget):
+    def __init__(self, label: str,
+                 switch_callback: Callable[[], None],
+                 close_callback: Callable[[QWidget], None],
+                 source: SourceFile | None = None,
+                 parent=None,
+                 ) -> None:
+        super().__init__(parent)
+        # By default QWidget are automatically painted and instances of classes subclassing QWidget do not have autoamatic painting
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+
+        self.live_icon = LiveIcon(diameter=8)
+        self.is_live = False
+        self.is_focused = False
+        self.label = label
+        self.close_callback = close_callback
+        self.switch_callback = switch_callback
+        self.source_file = source
+        self.initUi()
+
+    def initUi(self):
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
+        self.setStyleSheet(TAB_WIDGET_CSS)
+        self.setContentsMargins(0, 0, 0, 0)
+
+        main_layout = QHBoxLayout(self)
+        col0_layout = QVBoxLayout()
+        col1_layout = QVBoxLayout()
+        col2_layout = QVBoxLayout()
+
+        main_layout.addLayout(col0_layout)
+        main_layout.addLayout(col1_layout)
+        main_layout.addLayout(col2_layout)
+
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        col0_layout.setContentsMargins(4, 4, 0, 0)
+        col1_layout.setContentsMargins(0, 0, 0, 0)
+        col2_layout.setContentsMargins(0, 0, 0, 0)
+
+        main_layout.setSpacing(0)
+        col0_layout.setSpacing(0)
+        col1_layout.setSpacing(0)
+        col2_layout.setSpacing(0)
+
+        col0_layout.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        col1_layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
+        col2_layout.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight)
+        main_layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
+
+        tab_btn = QPushButton(self.label)
+        tab_btn.setFlat(True)
+        tab_btn.setFixedHeight(29)
+        tab_btn.setMinimumWidth(69)
+        tab_btn.setMaximumWidth(119)
+        tab_btn.clicked.connect(self.switch_callback)
+        tab_btn.setStyleSheet(TAB_BTN_EMPTY_CSS)
+
+
+        close_btn = QPushButton()
+        close_btn.setFixedSize(QSize(19, 20))
+        close_btn.setIcon(QIcon(str(constants.ICON_PATH / "exit.png")))
+        close_btn.setStyleSheet(CLOSE_TAB_BTN_CSS)
+
+        close_btn.clicked.connect(
+                lambda: self.close_callback(self)
+                )
+
+        col0_layout.addWidget(self.live_icon)
+
+        policy = self.live_icon.sizePolicy()
+        policy.setRetainSizeWhenHidden(True)
+        self.live_icon.setSizePolicy(policy)
+        self.live_icon.hide()
+
+        col1_layout.addWidget(tab_btn)
+        col2_layout.addWidget(close_btn)
+
+
+    def toggle_live(self):
+        self.is_live = not self.is_live
+
+        if self.is_live is False:
+            self.live_icon.hide()
+            return
+        else:
+            self.live_icon.show()
+
+    def set_focus(self, focus=True):
+        # TODO move to style sheet
+        self.is_focused = focus
+        # handle tab
+        if self.is_focused:
+            self.setStyleSheet("background-color: #555;")
+
+        else:
+            self.setStyleSheet("background-color: transparent;")
+
+
 class ToolTabBar(QWidget):
     def __init__(self):
         super().__init__()
@@ -209,6 +334,7 @@ class ToolTabBar(QWidget):
         self.setLayout(self.main_layout)
         self.setFixedHeight(30)
 
+
     def build_tool_bar(self) -> QWidget:
         cont = QWidget()
         layout = QHBoxLayout()
@@ -217,48 +343,60 @@ class ToolTabBar(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         cont.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         cont.setLayout(layout)
+
         self.add_tab_btn = QPushButton()
         self.add_tab_btn.setToolTip("New Tab")
         self.add_tab_btn.setIcon(QIcon(str(constants.ICON_PATH / "add.png")))
         self.add_tab_btn.setFixedSize(constants.ICON_SIZE)
         self.add_tab_btn.setStyleSheet(ICON_CSS)
+
         layout.addWidget(self.add_tab_btn, alignment=Qt.AlignmentFlag.AlignVCenter)
         return cont
 
-    def add_tab_button(self, label: str, switch_callback: Callable[[], None], close_callback: Callable[[], None]) -> None:
-        cont = QWidget()
-        cont.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
-        def wrapped_close():
-            cont.deleteLater()
-            self.main_layout.removeWidget(cont)
-            close_callback()
+    def add_tab_button(self,
+                       label: str,
+                       switch_callback: Callable[[], None],
+                       close_callback: Callable[[QLayout, QWidget], None]
+                       ) -> None:
+        """
+        Params:
+            close_callback: TODO, why do we have wrapped close? We do not just allow callbacks to have args
+            switch_callback: TODO
+        """
 
-        layout = QHBoxLayout(cont)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-        layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
-
-        tab_btn = QPushButton(label)
-        tab_btn.setFlat(True)
-        tab_btn.setFixedHeight(30)
-        tab_btn.setMinimumWidth(70)
-        tab_btn.setMaximumWidth(120)
-        tab_btn.clicked.connect(switch_callback)
-        tab_btn.setStyleSheet(TAB_BTN_EMPTY_CSS)
-        close_btn = QPushButton()
-        close_btn.setFixedSize(QSize(20, 20))
-        close_btn.setIcon(QIcon(str(constants.ICON_PATH / "exit.png")))
-        close_btn.setStyleSheet(CLOSE_TAB_BTN_CSS)
-        close_btn.clicked.connect(wrapped_close)
-        cont.setStyleSheet(TAB_WIDGET_CSS)
-
-        layout.addWidget(tab_btn)
-        layout.addWidget(close_btn)
+        partial_close = partial(close_callback, self.main_layout)
+        tab = TabWidget(label, switch_callback, partial_close)
         count = self.main_layout.count()
-        self.main_layout.insertWidget(max(0, count - 1), cont)
+        self.main_layout.insertWidget(max(0, count - 1), tab)
 
-    def connect_tab_btn(self, callback: Callable[[], None]):
+    def connect_tab_btn(self, callback: Callable[[], None]) -> None:
         self.add_tab_btn.clicked.connect(callback)
+
+
+    def get_focused_tab(self) -> TabWidget | None:
+        for i in range(self.main_layout.count()):
+            item = self.main_layout.itemAt(i)
+
+            if item is None:
+                return None
+            tab = item.widget()
+            if isinstance(tab, TabWidget) and tab.is_focused:
+                return tab
+
+            return None
+
+    def toggle_live(self) -> None:
+        for i in range(self.main_layout.count()): # -1 to account for settings widget in toolbar
+            item = self.main_layout.itemAt(i)
+
+            if item is None: return
+            tab = item.widget()
+            if not isinstance(tab, TabWidget):
+                return
+
+            if tab.is_focused and tab.source_file is not None:
+                tab.toggle_live()
+
 
     def focus_tab(self, idx: int):
         # TODO remove for loop
@@ -267,19 +405,21 @@ class ToolTabBar(QWidget):
             if item is None:
                 return
             tab = item.widget()
-            if tab is None:
+            if not isinstance(tab, TabWidget):
                 return
+
             if i == idx:
-                tab.setStyleSheet("background-color: #555;")
+                tab.set_focus(focus=True)
             else:
-                tab.setStyleSheet("background-color: transparent;")
+                tab.set_focus(focus=False)
+
 
 
 class TabbedSvgViewer(QWidget):
     def __init__(self, parent: QWidget | None=None):
         super().__init__(parent)
         self.initUI()
-        self.max_tabs = 5
+        self.max_tabs = 7 #set this dynamically based on min window size and tab size
 
     def initUI(self):
         # Layout
@@ -291,54 +431,77 @@ class TabbedSvgViewer(QWidget):
         self.tab_bar = ToolTabBar()
         self.stack = QStackedWidget()
         # Configure widgets
-        self.tab_bar.connect_tab_btn(lambda: self.add_svg_tab(focus=True))
+        self.tab_bar.connect_tab_btn(lambda: self.addTab(focus=True))
         self.stack.setStyleSheet("background-color: white;")
-        self.stack.setFixedSize(constants.VIEWER_WIDTH, constants.VIEWER_HEIGHT)
+        self.stack.setMinimumSize(constants.VIEWER_WIDTH, constants.VIEWER_HEIGHT)
         self.stack.setContentsMargins(0, 0, 0, 0)
         # Add widgets to layout
         self.main_layout.addWidget(self.tab_bar)
         self.main_layout.addWidget(self.stack)
 
-    def close_tab(self, widget: QWidget):
+
+    def close_tab(self, widget: QWidget, toolbar_layout: QLayout, tab_widget: QWidget):
+        tab_widget.deleteLater()
+        toolbar_layout.removeWidget(widget)
+
         idx = self.stack.indexOf(widget)
         if idx == -1: # widget is not in stack
             return
+
         self.stack.removeWidget(widget)
         widget.deleteLater()
         if self.stack.count() == 0:
-            self.add_svg_tab(focus=True)
-#                self.tab_bar.focus_tab()
+            self.addTab(focus=False)
+            self.tab_bar.focus_tab(1)
         else:
             next_idx = idx if self.stack.count() -1 >= idx else self.stack.count()- 1
             self.stack.setCurrentIndex(next_idx)
             self.tab_bar.focus_tab(next_idx)
+
 
     def change_tab(self, widget: QWidget):
         idx = self.stack.indexOf(widget)
         self.stack.setCurrentIndex(idx)
         self.tab_bar.focus_tab(idx)
 
-    def addTab(self, widget: QWidget, label: str, focus: bool=True):
+    # exchange label: str for path: str
+    def addTab(self, source: SourceFile | None = None, focus: bool=True):
+        """
+        Params:
+            - label: displayed on tab widget
+            - focus: if set to true tab widget is highlighted and set to 'focus' (live preview uses the focus property, see LiveTypstPreview)
+        """
+        view = ZMultiPageViewer()
+        view.setMinimumSize(constants.VIEWER_WIDTH, constants.VIEWER_HEIGHT)
+#        label = label if label is not None else f"{self.stack.count() + 1}"
+        if isinstance(source, Lecture) or isinstance(source, Assignment):
+            func = getattr(source, "pretty_name", lambda: source.name)
+            file_name = func()
+        elif source is None:
+            file_name = f"{self.main_layout.count() - 1}"
+        else:
+            file_name = source.path.parent.parent.stem
+
         if self.max_tabs == self.stack.count():
             return
-        change = lambda: self.change_tab(widget)
-        close = lambda: self.close_tab(widget)
-        self.stack.addWidget(widget)
-        self.tab_bar.add_tab_button(label, change, close)
+
+        close_callable = functools.partial(self.close_tab, view)
+        switch_callable = functools.partial(self.change_tab, view)
+        self.stack.addWidget(view)
+        self.tab_bar.add_tab_button(
+                file_name,
+                switch_callable,
+                close_callable
+                )
         # First tab should auto focus
         if self.stack.count() == 1 or focus:
-            self.change_tab(widget)
-
-    def add_svg_tab(self, focus: bool=True):
-        view = ZMultiPageViewer()
-        view.setFixedSize(constants.VIEWER_WIDTH, constants.VIEWER_HEIGHT)
-        self.addTab(view, f"{self.stack.count() + 1}", focus=focus)
+            self.change_tab(view)
 
 
     def load_current_viewer(self,
                             svg_paths: list[str] | str,
                             tmpdir: tempfile.TemporaryDirectory | None=None,
-                            name: str | None=None,
+                            source: SourceFile | None=None,
                             preserve_state: bool=False
                             ):
         current_viewer = self.stack.currentWidget()
@@ -346,15 +509,20 @@ class TabbedSvgViewer(QWidget):
             return
         current_viewer.load(svg_paths, tmpdir, preserve_state=preserve_state)
         idx = self.stack.indexOf(current_viewer)
-        if name is None:
+        if source is None:
             return
         try:
             widget = self.tab_bar.main_layout.itemAt(idx).widget()
             btn = widget.layout().itemAt(0).widget()
+
             if isinstance(btn, QPushButton):
-                btn.setText(name)
-                btn.setToolTip(name)
+                btn.setText(source.name)
+                btn.setToolTip(source.name)
                 btn.setStyleSheet(TAB_BTN_CSS)
+
+            if isinstance(widget, TabWidget):
+                widget.source_file = source
+
         except Exception as e:
             pass
 
