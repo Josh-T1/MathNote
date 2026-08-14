@@ -6,6 +6,8 @@ from pathlib import Path
 from typing import Optional, Deque
 from collections import deque
 
+from mathnotelib.services import pipeline
+
 from ..models import Flashcard, FlashcardDoubleLinkedList
 from ..config import CONFIG
 from ..services import FlashcardCompiler
@@ -15,16 +17,13 @@ from ..services import FlashcardBuilderStage, CleanStage, DataGenerator, Process
 logger = logging.getLogger("mathnote")
 
 
-# build into stage
-
-# Global state?
 class FlashcardSession:
     def __init__(self, compiler: FlashcardCompiler) -> None:
         """
         -- Params --
         compiler: manages compilation of flash cards, type TexCompilationManager
         """
-        self.cache_dir = Path(__file__).parent.resolve() / "cache_tex"
+        # TODO
         self.compiler = compiler
         self.flashcards: Deque[Flashcard] = deque()
         self.compiled_flashcards: FlashcardDoubleLinkedList = FlashcardDoubleLinkedList()
@@ -70,13 +69,59 @@ class FlashcardSession:
         with self.flashcard_lock:
             self.compiled_flashcards.append(card)
 
+    def load_flashcards_from_deck(self, path: Path, shuffle=True) -> None:
+        with self.flashcard_lock:
+            self.compiled_flashcards.clear()
+            self.current_card = None
+            self.flashcards.clear()
+
+        section_names = ["Card"]
+
+        data_iterable = DataGenerator([path])
+        clean_data_stage = CleanStage(CONFIG.macros())
+        build_stage = FlashcardBuilderStage(section_names)
+        build_stage.add_subsection_finder("PROOF", ["THEOREM", "PROPOSITION", "LEMMA", "COROLLARY"])
+        pipeline = ProcessingPipeline(data_iterable)
+        pipeline.add_stage(clean_data_stage)
+        pipeline.add_stage(build_stage)
+        for flash_cards in pipeline:
+            if shuffle:
+                random.shuffle(flash_cards)
+            with self.flashcard_lock:
+                for flashcard in flash_cards:
+                    self.flashcards.append(flashcard)
+            logger.debug(f"Loaded flashcards: {flash_cards}")
+        return None
+
+    def load_flashcards_from_course(self, section_names: list[str], paths: list[Path], shuffle=True) -> None:
+        with self.flashcard_lock:
+            self.compiled_flashcards.clear()
+            self.current_card = None
+            self.flashcards.clear()
+        data_iterable = DataGenerator(paths)
+        clean_data_stage = CleanStage(CONFIG.macros())
+        build_stage = FlashcardBuilderStage(section_names)
+        build_stage.add_subsection_finder("PROOF", ["THEOREM", "PROPOSITION", "LEMMA", "COROLLARY"])
+        pipeline = ProcessingPipeline(data_iterable)
+        pipeline.add_stage(clean_data_stage)
+        pipeline.add_stage(build_stage)
+        for flash_cards in pipeline:
+            if shuffle:
+                random.shuffle(flash_cards)
+            with self.flashcard_lock:
+                for flashcard in flash_cards:
+                    self.flashcards.append(flashcard)
+            logger.debug(f"Loaded flashcards: {flash_cards}")
+        return
+
+    # TODO Delete
     def load_flashcards(self, section_names: list[str], paths: list[Path], shuffle=True) -> None:
         r""" Load flash cards with raw tex. Threadsafe... hopefully as I run it on its own thread. Even though this
         is bound by CPU, threading allows for the compilation and generation process to alternate (not sure if this is actually true)
         -- Params --
         section_names: names of box's defined by user. i.e \defin{Integer}{Content} is a section called 'defin'
         """
-        logger.debug(f"Calling load_flashcards(section_names={section_names}, paths={paths})")
+#        logger.debug(f"Calling load_flashcards(section_names={section_names}, paths={paths})")
         # Implement thread safe 'clearing'
         with self.flashcard_lock:
             self.compiled_flashcards.clear()
@@ -84,9 +129,9 @@ class FlashcardSession:
             self.flashcards.clear()
         # Since FlashcardsPipeline is a generator we can not shuffle all card together.
         # As a work around paths in each batch are shuffled and as each batch is added we shuffle all batches together
+
         if shuffle:
             random.shuffle(paths)
-
         data_iterable = DataGenerator(paths)
         # TODO fix get_hack_macros
         clean_data_stage = CleanStage(CONFIG.macros())

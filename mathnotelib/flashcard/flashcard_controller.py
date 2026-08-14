@@ -9,6 +9,7 @@ from PyQt6.QtGui import QStandardItem, QStandardItemModel
 from PyQt6.QtWidgets import QListView, QMessageBox, QWidget
 
 from mathnotelib.models.flashcard import Flashcard
+from mathnotelib.models.source_file import TrackedText
 
 from .window import FlashcardMainWindow
 from .flashcard_model import FlashcardSession
@@ -59,9 +60,8 @@ class FlashcardController:
         self.view.bind_create_flashcards_button(self.create_flashcards)
         self.view.bind_flashcard_info_button(self.show_flashcard_info)
         self.view.bind_show_proof_button(lambda: self.display_card("Proof"))
-        self.view.bind_open_main_button(self.open_main)
         self.view.bind_launch_iterm_button(self.launch_iterm)
-        self.view.config_bar.update_filters.connect(lambda: self.handle_update_filters())
+        self.view.course_config.update_filters.connect(lambda: self.handle_update_filters())
 
     def handle_update_filters(self):
         text = self.view.course_combo().currentText()
@@ -104,9 +104,7 @@ class FlashcardController:
     @with_error_dialog
     def show_next_flashcard(self, checked: bool = False):
         logger.debug(f"Calling {self.show_next_flashcard}")
-        print("Test")
         card = self.session.next_flashcard()
-        print(card, "Card")
         self.update_state(card)
 
 
@@ -121,6 +119,7 @@ class FlashcardController:
     @with_error_dialog
     def update_state(self, card: Flashcard):
         # Last condition is redundant but tmp fix for type hinting
+
         if card.proof_section is not None and card.main_section.title_pdf is not None and card.main_section.title is not None:
             self.view.show_proof_button().setHidden(False)
             self.view.flashcard_button_bar.show_answer_button.setText("Answer")
@@ -129,7 +128,7 @@ class FlashcardController:
             self.current_data["Proof"] = (card.proof_section.pdf_path, card.main_section.content)
             self.view.display_pdf(card.main_section.title_pdf, card.main_section.title)
 
-        elif card.proof_section is not None and card.main_section.title is None:
+        elif card.proof_section is not None and card.main_section.title is None and card.main_section.pdf_path is not None:
             self.view.show_proof_button().setHidden(True)
             self.view.flashcard_button_bar.show_answer_button.setText("Proof")
             self.current_data["Question"] = (card.main_section.pdf_path, card.main_section.content)
@@ -140,7 +139,7 @@ class FlashcardController:
         else:
             self.view.show_proof_button().setHidden(True)
             self.view.flashcard_button_bar.show_answer_button.setText("Answer")
-            t = card.main_section.title if card.main_section.title is not None else ""
+            t = card.main_section.title if card.main_section.title is not None else TrackedText("")
             self.current_data["Question"] = (card.main_section.title_pdf, card.main_section.title)
             self.current_data["Answer"] = (card.main_section.pdf_path, card.main_section.content)
             self.current_data["Proof"] = ("", "")

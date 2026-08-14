@@ -6,7 +6,7 @@ from PyQt6.QtWidgets import (QCheckBox, QComboBox, QHBoxLayout, QLabel, QListVie
                              QWidget, QPushButton, QMainWindow, QSpacerItem, QSizePolicy, QScrollArea)
 from PyQt6.QtPdfWidgets import QPdfView
 from PyQt6.QtPdf import QPdfDocument
-from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtCore import QSize, Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QPalette, QStandardItem, QStandardItemModel
 
 from ..exceptions import LaTeXCompilationError
@@ -50,51 +50,141 @@ class InfoButton(QWidget):
         self.clicked.connect(slot)
 
 
-# TODO remove courses
-class VConfigBar(QWidget):
-    update_filters = pyqtSignal()
+TAB_BTN_EMPTY_CSS = """
+QPushButton {
+    border: none;
+    background: transparent;
+    border-radius: 4px;
+}
+QPushButton:hover {
+    background: transparent;
+    border-radius: 4px;
+}
 
-    def __init__(self):
+QPushButton:pressed {
+    background: transparent;
+    border-radius: 4px;
+}
+"""
+
+
+
+
+class TabButton(QWidget):
+
+    def __init__(self, label: str):
         super().__init__()
+        self.label = label
         self.initUi()
 
     def initUi(self):
-        self.config_layout = QVBoxLayout()
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self.setFixedSize(QSize(80, 29))
+        self.setContentsMargins(0, 0, 0, 0)
+        main_layout = QHBoxLayout()
+        main_layout.setSpacing(0)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
+
+        self.btn = QPushButton(self.label)
+        self.btn.setFlat(True)
+        self.btn.setFixedWidth(80)
+        self.btn.setFlat(True)
+        self.btn.setFixedHeight(29)
+        self.btn.setStyleSheet(TAB_BTN_EMPTY_CSS)
+        main_layout.addWidget(self.btn)
+        self.setLayout(main_layout)
+
+
+
+class FlashcardConfigWidget(QWidget):
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.setContentsMargins(0, 0, 0, 0)
+        self.initUi()
+
+    def initUi(self):
+
+
+        self.setContentsMargins(0, 0, 0, 0)
         self.setFixedWidth(160)
-        self.setLayout(self.config_layout)
-        # Create Widgets
-        self.course_combo_label = QLabel()
-        self.course_combo= QComboBox()
+        self.main_layout = QVBoxLayout()
+        self.main_layout.setContentsMargins(0, 0, 0, 0)
+        self.main_layout.setSpacing(0)
+        self.button_layout = QHBoxLayout()
+        self.button_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.course_btn = TabButton("Courses")
+        self.deck_btn = TabButton("Deck")
+
+
+        self.command_bar = CommandBar()
+
+        self.course_btn.btn.clicked.connect(lambda: self.toggle(self.course_btn.label))
+        self.deck_btn.btn.clicked.connect(lambda: self.toggle(self.deck_btn.label))
+
+        self.button_layout.addWidget(self.course_btn)
+        self.button_layout.addWidget(self.deck_btn)
+
+        self.course_config = CourseFlashcardConfigWidget()
+        self.deck_config = DeckFlashcardConfigWidget()
+        self.main_layout.addLayout(self.button_layout)
+        self.main_layout.addWidget(self.course_config)
+        self.main_layout.addWidget(self.deck_config)
+        self.main_layout.addWidget(self.command_bar)
+
+        self.deck_config.hide()
+        self.course_btn.setStyleSheet("background-color: #555;")
+
+        self.setLayout(self.main_layout)
+
+
+    def toggle(self, label: str):
+        buttons: dict[str, tuple[QWidget, TabButton]] = {
+                "Courses": (self.course_config, self.course_btn),
+                "Deck": (self.deck_config, self.deck_btn)
+                }
+        for (k, v) in buttons.items():
+            widget, btn = v
+            if k == label:
+                btn.setStyleSheet("background-color: #555;")
+                widget.show()
+            else:
+                btn.setStyleSheet("background-color: transparent;")
+                widget.hide()
+
+class SectionListWidget(QWidget):
+    def __init__(self, section_names: list[str]):
+        super().__init__()
+        self.section_names = section_names
+
+        self.initUi()
+
+
+    def initUi(self):
+        self.setContentsMargins(0, 0, 0, 0)
+        self.setFixedWidth(150)
+
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+        self.setLayout(main_layout)
+
+        self.section_list_label = QLabel("Select Section")
         self.section_list = QListView()
-        self.filter_by_week_list = QListView()
-        self.filter_by_week_list_label = QLabel()
-        self.section_list_label = QLabel()
-        self.create_flashcards_button = QPushButton("Create Flashcards")
-        self.open_main = QPushButton("Open main")
-        self.random_checkbox_label = QLabel("Randomize")
-        self.random_checkbox = QCheckBox()
-        self.filter_by_week_list_model = QStandardItemModel()
+        # TODO
+        self.section_list.setStyleSheet("""
+    QListView {
+        border-radius: 6px;
+        background: #222;
+    }
+""")
+
         self.section_list_model = QStandardItemModel()
 
-        # Add iterm2 widgets if enabled
-        if CONFIG.iterm2_enabled:
-            self.launch_iterm_button = QPushButton("Launch iterm")
-            self.config_layout.addWidget(self.launch_iterm_button)
-
-        # Configure
-        self.random_checkbox.setChecked(True)
-        self.course_combo_label.setText("Select Course")
-        self.section_list_label.setText("Select Section")
-        self.filter_by_week_list_label.setText("Filter by week")
-        self.filter_by_week_list.setModel(self.filter_by_week_list_model)
-        self.filter_by_week_list.setMaximumWidth(125)
-        self.filter_by_week_list.setMaximumHeight(150)
-
-        self.course_combo.currentIndexChanged.connect(lambda: self.update_filters.emit())
-
-        self.section_list_items = ["definition", "theorem",  "lemma", "proposition",
-                                   "corollary", "derivation", "All"]
-        for item in self.section_list_items:
+        for item in self.section_names:
             list_item = QStandardItem(item)
             list_item.setCheckable(True)
             self.section_list_model.appendRow(list_item)
@@ -102,23 +192,69 @@ class VConfigBar(QWidget):
 
         self.section_list.setMaximumWidth(125)
         self.section_list.setMaximumHeight(150)
-        self.create_flashcards_button.setMaximumWidth(150)
-        self.course_combo.setMaximumWidth(150)
+        self.section_list.setContentsMargins(0, 8, 0, 12)
+        self.section_list.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        self.section_list_label.setContentsMargins(0, 12, 0, 8)
+        self.section_list_label.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
 
-        # Add widgets
-        self.config_layout.addWidget(self.course_combo_label)
-        self.config_layout.addWidget(self.course_combo)
-        self.config_layout.addWidget(self.section_list_label)
+        main_layout.addWidget(self.section_list_label)
+        main_layout.addWidget(self.section_list)
+
+class DeckFlashcardConfigWidget(QWidget):
+    def __init__(self) -> None:
+        super().__init__()
+        self.initUi()
+
+    def initUi(self):
+        self.setContentsMargins(0, 0, 0, 0)
+        self.setFixedWidth(150)
+
+        self.config_layout = QVBoxLayout()
+        self.config_layout.setContentsMargins(0, 0, 0, 0)
+        self.setLayout(self.config_layout)
+
+        self.config_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.config_layout.setSpacing(0)
+
+
+        # Create widgets
+        self.deck_combo_label = QLabel("Deck")
+        self.deck_combo_label.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        self.deck_combo_label.setContentsMargins(0, 24, 0, 8)
+        self.deck_combo= QComboBox()
+        self.deck_combo.setContentsMargins(0, 8, 0, 12)
+        self.deck_combo.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+
+        section_names = ["definition", "theorem",  "lemma", "proposition", "corollary", "derivation", "All"]
+        self.section_list = SectionListWidget(section_names)
+
+        self.config_layout.addWidget(self.deck_combo_label)
+        self.config_layout.addWidget(self.deck_combo)
         self.config_layout.addWidget(self.section_list)
-        self.config_layout.addWidget(self.filter_by_week_list_label)
-        self.config_layout.addWidget(self.filter_by_week_list)
-        self.config_layout.addWidget(self.random_checkbox_label)
-        self.config_layout.addWidget(self.random_checkbox)
-        self.config_layout.addWidget(self.create_flashcards_button)
-        self.config_layout.addWidget(self.open_main)
-
         self.config_layout.addStretch()
 
+
+
+
+
+BUTTON_CSS = """
+QPushButton {
+    background: #555;
+    color: #ddd;
+    border: none;
+    border-radius: 4px;
+    font-size: 13px;
+    padding: 4px 10px;
+}
+QPushButton:hover {
+    background: #666;
+    border-radius: 4px;
+}
+QPushButton:pressed {
+    background: #777;
+    border-radius: 4px;
+}
+"""
 
 
 class HButtonBar(QWidget):
@@ -138,7 +274,15 @@ class HButtonBar(QWidget):
         self.show_answer_button = QPushButton("Answer", self)
         self.show_question_button = QPushButton("Question", self)
         self.show_proof_button = QPushButton("Proof", self)
-
+        buttons = [
+                self.next_flashcard_button,
+                self.prev_flashcard_button,
+                self.show_question_button,
+                self.show_answer_button,
+                self.show_proof_button
+                ]
+        for btn in buttons:
+            btn.setStyleSheet(BUTTON_CSS)
         # Configure widgets
         self.show_proof_button.setHidden(True)
         self.prev_flashcard_button.setFixedSize(75, 35)
@@ -169,7 +313,7 @@ class HButtonBar(QWidget):
     def connect_clicked_prev_button(self, func):
         self.prev_flashcard_button.clicked.connect(func)
 
-class HBar(QWidget):
+class InfoBar(QWidget):
     def __init__(self):
         super().__init__()
         self.initUi()
@@ -189,11 +333,11 @@ class HBar(QWidget):
         self.flashcard_type.setStyleSheet("font-size: 18px; color: white; font-family: Arial")
 
         # Add widgets
-        self.bar_layout.addWidget(self.info_button)
         self.bar_layout.addStretch()
         self.bar_layout.addWidget(self.flashcard_type)
         self.bar_layout.addStretch()
         self.bar_layout.addStretch()
+        self.bar_layout.addWidget(self.info_button)
 
     def connect_clicked_info_button(self, callback):
         self.info_button.connect(callback)
@@ -205,9 +349,8 @@ class PdfWindow(QWidget):
         self.parent_widget = widget
         self.initUi()
 
-
-
     def initUi(self):
+        self.setContentsMargins(0, 0, 0, 0)
         self.pdf_layout = QHBoxLayout()
         self.setLayout(self.pdf_layout)
 
@@ -245,7 +388,6 @@ class PdfWindow(QWidget):
                 self.pdf_viewer.setZoomMode(QPdfView.ZoomMode.FitToWidth)
         return load_status
 
-    # TODO
     def display_pdf(self, pdf_path: Path, markdown: TrackedText):
         """
         -- Params --
@@ -258,7 +400,33 @@ class PdfWindow(QWidget):
             self.document = None
             raise LaTeXCompilationError(f"Failed to compile card: {pdf_path}. Load status: {load_status}")
 
-# Yeah... idk about all those one methods
+
+class CommandBar(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.initUi()
+
+    def initUi(self):
+        self.setContentsMargins(0, 12, 0, 12)
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.setLayout(main_layout)
+
+        self.create_flashcards_button = QPushButton("Create Flashcards")
+        self.create_flashcards_button.setStyleSheet(BUTTON_CSS)
+        self.create_flashcards_button.setMaximumWidth(150)
+        main_layout.addWidget(self.create_flashcards_button)
+
+
+MAIN_WINDOW_CSS = """
+QMainWindow {
+        background-color: #2E2E2E;
+        }
+"""
+
+
+# Yeah... idk about all these one line methods
 class FlashcardMainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -266,28 +434,30 @@ class FlashcardMainWindow(QMainWindow):
         self.initUi()
 
     def initUi(self):
+        self.setStyleSheet(MAIN_WINDOW_CSS)
         self.widget = QWidget()
         self.main_layout = QHBoxLayout(self.widget)
         self.main_flashcard_layout = QVBoxLayout()
         self.resize(1000, 600)
-        self.setMinimumSize(400, 300)
+        self.setMinimumSize(1000, 600)
+        self.setContentsMargins(8, 8, 8, 8)
         self.setCentralWidget(self.widget)
 
         # Create widgets
         self.flashcard_button_bar = HButtonBar()
-        self.top_bar = HBar()
+        self.top_bar = InfoBar()
         self.pdf_window = PdfWindow(self.widget)
-        self.config_bar = VConfigBar()
-        spacer = QSpacerItem(40, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
+        self.config_bar = FlashcardConfigWidget()
+        self.course_config = self.config_bar.course_config
 
         # Add widgets
         self.main_flashcard_layout.addWidget(self.top_bar)
         self.main_flashcard_layout.addWidget(self.pdf_window, 3)
         self.main_flashcard_layout.addWidget(self.flashcard_button_bar)
-
-        self.main_layout.addItem(spacer)
-        self.main_layout.addLayout(self.main_flashcard_layout)
         self.main_layout.addWidget(self.config_bar)
+
+        self.main_layout.addLayout(self.main_flashcard_layout)
+
 
     @property
     def document(self):
@@ -329,7 +499,7 @@ class FlashcardMainWindow(QMainWindow):
         self.flashcard_button_bar.connect_clicked_show_question_button(callback)
 
     def bind_create_flashcards_button(self, callback: Callable[[], None]):
-        self.config_bar.create_flashcards_button.clicked.connect(callback)
+        self.config_bar.command_bar.create_flashcards_button.clicked.connect(callback)
 
     def bind_flashcard_info_button(self, callback):
         self.top_bar.connect_clicked_info_button(callback)
@@ -339,19 +509,16 @@ class FlashcardMainWindow(QMainWindow):
 
     def bind_launch_iterm_button(self, callback):
         if CONFIG.iterm2_enabled:
-            self.config_bar.launch_iterm_button.clicked.connect(callback)
-
-    def bind_open_main_button(self, callback):
-        self.config_bar.open_main.clicked.connect(callback)
+            self.course_config.launch_iterm_button.clicked.connect(callback)
 
     def flashcard_type_label(self):
         return self.top_bar.flashcard_type
 
     def list_model(self) -> QStandardItemModel:
-        return self.config_bar.filter_by_week_list_model
+        return self.course_config.filter_by_week_list_model
 
     def course_combo(self):
-        return self.config_bar.course_combo
+        return self.course_config.course_combo
 
     def flashcard_info_button(self):
         return self.top_bar.info_button
@@ -360,13 +527,13 @@ class FlashcardMainWindow(QMainWindow):
         return self.pdf_window.pdf_viewer
 
     def section_list(self):
-        return self.config_bar.section_list
+        return self.course_config.section_list
 
     def filter_by_week_list(self):
-        return self.config_bar.filter_by_week_list
+        return self.course_config.filter_by_week_list
 
     def random_checkbox(self):
-        return self.config_bar.random_checkbox
+        return self.course_config.random_checkbox
 
     def show_proof_button(self):
         return self.flashcard_button_bar.show_proof_button

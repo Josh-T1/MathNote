@@ -1,6 +1,6 @@
 # #2E2E2E is a dark grey
 # #d3d3d3 is a light grey
-# #444 is light grey and #555 is a very ligh grey's
+# #/444 is light grey and #/555 is a very ligh grey's
 
 BUILDER_LIST_CSS = """
 QListView {

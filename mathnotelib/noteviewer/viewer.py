@@ -17,7 +17,6 @@ from .style import CLOSE_TAB_BTN_CSS, ICON_CSS, PAGE_INPUT_CSS, TAB_BTN_CSS, TAB
 from . import constants
 
 
-
 class ZMultiPageViewer(QGraphicsView):
     EDGE_THRESHOLD = 20
     MAX_ZOOM = 5.0
@@ -29,6 +28,7 @@ class ZMultiPageViewer(QGraphicsView):
         self._scene = QGraphicsScene()
         self.setScene(self._scene)
         self.setStyleSheet("background-color: transparent;")
+
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setContentsMargins(0, 0, 0, 0)
@@ -123,18 +123,6 @@ class ZMultiPageViewer(QGraphicsView):
             self._restore()
 
 
-
-
-#    def _load_pending(self):
-#        if len(self._pending_items) == 0:
-#            self._timer.stop()
-#            if self.tmpdir:
-#                self.tmpdir.cleanup()
-#                self.tmpdir = None
-#            return
-#        item = self._pending_items.pop(0)
-#        self.append_item(item)
-
     def append_item(self, path: str):
         if len(items := self._scene.items()) > 0:
             prev_item = items[-1]
@@ -223,6 +211,8 @@ class LiveIcon(QWidget):
         painter.setBrush(QBrush(color))
         painter.setPen(Qt.PenStyle.SolidLine)
         painter.drawEllipse(0, 0, self.diameter, self.diameter)
+
+
 
 class TabWidget(QWidget):
     def __init__(self, label: str,
@@ -323,6 +313,8 @@ class TabWidget(QWidget):
 
 
 class ToolTabBar(QWidget):
+    preview = pyqtSignal()
+
     def __init__(self):
         super().__init__()
         self.toolbar = self.build_tool_bar()
@@ -343,6 +335,11 @@ class ToolTabBar(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         cont.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         cont.setLayout(layout)
+        self.live_preview_btn = QPushButton()
+        self.live_preview_btn.setToolTip("Live Preview")
+        self.live_preview_btn.setIcon(QIcon(str(constants.ICON_PATH / "preview.png")))
+        self.live_preview_btn.setFixedSize(QSize(constants.ICON_SIZE))
+        self.live_preview_btn.setStyleSheet(ICON_CSS)
 
         self.add_tab_btn = QPushButton()
         self.add_tab_btn.setToolTip("New Tab")
@@ -351,6 +348,9 @@ class ToolTabBar(QWidget):
         self.add_tab_btn.setStyleSheet(ICON_CSS)
 
         layout.addWidget(self.add_tab_btn, alignment=Qt.AlignmentFlag.AlignVCenter)
+        layout.addWidget(self.live_preview_btn, alignment=Qt.AlignmentFlag.AlignVCenter)
+
+        self.live_preview_btn.clicked.connect(lambda: self.preview.emit())
         return cont
 
     def add_tab_button(self,
@@ -373,17 +373,25 @@ class ToolTabBar(QWidget):
         self.add_tab_btn.clicked.connect(callback)
 
 
-    def get_focused_tab(self) -> TabWidget | None:
+    def get_tabs(self) -> list[TabWidget]:
+        tabs = []
         for i in range(self.main_layout.count()):
             item = self.main_layout.itemAt(i)
 
             if item is None:
-                return None
+                continue
             tab = item.widget()
-            if isinstance(tab, TabWidget) and tab.is_focused:
-                return tab
+            if isinstance(tab, TabWidget):
+                tabs.append(tab)
 
-            return None
+        return tabs
+
+    def get_focused_tab(self) -> TabWidget | None:
+        tabs = self.get_tabs()
+        for tab in tabs:
+            if tab.is_focused:
+                return tab
+        return None
 
     def toggle_live(self) -> None:
         for i in range(self.main_layout.count()): # -1 to account for settings widget in toolbar
@@ -416,6 +424,8 @@ class ToolTabBar(QWidget):
 
 
 class TabbedSvgViewer(QWidget):
+    tab_changed = pyqtSignal()
+
     def __init__(self, parent: QWidget | None=None):
         super().__init__(parent)
         self.initUI()
@@ -441,6 +451,7 @@ class TabbedSvgViewer(QWidget):
 
 
     def close_tab(self, widget: QWidget, toolbar_layout: QLayout, tab_widget: QWidget):
+        # TODO: Issue is that you can close tabs without every selecting said tab. This implies tab 5 can be focused, we delete tab 3 and then tab 2 becomes focused instead of tab 5
         tab_widget.deleteLater()
         toolbar_layout.removeWidget(widget)
 
@@ -454,7 +465,8 @@ class TabbedSvgViewer(QWidget):
             self.addTab(focus=False)
             self.tab_bar.focus_tab(1)
         else:
-            next_idx = idx if self.stack.count() -1 >= idx else self.stack.count()- 1
+#            next_idx = idx if self.stack.count() -1 >= idx else self.stack.count()- 1
+            next_idx = self.stack.count() - 1
             self.stack.setCurrentIndex(next_idx)
             self.tab_bar.focus_tab(next_idx)
 
@@ -463,6 +475,7 @@ class TabbedSvgViewer(QWidget):
         idx = self.stack.indexOf(widget)
         self.stack.setCurrentIndex(idx)
         self.tab_bar.focus_tab(idx)
+        self.tab_changed.emit()
 
     # exchange label: str for path: str
     def addTab(self, source: SourceFile | None = None, focus: bool=True):
@@ -478,7 +491,7 @@ class TabbedSvgViewer(QWidget):
             func = getattr(source, "pretty_name", lambda: source.name)
             file_name = func()
         elif source is None:
-            file_name = f"{self.main_layout.count() - 1}"
+            file_name = f"{self.stack.count() + 1}"
         else:
             file_name = source.path.parent.parent.stem
 

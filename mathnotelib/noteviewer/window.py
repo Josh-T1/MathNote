@@ -48,51 +48,44 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.initUi()
-
-#        self.compile_typst(TYP_FILE_LIVE)
         self._nav_minimal: bool = False
 
     def initUi(self):
         self.widget = QWidget()
-        self.main_layout = QHBoxLayout(self.widget)
         self.setCentralWidget(self.widget)
+
+        self.main_layout = QHBoxLayout(self.widget)
         self.main_layout.setSpacing(0)
         self.main_layout.setContentsMargins(0, 0, 0, 12)
+
         # Init widgets
         self.viewer = TabbedSvgViewer()
         self.minimal_nav_bar = CollapsedNavBar()
-        self.doc_builder_widget = DocumentBuilder()
         # Set controllers. Should this code really live here?
         notes_navbar = NotesNavBar()
         courses_navbar = CourseNavBar()
         settings = SettingsNavBar(CONFIG)
         self.notes_controller = NoteController(self, notes_navbar, self.viewer)
-
         self.coures_controller = CourseController(self, courses_navbar, self.viewer)
         self.navbar = NavBarContainer(notes_navbar, courses_navbar, settings)
-        self.preview_controller = LiveTypstController(self.navbar, self.viewer)
+        self.preview_controller = LiveTypstController(self, self.viewer)
         self.filter = EventFilter(self.navbar.search_widget)
+
         self.installEventFilter(self.filter)
         # Configure
         self.setStyleSheet(MAIN_WINDOW_CSS)
-
         self.viewer.setMinimumSize(VIEWER_WIDTH, VIEWER_HEIGHT)
         self.viewer.addTab(focus=True)
-
         self.minimal_nav_bar.connect_toggle_button(self._toggle_nav_callback)
         self.navbar.connect_toggle_button(self._toggle_nav_callback)
-        self.doc_builder_widget.setFixedWidth(200)
-        self.doc_builder_widget.setHidden(True)
         self.minimal_nav_bar.setVisible(False)
+        self.setMinimumWidth(
+                self.navbar.width() + self.viewer.width() + self.minimal_nav_bar.width()
+                )
         # Add to layout
         self.main_layout.addWidget(self.navbar, alignment=Qt.AlignmentFlag.AlignLeft)
         self.main_layout.addWidget(self.minimal_nav_bar)
         self.main_layout.addWidget(self.viewer)
-        self.main_layout.addWidget(self.doc_builder_widget, alignment=Qt.AlignmentFlag.AlignRight)
-
-        self.setMinimumWidth(
-                self.navbar.width() + self.viewer.width() + self.minimal_nav_bar.width()
-                )
 
     def _toggle_nav_callback(self):
         self._nav_minimal = not self._nav_minimal

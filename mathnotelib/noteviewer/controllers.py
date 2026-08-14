@@ -1,4 +1,5 @@
 from __future__ import annotations
+from io import UnsupportedOperation
 import tempfile
 from pathlib import Path
 from typing import Callable, Literal
@@ -150,7 +151,7 @@ class NoteController(QObject):
         else:
             return
 
-        if parent is not None and parent.rowCount() == 0 and delete: # TODO why row count?
+        if parent is not None and parent.rowCount() == 0 and delete:
             self.navbar.tree.collapse(parent.index())
             parent.setData(False, constants.LOADED_ROLE)
 
@@ -188,7 +189,7 @@ class NoteController(QObject):
             note = self.notes_repo.create_note(name, cat, ftype)
             res_item = self.navbar._build_file_item(note)
 
-            self.viewer.addTab(note.path, focus=True)
+            self.viewer.addTab(note, focus=True)
             self.navbar.file_opened.emit(note)
             self.navbar.tree.setCurrentIndex(res_item.index())
         else:
@@ -416,12 +417,12 @@ class CourseController(QObject):
 class LiveTypstController:
     DEBOUNCE = 20
 
-    # How do I update files which I type to but are not currently live?
-    def __init__(self, navbar: NavBarContainer, viewer: TabbedSvgViewer):
-        self.navbar = navbar
+    def __init__(self, window: QMainWindow, viewer: TabbedSvgViewer):
         self.viewer = viewer
-
+        self.viewer.tab_changed.connect(self.update_tab)
+        self.window = window # Used by @with_error_dialog
         self.live_file: SourceFile | None = None
+        self.live_files: list[SourceFile] = []
 
         self._debounce_timer = QTimer()
         self._debounce_timer.setSingleShot(True)
@@ -433,10 +434,25 @@ class LiveTypstController:
         self.connect_handlers()
 
 
+    def update_tab(self) -> None:
+        for tab in self.viewer.tab_bar.get_tabs():
+            if tab.is_focused:
+                sc = tab.source_file
+                if sc is None:
+                    return
+                current_tab = self.viewer.tab_bar.get_focused_tab()
+                if current_tab is None:
+                    return
+                self.live_file = current_tab.source_file
+
+                self.compile_typst()
+                return
+
+    @with_error_dialog
     def toggle_live_preview(self) -> bool:
         # TODO: Have some debugging here
-        path: None | Path = None
-        is_live: None | bool = None
+        source_file: None | SourceFile = None
+        is_live: bool = False
 
         layout = self.viewer.tab_bar.main_layout
 
@@ -447,34 +463,36 @@ class LiveTypstController:
             tab = item.widget()
             if not isinstance(tab, TabWidget):
                 continue
-
-            source_file = tab.source_file
-            if not tab.is_focused or source_file is None:
+            if not tab.is_focused:
                 continue
-            path = source_file.path
+            source_file = tab.source_file
             is_live = tab.is_live
 
-        if path is None or is_live is None:
+        if source_file is None:
             return False
+
+        if source_file.path.suffix != ".typ":
+            raise UnsupportedOperation(f"Live preview is only supported for typst files (.typ) not '{path.stem}'")
+
         if is_live:
-            self.watcher.removePath(str(path))
+            self.watcher.removePath(str(source_file.path))
         else:
-            self.watcher.addPath(str(path))
+            self.watcher.addPath(str(source_file.path))
         return True
 
 
     def connect_handlers(self):
-        self.navbar.preview.connect(self.toggle_live_preview)
-        self.navbar.preview.connect(self.viewer.tab_bar.toggle_live)
-#        self.toolbar
+        self.viewer.tab_bar.preview.connect(self.toggle_live_preview)
+        self.viewer.tab_bar.preview.connect(self.viewer.tab_bar.toggle_live)
 
     def on_typ_changed(self, path: str):
-        # TODO: deal with active tabs
-        tab = self.viewer.tab_bar.get_focused_tab()
-        if tab is None:
+        current_tab = self.viewer.tab_bar.get_focused_tab()
+        if current_tab is None:
             return
-        self.live_file = tab.source_file
-        if self.live_file is None or str(self.live_file.path) != path or not tab.is_live:
+
+        self.live_file = current_tab.source_file
+
+        if self.live_file is None or str(self.live_file.path) != path or not current_tab.is_live:
             return
 
         if self._debounce_timer and not self._debounce_timer.isActive():
@@ -486,7 +504,7 @@ class LiveTypstController:
 #            self.process.kill()  # Stop any ongoing compilation
         if self.live_file is None:
             return
-        tmpdir = tempfile.TemporaryDirectory()
+        tmpdir = tempfile.TemporaryDirectory() # Does this get cleaned up?
         tmpdir_path = Path(tmpdir.name)
 
         options = CompileOptions(self.live_file.path, OutputFormat.SVG, multi_page=True)
