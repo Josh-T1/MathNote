@@ -1,19 +1,22 @@
 from PyQt6.QtGui import QKeyEvent, QMouseEvent
 from PyQt6.QtWidgets import (QApplication, QFrame, QGestureEvent, QGraphicsScene, QGraphicsView, QHBoxLayout,
-                             QLabel, QListWidget, QMainWindow, QPinchGesture, QToolBar, QTreeView, QVBoxLayout, QWidget)
+                             QLabel, QListWidget, QMainWindow, QPinchGesture, QStackedWidget, QToolBar, QTreeView, QVBoxLayout, QWidget)
 from PyQt6.QtCore import QEvent, QFileSystemWatcher, QModelIndex, QObject, QProcess, QTimer, pyqtSignal, Qt
 from PyQt6.QtSvgWidgets import QGraphicsSvgItem, QSvgWidget
 
-from .navbar import CollapsedNavBar, CourseNavBar, ModeSelector, NavBarContainer, NotesNavBar, SettingsNavBar
+
+from .navbar import CollapsedNavBar, CourseNavBar, NavBarContainer, NotesNavBar, SettingsNavBar
 from .builder_widget import DocumentBuilder
-from .viewer import TabbedSvgViewer
+from .svg_viewer import TabbedSvgViewer, ZMultiPageViewer
+from .flashcard_navbar import FlashcardNavBar
 from .style import MAIN_WINDOW_CSS
-from .controllers import LiveTypstController, NoteController, CourseController
+from .controllers import LiveTypstController, NoteController, CourseController, ViewContainer, ViewController
 from .search import SearchWidget
 from ..config import CONFIG
 from .._enums import FileType
 
 from .constants import VIEWER_HEIGHT, VIEWER_WIDTH
+from mathnotelib.ui import constants
 
 class EventFilter(QObject):
     def __init__(self, search_widget: SearchWidget):
@@ -43,6 +46,8 @@ class EventFilter(QObject):
 
         return super().eventFilter(a0, a1)
 
+
+
 # Get controllers tf out of here
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -51,6 +56,8 @@ class MainWindow(QMainWindow):
         self._nav_minimal: bool = False
 
     def initUi(self):
+        self.navbar_stack = QStackedWidget() # TODO
+
         self.widget = QWidget()
         self.setCentralWidget(self.widget)
 
@@ -59,36 +66,49 @@ class MainWindow(QMainWindow):
         self.main_layout.setContentsMargins(0, 0, 0, 12)
 
         # Init widgets
-        self.viewer = TabbedSvgViewer()
+        self.notes_view = TabbedSvgViewer()
+        self.flashcard_view = ZMultiPageViewer()
+        self.flashcard_view.setMinimumSize(constants.VIEWER_WIDTH, constants.VIEWER_HEIGHT)
+        self.view_container = ViewContainer(self.notes_view, self.flashcard_view)
+
         self.minimal_nav_bar = CollapsedNavBar()
         # Set controllers. Should this code really live here?
         notes_navbar = NotesNavBar()
         courses_navbar = CourseNavBar()
+        flashcards_navbar = FlashcardNavBar()
         settings = SettingsNavBar(CONFIG)
-        self.notes_controller = NoteController(self, notes_navbar, self.viewer)
-        self.coures_controller = CourseController(self, courses_navbar, self.viewer)
-        self.navbar = NavBarContainer(notes_navbar, courses_navbar, settings)
-        self.preview_controller = LiveTypstController(self, self.viewer)
-        self.filter = EventFilter(self.navbar.search_widget)
+
+        self.notes_controller = NoteController(self, notes_navbar, self.notes_view)
+        self.coures_controller = CourseController(self, courses_navbar, self.notes_view)
+        self.preview_controller = LiveTypstController(self, self.notes_view)
+
+        self.navbar_cont = NavBarContainer(notes_navbar, courses_navbar, flashcards_navbar, settings)
+
+        self.view_controller = ViewController(self.navbar_cont, self.view_container)
+
+        self.filter = EventFilter(self.navbar_cont.search_widget)
 
         self.installEventFilter(self.filter)
         # Configure
         self.setStyleSheet(MAIN_WINDOW_CSS)
-        self.viewer.setMinimumSize(VIEWER_WIDTH, VIEWER_HEIGHT)
-        self.viewer.addTab(focus=True)
+        self.notes_view.setMinimumSize(VIEWER_WIDTH, VIEWER_HEIGHT)
+        self.notes_view.addTab(focus=True)
+        # TODO: I am sure there is a better way
         self.minimal_nav_bar.connect_toggle_button(self._toggle_nav_callback)
-        self.navbar.connect_toggle_button(self._toggle_nav_callback)
+        self.navbar_cont.connect_toggle_button(self._toggle_nav_callback)
         self.minimal_nav_bar.setVisible(False)
         self.setMinimumWidth(
-                self.navbar.width() + self.viewer.width() + self.minimal_nav_bar.width()
+                self.navbar_cont.width() + VIEWER_WIDTH + self.minimal_nav_bar.width()
                 )
         # Add to layout
-        self.main_layout.addWidget(self.navbar, alignment=Qt.AlignmentFlag.AlignLeft)
+        self.main_layout.addWidget(self.navbar_cont, alignment=Qt.AlignmentFlag.AlignLeft)
         self.main_layout.addWidget(self.minimal_nav_bar)
-        self.main_layout.addWidget(self.viewer)
+        self.main_layout.addWidget(self.view_container)
 
     def _toggle_nav_callback(self):
         self._nav_minimal = not self._nav_minimal
-        self.navbar.setVisible(not self._nav_minimal)
+        self.navbar_cont.setVisible(not self._nav_minimal)
         self.minimal_nav_bar.setVisible(self._nav_minimal)
+
+
 

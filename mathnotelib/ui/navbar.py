@@ -1,3 +1,5 @@
+from typing import Callable
+from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import (QComboBox, QHBoxLayout, QLabel, QPushButton, QSizePolicy,
                              QSpacerItem, QStackedWidget, QVBoxLayout, QWidget)
 from PyQt6.QtCore import Qt
@@ -6,17 +8,25 @@ from .style import ICON_CSS, LABEL_CSS, TITLE_LABEL_CSS
 from . import constants
 from .search import SearchWidget
 from .file_navbar import NotesNavBar, CourseNavBar
+from .flashcard_navbar import FlashcardNavBar
 from ..config import Config
 
-
+# TODO: type hint setting widget + rename settings navbar?
 class NavBarContainer(QWidget):
 
-    def __init__(self, notes_navbar: NotesNavBar, courses_navbar: CourseNavBar, settings_widget):
+    def __init__(self,
+                 notes_navbar: NotesNavBar,
+                 courses_navbar: CourseNavBar,
+                 flashcard_navbar: FlashcardNavBar,
+                 settings_widget
+                 ):
         super().__init__()
         self.tree_visible: bool = True
         self.notes_navbar = notes_navbar
         self.courses_navbar = courses_navbar
         self.settings_widget = settings_widget
+        self.flashcard_navbar = flashcard_navbar
+        self.stack = QStackedWidget()
         self.initUI()
 
     def initUI(self):
@@ -26,7 +36,7 @@ class NavBarContainer(QWidget):
         self.setLayout(main_layout)
         self.setFixedWidth(250)
         #Init widgets
-        self.stack = QStackedWidget()
+
         self.search_widget = SearchWidget()
         self.minimize_btn = QPushButton()
         self.courses_btn = QPushButton()
@@ -60,10 +70,7 @@ class NavBarContainer(QWidget):
         self.minimize_btn.setToolTip("Hide Navbar")
         self.notes_btn.setToolTip("Notes")
         self.courses_btn.setToolTip("Courses")
-        self.courses_btn.clicked.connect(lambda: self.stack.setCurrentWidget(self.courses_navbar))
-        self.notes_btn.clicked.connect(lambda: self.stack.setCurrentWidget(self.notes_navbar))
-        self.settings_btn.clicked.connect(lambda: self.stack.setCurrentWidget(self.settings_widget))
-        self.flashcards_btn.clicked.connect(lambda: print(''))
+
 
         # Add to layout
         for btn in icons:
@@ -74,6 +81,7 @@ class NavBarContainer(QWidget):
         main_layout.addWidget(self.stack)
         self.stack.addWidget(self.notes_navbar)
         self.stack.addWidget(self.courses_navbar)
+        self.stack.addWidget(self.flashcard_navbar)
         self.stack.addWidget(self.settings_widget)
         self.stack.setCurrentWidget(self.notes_navbar)
 

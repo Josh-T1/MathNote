@@ -540,25 +540,7 @@ class TabbedSvgViewer(QWidget):
             pass
 
 
-class SettingsWidget(QWidget):
-    def __init__(self):
-        super().__init__()
-        self.initUI()
 
-    def initUI(self):
-        # layout
-        main_layout = QVBoxLayout()
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.setSpacing(0)
-        self.setFixedSize(constants.VIEWER_WIDTH, constants.VIEWER_HEIGHT)
-        self.setLayout(main_layout)
-        self.setStyleSheet("background-color: #282828;")
 
-        self.title = QLabel("Settings")
-        spacer = QWidget()
 
-        self.title.setStyleSheet("font-size: 24px;")
-        spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
-        main_layout.addWidget(self.title, alignment=Qt.AlignmentFlag.AlignTop)
-        main_layout.addWidget(spacer)

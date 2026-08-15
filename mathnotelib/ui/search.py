@@ -1,15 +1,9 @@
-import subprocess
-from PyQt6.QtGui import QMouseEvent
 from rapidfuzz import fuzz
 
-from PyQt6.QtWidgets import (QApplication, QButtonGroup, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFormLayout, QFrame, QGestureEvent, QGraphicsRectItem, QGraphicsScene, QGraphicsView, QHBoxLayout, QLabel, QLineEdit, QListWidget, QMainWindow, QMenu, QPinchGesture, QPushButton, QRadioButton, QScrollArea, QSizePolicy,
-                             QSpacerItem, QStackedWidget, QStyle, QStyleOptionViewItem, QToolBar, QTreeView, QVBoxLayout, QWidget)
-from PyQt6.QtCore import QByteArray, QEvent, QFileSystemWatcher, QLine, QModelIndex, QObject, QPoint, QProcess, QSize, QTimer, pyqtSignal, Qt
+from PyQt6.QtWidgets import (QLineEdit, QListWidget, QVBoxLayout, QWidget)
+from PyQt6.QtCore import QByteArray, QPoint, QProcess, Qt
 
 from .style import SEARCH_CSS
-from ..services import NotesRepository
-from ..config import CONFIG
-
 
 
 class Container(QWidget):

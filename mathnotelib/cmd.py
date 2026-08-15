@@ -1,5 +1,4 @@
 from pathlib import Path
-import subprocess
 import logging
 from typing import Protocol
 import argparse
@@ -7,16 +6,14 @@ import sys
 
 from PyQt6.QtWidgets import QApplication
 
-from mathnotelib.services.flashcard_compiler import FlashcardCache
 
 from .utils import load_json, dump_json
 from .config import Config
 from .models import Course
 from ._enums import FileType
 from .services import NotesRepository, CourseRepository
-from .noteviewer import MainWindow
+from .ui import MainWindow
 
-from .flashcard import FlashcardMainWindow, FlashcardController, FlashcardSession, FlashcardCompiler
 from mathnotelib import config
 
 
@@ -43,68 +40,6 @@ class NoteViewer(Command):
         sys.exit(app.exec())
 
 
-class FlashcardCommand(Command):
-    """ Command for generating flashcards from latex files """
-    # should these really be class level?
-
-    def __init__(self, project_config: Config):
-        self.config = project_config
-        self._has_dependecies()
-        self._app: QApplication = QApplication(sys.argv)
-        self._window = FlashcardMainWindow()
-        self._cache = FlashcardCache(self.config.cache_dir()) #Fix
-        self._compiler = FlashcardCompiler(self._cache)
-        self._session = FlashcardSession(self._compiler)
-        self._controller = FlashcardController(self._window, self._session, self.config)
-        self._compiler = None
-
-    #TODO: Delete, we dont cover cases properly
-    @staticmethod
-    def _has_dependecies() -> None:
-        # TODO
-        # ensure dependencies exist for typst or latex but not necessairly both
-        dependencies = [
-                (None, "latexmk"),
-                (None, "tlmgr"),
-                ("tlmgr","preview"),
-                ]
-        failed = set()
-        for package_manager, dependency in dependencies:
-            try:
-                if package_manager is None:
-                    subprocess.run([dependency, "--version"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                else:
-                    subprocess.run([package_manager, dependency, "--version"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            except FileNotFoundError:
-                failed.add(dependency)
-                print(f"Missing dependency: {dependency}")
-        if len(failed) != 0:
-            exit()
-
-
-    def cmd(self, namespace: argparse.Namespace):
-        if (file := self.build_file(namespace)) is not None:
-            self._controller.create_flashcards_from_file(file)
-#            controller.create_flashcards_from_file(file, 'All')
-        self._window.setCloseCallback(self._controller.close)
-        self._controller.run()
-#        if not flashcard_model.compile_thread.stopped(): # Cant remember if I actually need this
-#            flashcard_model.compile_thread.wait_for_stop()
-        sys.exit(self._app.exec())
-
-    def build_file(self, namespace: argparse.Namespace) -> Path | None:
-        if namespace.file is None:
-            return None
-        file = Path(namespace.file[0])
-        if file.is_file():
-            return file
-
-        if namespace.dir is not None:
-            full_path = Path(namespace.dir[0]) / file
-            if full_path.is_file():
-                return full_path
-
-        return None
 
 class CourseCommand(Command):
     """ Class command """

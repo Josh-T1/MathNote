@@ -3,7 +3,6 @@ from PyQt6.QtWidgets import (QCheckBox, QComboBox, QDateEdit, QDialog, QDialogBu
 
 from .._enums import FileType
 
-
 def show_error_dialog(window: QWidget, msg: str):
     dialog = QMessageBox(window)
     dialog.setIcon(QMessageBox.Icon.Critical)
@@ -101,6 +100,7 @@ class NewNoteDialog(QDialog):
     def get_data(self):
         ftype = FileType.LaTeX if self.ftype_combo.currentText() == "LaTeX" else FileType.Typst
         return self.name.text(), ftype
+
 
 class DaysOfWeekSelector(QWidget):
     def __init__(self):

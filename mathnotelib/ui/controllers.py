@@ -6,35 +6,84 @@ from typing import Callable, Literal
 
 from PyQt6.QtCore import QFileSystemWatcher, QModelIndex, QObject, QProcess, QTimer, Qt
 from PyQt6.QtGui import QStandardItem
-from PyQt6.QtWidgets import QMainWindow
+from PyQt6.QtWidgets import QHBoxLayout, QMainWindow, QStackedWidget, QWidget
 
-from mathnotelib.models.source_file import Assignment, Lecture
-from mathnotelib.services.compiler import compile_typst
 
 from . import constants
 from .navbar import CourseNavBar, NavBarContainer, NotesNavBar
 from .dialog import NewCourseDialog, NewNoteDialog, NameDialog, show_error_dialog
-from .viewer import TabWidget, TabbedSvgViewer, ZMultiPageViewer
-from .ui_components import confirm_delete
+from .svg_viewer import TabWidget, TabbedSvgViewer, ZMultiPageViewer
 from ..models import Category, Course, SourceFile, Note
 from ..utils import rendered_sorted_key
 from ..services import CompileOptions, compile_source, NotesRepository, CourseRepository, NotesRepository
 from ..config import CONFIG
 from .._enums import OutputFormat
-from ..exceptions import CompilationError, NoItemSelected, NoteExistsError, CategoryExistsError, InvalidNameError, NoteExistsError, CourseExistsError
+from ..exceptions import (CompilationError, LaTeXCompilationError, NoItemSelected, NoteExistsError, CategoryExistsError,
+                          InvalidNameError, NoteExistsError, CourseExistsError, TypstCompilationError)
 
 
 # TODO: add input cleaning. Replace spaces with "_", remove ".ext" if they exist
 
+
 def with_error_dialog(func):
-    def wrapper(self: NoteController | CourseController, *args, **kwargs):
+    def wrapper(self: NoteController | CourseController | FlashcardController, *args, **kwargs):
         try:
             return func(self, *args, **kwargs)
         except (NoteExistsError, CourseExistsError, InvalidNameError, CategoryExistsError) as e:
             show_error_dialog(self.window, str(e))
+        except (LaTeXCompilationError, TypstCompilationError) as e:
+            show_error_dialog(self.window, str(e))
         except Exception as e:
             show_error_dialog(self.window, f"Unexpected error: {e}")
     return wrapper
+
+
+
+class ViewContainer(QWidget):
+
+    def __init__(self, notes_viewer: TabbedSvgViewer, flashcard_viewer: ZMultiPageViewer):
+        super().__init__()
+        self.notes_viewer = notes_viewer
+        self.flashcard_viewer = flashcard_viewer
+        self.view_stack = QStackedWidget()
+        self.initUi()
+
+    def initUi(self):
+        self.main_layout = QHBoxLayout()
+        self.main_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.setLayout(self.main_layout)
+
+        self.view_stack.addWidget(self.notes_viewer)
+        self.view_stack.addWidget(self.flashcard_viewer)
+        self.view_stack.setCurrentWidget(self.notes_viewer)
+
+        self.main_layout.addWidget(self.view_stack)
+
+
+class ViewController(QObject):
+    def __init__(self, navbar_container: NavBarContainer, view_container: ViewContainer):
+        self.navbar_cont = navbar_container
+        self.window_cont = view_container
+        self.connect_handlers()
+
+    def connect_handlers(self):
+        self.navbar_cont.notes_btn.clicked.connect(lambda: self.set_notes_view())
+        self.navbar_cont.courses_btn.clicked.connect(lambda: self.set_course_notes_view())
+        self.navbar_cont.flashcards_btn.clicked.connect(lambda: self.set_flashcard_view())
+
+    def set_flashcard_view(self):
+        self.navbar_cont.stack.setCurrentWidget(self.navbar_cont.flashcard_navbar)
+        self.window_cont.view_stack.setCurrentWidget(self.window_cont.flashcard_viewer)
+
+    def set_notes_view(self):
+        self.navbar_cont.stack.setCurrentWidget(self.navbar_cont.notes_navbar)
+        self.window_cont.view_stack.setCurrentWidget(self.window_cont.notes_viewer)
+
+    def set_course_notes_view(self):
+        self.navbar_cont.stack.setCurrentWidget(self.navbar_cont.courses_navbar)
+        self.window_cont.view_stack.setCurrentWidget(self.window_cont.notes_viewer)
+
 
 
 class NoteController(QObject):
@@ -527,3 +576,194 @@ class LiveTypstController:
         paths = path if isinstance(path, list) else [path]
         if all(p.exists() for p in paths):
             self.viewer.load_current_viewer([str(p) for p in paths], tmpdir=tmpdir, source=source, preserve_state=True)
+
+
+class FlashcardController:
+    def __init__(self, view: FlashcardMainWindow, session: FlashcardSession, config: Config) -> None:
+        self.session = session
+        self.window = view
+        self.course_repo = CourseRepository(config)
+        self.flashcards = []
+        self.current_data = {"Question": "", "Answer": "", "Proof": None}
+        self._setBindings()
+        self._populate_view()
+
+    def _setBindings(self):
+        self.window.bind_next_flashcard_button(self.show_next_flashcard)
+        self.window.bind_prev_flashcard_button(self.show_prev_flashcard)
+        self.window.bind_show_answer_button(lambda: self.display_card("Answer"))
+        self.window.bind_show_question_button(lambda: self.display_card("Question"))
+        self.window.bind_create_flashcards_button(self.create_flashcards)
+        self.window.bind_flashcard_info_button(self.show_flashcard_info)
+        self.window.bind_show_proof_button(lambda: self.display_card("Proof"))
+        self.window.bind_launch_iterm_button(self.launch_iterm)
+        self.window.course_config.update_filters.connect(lambda: self.handle_update_filters())
+
+    def handle_update_filters(self):
+        text = self.window.course_combo().currentText()
+        course = self.course_repo.get_course(text)
+        if course is None:
+            raise ValueError("Course directory not found")
+        day_per_week = max(len(course.days()), 2) # defualt to 2 if not set in course_info.json
+        num_weeks = math.ceil(len(course.lectures) / day_per_week)
+
+        self.window.list_model().clear()
+        all_box = QStandardItem('All')
+        all_box.setCheckable(True)
+        self.window.list_model().appendRow(all_box)
+        for i in range(1, num_weeks+1):
+            list_item = QStandardItem(f"Week {i}")
+            list_item.setCheckable(True)
+            self.window.list_model().appendRow(list_item)
+
+    def _populate_view(self):
+        """ Use model data to populate view """
+        courses = self.course_repo.courses().keys()
+        self.window.course_combo().addItems(courses)
+
+    def run(self):
+        logger.debug(f"Calling {self.run}")
+        self.session.start()
+        self.window.show()
+
+    def close(self):
+        logger.info(f"Closing app")
+        self.session.stop()
+
+    @with_error_dialog
+    def display_card(self, section_type: Literal['Answer', 'Question', 'Proof']):
+        card = self.session.current_card
+        if not card:
+            raise EndofFlashcards("End of flashcards has been reached")
+        self.window.display_pdf(self.current_data[section_type][0], self.current_data[section_type][1])
+
+    @with_error_dialog
+    def show_next_flashcard(self, checked: bool = False):
+        logger.debug(f"Calling {self.show_next_flashcard}")
+        card = self.session.next_flashcard()
+        self.update_state(card)
+
+
+    @with_error_dialog
+    def show_prev_flashcard(self, checked: bool = False):
+        logger.debug(f"Calling {self.show_prev_flashcard}")
+        card = self.session.prev_flashcard()
+        self.update_state(card)
+
+
+    # TODO fix pdf_path: None | Path -> Path
+    @with_error_dialog
+    def update_state(self, card: Flashcard):
+        # Last condition is redundant but tmp fix for type hinting
+
+        if card.proof_section is not None and card.main_section.title_pdf is not None and card.main_section.title is not None:
+            self.window.show_proof_button().setHidden(False)
+            self.window.flashcard_button_bar.show_answer_button.setText("Answer")
+            self.current_data["Question"] = (card.main_section.title_pdf, card.main_section.title)
+            self.current_data["Answer"] = (card.main_section.pdf_path, card.main_section.content)
+            self.current_data["Proof"] = (card.proof_section.pdf_path, card.main_section.content)
+            self.window.display_pdf(card.main_section.title_pdf, card.main_section.title)
+
+        elif card.proof_section is not None and card.main_section.title is None and card.main_section.pdf_path is not None:
+            self.window.show_proof_button().setHidden(True)
+            self.window.flashcard_button_bar.show_answer_button.setText("Proof")
+            self.current_data["Question"] = (card.main_section.pdf_path, card.main_section.content)
+            self.current_data["Answer"] = (card.proof_section.pdf_path, card.main_section.content)
+            self.current_data["Proof"] = None
+            self.window.display_pdf(card.main_section.pdf_path, card.main_section.content)
+
+        else:
+            self.window.show_proof_button().setHidden(True)
+            self.window.flashcard_button_bar.show_answer_button.setText("Answer")
+            t = card.main_section.title if card.main_section.title is not None else TrackedText("")
+            self.current_data["Question"] = (card.main_section.title_pdf, card.main_section.title)
+            self.current_data["Answer"] = (card.main_section.pdf_path, card.main_section.content)
+            self.current_data["Proof"] = ("", "")
+            self.window.display_pdf(card.main_section.title_pdf, t)
+
+        self.window.flashcard_type_label().setText(f"Section: {card.main_section.name.lower()}")
+
+
+    def show_flashcard_info(self):
+        info = self._get_pdf_source()
+        if info is None:
+            message = "No flashcards have been loaded"
+            return
+        else:
+            message = f"Source: {info}"
+        self.window.flashcard_info_button().set_message(message)
+
+    # Why do we default to all sections?
+    def create_flashcards_from_file(self, path: Path, shuffle=False):
+        section_names = [member for member in CONFIG.section_names.keys()]
+        logger.info(f"Creating flashcards from {path}")
+        load_thread = threading.Thread(target=self.session.load_flashcards, args=(section_names, [path], shuffle))
+        load_thread.start()
+
+    def create_flashcards(self):
+        course_name, section_names, weeks, random = self.get_flashcard_pipeline_config()
+        course = self.course_repo.get_course(course_name)
+
+        # catch user errors
+        if not section_names or not course:
+            self.window.set_error_message(f"Invalid selection course={course}, section names={section_names}. You must select a course name and at least one section")
+            logger.debug(f"Invalid selection (course={course}, section_names={section_names}) for generating flashcards")
+            return
+        # fix
+#        paths = [lecture.path for lecture in course.lectures if course.get_week(lecture) in weeks]
+        paths = [lecture.path for lecture in course.lectures]
+        logger.info(f"Creating flashcards from {len(paths)} paths")
+        load_thread = threading.Thread(target=self.session.load_flashcards, args=(section_names, paths, random))
+        load_thread.start()
+
+    def get_flashcard_pipeline_config(self) -> tuple[str, dict[str, dict[str, str]], set[int], bool]:
+        """ Retreives user config from widgets. We need to do error checking... what if no boxes are checked """
+        random = self.window.random_checkbox().isChecked()
+        course_name = self.window.course_combo().currentText()
+        checked_sections = self._get_checked_items_from_listView(self.window.section_list())
+        weeks_items = self._get_checked_items_from_listView(self.window.filter_by_week_list())
+        weeks_text = [week.text() for week in weeks_items]
+        # Clean filter by weeks params
+        if "ALL" in [week.upper() for week in weeks_text] or not weeks_text:
+            weeks = {i for i in range(1, 13+1)} # TODO: verify weeks
+        else:
+            weeks = {int(week.split(" ")[-1]) for week in weeks_text}
+
+        # Clean checked section params
+        section_names_pretty = [item.text().upper() for item in checked_sections]
+        if "ALL" in [section.upper() for section in section_names_pretty]:
+            section_names = CONFIG.section_names
+        else:
+            section_names = {k: d for (k, d) in CONFIG.section_names.items() if k in section_names_pretty} # TODO: what is pretty
+#            section_names = [getattr(SectionNames, section_pretty).value for section_pretty in section_names_pretty if hasattr(SectionNames, section_pretty)]
+        return course_name, section_names, weeks, random
+
+    def _get_checked_items_from_listView(self, listview: QListView):
+        """ Given a QListView object, all items that are in the 'checked' state are returned """
+        checked_items = []
+        model: QStandardItemModel | None = listview.model() #type: ignore
+        if model:
+            for i in range(model.rowCount()):
+                item = model.item(i)
+                if item and item.checkState() == Qt.CheckState.Checked: #type: ignore
+                    checked_items.append(item)
+        return checked_items
+
+    # TODO
+    def _get_pdf_source(self) -> Path | None:
+        card = self.session.current_card
+        if card is None:
+            return
+        source = card.main_section.content.source
+        return source
+
+    def open_main(self):
+        course_name, *_ = self.get_flashcard_pipeline_config()
+        course = self.course_repo.get_course(course_name)
+        if course is not None:
+            open_pdf(course.main_file)
+
+    def launch_iterm(self):
+        source = self._get_pdf_source()
+        if source is not None:
+            open_file_with_editor(str(source))

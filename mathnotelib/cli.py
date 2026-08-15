@@ -5,7 +5,7 @@ import logging
 import logging.config
 from pathlib import Path
 
-from .cmd import CourseCommand, FlashcardCommand, NoteCommand, NoteViewer
+from .cmd import CourseCommand, NoteCommand, NoteViewer
 from .config import CONFIG
 
 """
@@ -156,7 +156,6 @@ args = global_parser.parse_args()
 
 command_mapping = {
         "course": CourseCommand,
-        "flashcard": FlashcardCommand,
         "note": NoteCommand,
         "view": NoteViewer
         }
