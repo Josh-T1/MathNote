@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from enum import Enum, auto
 from pathlib import Path
 from typing import Generic, Iterator, TypeVar
 
@@ -6,24 +7,39 @@ from .source_file import TrackedText, FileType
 from ..exceptions import FlashcardNotFoundException
 
 
+class SectionRole(Enum):
+    QUESTION = auto()
+    ANSWER = auto()
+    PROOF = auto()
+
 @dataclass
 class Section:
-    name: str # TODO make Enum
+    role: SectionRole
     content: TrackedText
     pdf_path: Path | None = None
-    title: TrackedText | None = None
-    title_pdf: Path | None = None
+#    title: TrackedText | None = None
+#    title_pdf: Path | None = None
 
 
 
 @dataclass
 class Flashcard:
-    main_section: Section
-    proof_section: Section | None = None
+    sections: dict[SectionRole, Section]
     seen: bool = False
 
+    def __post_init__(self):
+        if SectionRole.QUESTION not in self.sections:
+            raise ValueError("Flashcard requires QUESTION section")
+
+    @property
+    def question(self) -> Section:
+        return self.sections[SectionRole.QUESTION]
+
+    def answer(self) -> Section:
+        return self.sections[SectionRole.ANSWER]
+
     def filetype(self) -> FileType:
-        return self.main_section.content.filetype()
+        return self.question.content.filetype()
 
 
 class Node:

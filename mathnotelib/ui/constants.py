@@ -18,3 +18,12 @@ LOADED_ROLE = Qt.ItemDataRole.UserRole + 3
 COURSE_CONTAINER_ROLE = Qt.ItemDataRole.UserRole + 4
 COURSE_DIR = Qt.ItemDataRole.UserRole + 5
 EMPTY = Qt.ItemDataRole.UserRole + 6 # TODO delete?
+
+
+
+
+#MAIN_WINDOW_CSS = """
+#QMainWindow {
+#        background-color: #2E2E2E;
+#        }
+#"""

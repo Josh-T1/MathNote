@@ -1,10 +1,13 @@
 from typing import Iterable, Optional
+import json
 
 from PyQt6 import QtCore
 from PyQt6.QtGui import QIcon, QStandardItem, QStandardItemModel
 from PyQt6.QtWidgets import (QAbstractItemView, QFrame, QHBoxLayout, QLabel, QMenu, QMessageBox, QPushButton, QSizePolicy,
                              QSpacerItem, QTreeView, QVBoxLayout, QWidget)
 from PyQt6.QtCore import  QModelIndex, QPoint, pyqtBoundSignal, pyqtSignal, Qt
+
+from mathnotelib.models.courses import Course
 
 from .style import ICON_CSS, TREE_VIEW_CSS
 from . import constants
@@ -322,7 +325,7 @@ class StandardItemModel(QStandardItemModel):
             return True
         return super().hasChildren(parent)
 
-# TODO: delete
+# TODO: Move to dialog, figure out how to remove, using in controllers
 def confirm_delete(window: QWidget, item: SourceFile | Course | Category) -> bool:
     """
     Show a confirmation dialog before deleting.

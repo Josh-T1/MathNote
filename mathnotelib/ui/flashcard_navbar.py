@@ -13,42 +13,9 @@ from ..exceptions import LaTeXCompilationError
 from ..config import CONFIG
 from ..models import TrackedText
 from .._enums import FileType
+from .style import BUTTON_CSS, TAB_BTN_EMPTY_CSS
 
-BUTTON_CSS = """
-QPushButton {
-    background: #555;
-    color: #ddd;
-    border: none;
-    border-radius: 4px;
-    font-size: 13px;
-    padding: 4px 10px;
-}
-QPushButton:hover {
-    background: #666;
-    border-radius: 4px;
-}
-QPushButton:pressed {
-    background: #777;
-    border-radius: 4px;
-}
-"""
 
-TAB_BTN_EMPTY_CSS = """
-QPushButton {
-    border: none;
-    background: transparent;
-    border-radius: 4px;
-}
-QPushButton:hover {
-    background: transparent;
-    border-radius: 4px;
-}
-
-QPushButton:pressed {
-    background: transparent;
-    border-radius: 4px;
-}
-"""
 
 class FlashcardNavBar(QWidget):
 
@@ -62,6 +29,7 @@ class FlashcardNavBar(QWidget):
         main_layout.setSpacing(4)
         self.setLayout(main_layout)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.setContentsMargins(0, 0, 0, 0)
         #Init widgets
         self.button_layout = QHBoxLayout()
         self.button_layout.setContentsMargins(0, 0, 0, 0)
@@ -112,7 +80,7 @@ class FlashcardFromDeckConfigWidget(QWidget):
 
     def initUi(self):
         self.setContentsMargins(0, 0, 0, 0)
-        self.setFixedWidth(150)
+#        self.setFixedWidth(150)
 
         self.config_layout = QVBoxLayout()
         self.config_layout.setContentsMargins(0, 0, 0, 0)
@@ -138,6 +106,7 @@ class FlashcardFromDeckConfigWidget(QWidget):
         self.config_layout.addWidget(self.section_list)
         self.config_layout.addStretch()
 
+
 class FlashcardFromCourseConfigWidget(QWidget):
     update_filters = pyqtSignal()
 
@@ -148,7 +117,7 @@ class FlashcardFromCourseConfigWidget(QWidget):
 
     def initUi(self):
         self.setContentsMargins(0, 0, 0, 0)
-        self.setFixedWidth(150)
+#        self.setFixedWidth(150)
 
 #        self.setObjectName("TabButton")
 #        self.setStyleSheet("#TabButton { border: 1px solid #555; }")
@@ -187,7 +156,6 @@ class FlashcardFromCourseConfigWidget(QWidget):
         self.course_combo_label.setText("Select Course")
         self.filter_by_week_list_label.setText("Filter by week")
         self.filter_by_week_list.setModel(self.filter_by_week_list_model)
-        self.filter_by_week_list.setMaximumWidth(125)
         self.filter_by_week_list.setMaximumHeight(150)
 
         self.course_combo.currentIndexChanged.connect(lambda: self.update_filters.emit())
@@ -197,7 +165,6 @@ class FlashcardFromCourseConfigWidget(QWidget):
 
 
 
-        self.course_combo.setMaximumWidth(150)
 
 
         self.course_combo_label.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
@@ -224,35 +191,7 @@ class FlashcardFromCourseConfigWidget(QWidget):
         self.config_layout.addWidget(self.random_checkbox)
 
 
-class InfoButton(QWidget):
-    clicked = pyqtSignal()
 
-    def __init__(self, diameter=16):
-        super().__init__()
-        self.info_button_layout = QVBoxLayout()
-        self.info_button_layout.setContentsMargins(0, 0, 0, 0)
-        self.info_button_layout.setSpacing(0)
-        self.diameter = diameter
-        self.radius = self.diameter // 2
-        self.initUI()
-        self.setLayout(self.info_button_layout)
-
-    def initUI(self):
-        self.info_button = QPushButton("?")
-
-        self.info_button.setFixedSize(self.diameter, self.diameter)
-        self.info_button.setStyleSheet(f"border-radius: {self.radius}px; background-color: grey; font-weight: bold;")
-        self.info_button.clicked.connect(self.clicked.emit)
-
-        self.info_button_layout.addWidget(self.info_button)
-
-    def set_message(self, msg: str):
-        msg_box = QMessageBox(self)
-        msg_box.setText(msg)
-        msg_box.exec()
-
-    def connect(self, slot):
-        self.clicked.connect(slot)
 
 class TabButton(QWidget):
 
@@ -273,7 +212,7 @@ class TabButton(QWidget):
 
         self.btn = QPushButton(self.label)
         self.btn.setFlat(True)
-        self.btn.setFixedWidth(80)
+#        self.btn.setFixedWidth(80)
         self.btn.setFlat(True)
         self.btn.setFixedHeight(29)
         self.btn.setStyleSheet(TAB_BTN_EMPTY_CSS)
@@ -291,7 +230,7 @@ class SectionListWidget(QWidget):
 
     def initUi(self):
         self.setContentsMargins(0, 0, 0, 0)
-        self.setFixedWidth(150)
+#        self.setFixedWidth(150)
 
         main_layout = QVBoxLayout()
         main_layout.setContentsMargins(0, 0, 0, 0)
@@ -316,7 +255,6 @@ class SectionListWidget(QWidget):
             self.section_list_model.appendRow(list_item)
         self.section_list.setModel(self.section_list_model)
 
-        self.section_list.setMaximumWidth(125)
         self.section_list.setMaximumHeight(150)
         self.section_list.setContentsMargins(0, 8, 0, 12)
         self.section_list.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)

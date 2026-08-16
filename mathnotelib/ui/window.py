@@ -4,18 +4,18 @@ from PyQt6.QtWidgets import (QApplication, QFrame, QGestureEvent, QGraphicsScene
 from PyQt6.QtCore import QEvent, QFileSystemWatcher, QModelIndex, QObject, QProcess, QTimer, pyqtSignal, Qt
 from PyQt6.QtSvgWidgets import QGraphicsSvgItem, QSvgWidget
 
+from mathnotelib.ui.flashcard_viewer import FlashcardView
+
 
 from .navbar import CollapsedNavBar, CourseNavBar, NavBarContainer, NotesNavBar, SettingsNavBar
-from .builder_widget import DocumentBuilder
-from .svg_viewer import TabbedSvgViewer, ZMultiPageViewer
+from .svg_viewer import TabbedSvgViewer
 from .flashcard_navbar import FlashcardNavBar
 from .style import MAIN_WINDOW_CSS
-from .controllers import LiveTypstController, NoteController, CourseController, ViewContainer, ViewController
+from .controllers import FlashcardController, LiveTypstController, NoteController, CourseController, ViewContainer, ViewController
 from .search import SearchWidget
 from ..config import CONFIG
-from .._enums import FileType
 
-from .constants import VIEWER_HEIGHT, VIEWER_WIDTH
+from .constants import VIEWER_WIDTH
 from mathnotelib.ui import constants
 
 class EventFilter(QObject):
@@ -67,7 +67,7 @@ class MainWindow(QMainWindow):
 
         # Init widgets
         self.notes_view = TabbedSvgViewer()
-        self.flashcard_view = ZMultiPageViewer()
+        self.flashcard_view = FlashcardView()
         self.flashcard_view.setMinimumSize(constants.VIEWER_WIDTH, constants.VIEWER_HEIGHT)
         self.view_container = ViewContainer(self.notes_view, self.flashcard_view)
 
@@ -81,6 +81,7 @@ class MainWindow(QMainWindow):
         self.notes_controller = NoteController(self, notes_navbar, self.notes_view)
         self.coures_controller = CourseController(self, courses_navbar, self.notes_view)
         self.preview_controller = LiveTypstController(self, self.notes_view)
+        self.flashcard_controller = FlashcardController(self, flashcards_navbar, self.flashcard_view)
 
         self.navbar_cont = NavBarContainer(notes_navbar, courses_navbar, flashcards_navbar, settings)
 
@@ -91,7 +92,6 @@ class MainWindow(QMainWindow):
         self.installEventFilter(self.filter)
         # Configure
         self.setStyleSheet(MAIN_WINDOW_CSS)
-        self.notes_view.setMinimumSize(VIEWER_WIDTH, VIEWER_HEIGHT)
         self.notes_view.addTab(focus=True)
         # TODO: I am sure there is a better way
         self.minimal_nav_bar.connect_toggle_button(self._toggle_nav_callback)

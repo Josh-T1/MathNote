@@ -142,3 +142,39 @@ QLineEdit {
     border-radius: 4px;
 }
 """
+
+_TAB_BTN_EMPTY_CSS = """
+QPushButton {
+    border: none;
+    background: transparent;
+    border-radius: 4px;
+}
+QPushButton:hover {
+    background: transparent;
+    border-radius: 4px;
+}
+
+QPushButton:pressed {
+    background: transparent;
+    border-radius: 4px;
+}
+"""
+
+BUTTON_CSS = """
+QPushButton {
+    background: #555;
+    color: #ddd;
+    border: none;
+    border-radius: 4px;
+    font-size: 13px;
+    padding: 4px 10px;
+}
+QPushButton:hover {
+    background: #666;
+    border-radius: 4px;
+}
+QPushButton:pressed {
+    background: #777;
+    border-radius: 4px;
+}
+"""

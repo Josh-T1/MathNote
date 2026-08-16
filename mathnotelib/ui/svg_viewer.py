@@ -6,12 +6,13 @@ from functools import partial
 
 from PyQt6.QtGui import QBrush, QColor, QIcon, QMouseEvent, QPainter, QTransform, QWheelEvent
 from PyQt6.QtWidgets import (QWIDGETSIZE_MAX, QApplication, QFrame, QGestureEvent, QGraphicsEllipseItem, QGraphicsScene, QGraphicsView, QHBoxLayout,
-                             QLabel, QLayout, QLineEdit, QListWidget, QMainWindow, QPinchGesture, QPushButton, QSizePolicy, QStackedWidget, QVBoxLayout, QWidget)
+                             QLabel, QLayout, QLineEdit, QListWidget, QMainWindow, QMessageBox, QPinchGesture, QPushButton, QSizePolicy, QStackedWidget, QVBoxLayout, QWidget)
 from PyQt6.QtCore import QEvent, QFileSystemWatcher, QModelIndex, QProcess, QSize, QTimer, pyqtSignal, Qt
 from PyQt6.QtSvgWidgets import QGraphicsSvgItem, QSvgWidget
 from PyQt6 import QtCore
 
 from mathnotelib.models.source_file import Assignment, Lecture, SourceFile
+from mathnotelib.ui.flashcard_navbar import BUTTON_CSS
 
 from .style import CLOSE_TAB_BTN_CSS, ICON_CSS, PAGE_INPUT_CSS, TAB_BTN_CSS, TAB_BTN_EMPTY_CSS, TAB_WIDGET_CSS
 from . import constants
@@ -43,6 +44,8 @@ class ZMultiPageViewer(QGraphicsView):
         self._hide_timer.timeout.connect(self._hide_scrollbars)
         self._restore_data = None
         self._pending_items: list = []
+
+        # Wtf is this doing here?
         self.tmpdir: tempfile.TemporaryDirectory | None = None
 
     def _restore(self):
@@ -117,6 +120,7 @@ class ZMultiPageViewer(QGraphicsView):
         self.tmpdir = tmpdir
         paths = svg_paths if isinstance(svg_paths, list) else [svg_paths]
         for path in paths:
+            self._scene.items().clear() # TODO Change
             self.append_item(path)
         if preserve_state:
 #            QTimer.singleShot(10, lambda: self._restore())
@@ -415,7 +419,6 @@ class ToolTabBar(QWidget):
             tab = item.widget()
             if not isinstance(tab, TabWidget):
                 return
-
             if i == idx:
                 tab.set_focus(focus=True)
             else:
@@ -426,8 +429,8 @@ class ToolTabBar(QWidget):
 class TabbedSvgViewer(QWidget):
     tab_changed = pyqtSignal()
 
-    def __init__(self, parent: QWidget | None=None):
-        super().__init__(parent)
+    def __init__(self):
+        super().__init__()
         self.initUI()
         self.max_tabs = 7 #set this dynamically based on min window size and tab size
 
@@ -435,15 +438,17 @@ class TabbedSvgViewer(QWidget):
         # Layout
         self.main_layout = QVBoxLayout()
         self.main_layout.setSpacing(0)
+        self.main_layout.setContentsMargins(12, 12, 12, 12)
         self.setLayout(self.main_layout)
         self.setContentsMargins(0, 0, 0, 0)
+
         # Create widgets
         self.tab_bar = ToolTabBar()
         self.stack = QStackedWidget()
         # Configure widgets
+        self.setMinimumSize(constants.VIEWER_WIDTH, constants.VIEWER_HEIGHT)
         self.tab_bar.connect_tab_btn(lambda: self.addTab(focus=True))
         self.stack.setStyleSheet("background-color: white;")
-        self.stack.setMinimumSize(constants.VIEWER_WIDTH, constants.VIEWER_HEIGHT)
         self.stack.setContentsMargins(0, 0, 0, 0)
         # Add widgets to layout
         self.main_layout.addWidget(self.tab_bar)
@@ -538,9 +543,3 @@ class TabbedSvgViewer(QWidget):
 
         except Exception as e:
             pass
-
-
-
-
-
-
