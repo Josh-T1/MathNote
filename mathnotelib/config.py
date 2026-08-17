@@ -59,34 +59,34 @@ class Config:
         self.typst_packages: list[str] = []
         self.latex_packages: list[str] = []
         # tmp - add to config
-        self.section_names: dict[str, dict[str, str]] = {
+        self.section_names: dict[str, dict[FileType, str]] = {
                 "DEFINITION": {
-                    FileType.LaTeX.value: "defin",
-                    FileType.Typst.value: "definition"
+                    FileType.LaTeX: "defin",
+                    FileType.Typst: "definition"
                     },
                 "THEOREM": {
-                    FileType.LaTeX.value: "theo",
-                    FileType.Typst.value: "theorem"
+                    FileType.LaTeX: "theo",
+                    FileType.Typst: "theorem"
                     },
                 "PROOF": {
-                    FileType.LaTeX.value: "pf",
-                    FileType.Typst.value: "proof"
+                    FileType.LaTeX: "pf",
+                    FileType.Typst: "proof"
                     },
                 "COROLLARY": {
-                    FileType.LaTeX.value: "corollary",
-                    FileType.Typst.value: "corollary"
+                    FileType.LaTeX: "corollary",
+                    FileType.Typst: "corollary"
                     },
                 "LEMMA": {
-                    FileType.LaTeX.value: "lemma",
-                    FileType.Typst.value: "proposition"
+                    FileType.LaTeX: "lemma",
+                    FileType.Typst: "proposition"
                     },
                 "PROPOSITION": {
-                    FileType.LaTeX.value: "proposition",
-                    FileType.Typst.value: "proposition"
+                    FileType.LaTeX: "proposition",
+                    FileType.Typst: "proposition"
                     },
                 "UNAMED": {
-                    FileType.LaTeX.value: "unamed",
-                    FileType.Typst.value: "unamed"
+                    FileType.LaTeX: "unamed",
+                    FileType.Typst: "unamed"
                     },
                 }
 

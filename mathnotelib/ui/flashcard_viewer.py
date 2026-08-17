@@ -1,19 +1,18 @@
 import logging
 from pathlib import Path
 
-from PyQt6.QtWidgets import (QCheckBox, QComboBox, QHBoxLayout, QLabel, QListView, QMessageBox, QSizePolicy, QSpacerItem, QStackedWidget, QVBoxLayout,
-                             QWidget, QPushButton, QMainWindow, QSpacerItem, QSizePolicy, QScrollArea)
+from PyQt6.QtWidgets import (QHBoxLayout, QLabel, QMessageBox, QStackedWidget, QVBoxLayout,
+                             QWidget, QPushButton, QScrollArea)
 from PyQt6.QtPdfWidgets import QPdfView
 from PyQt6.QtPdf import QPdfDocument
-from PyQt6.QtCore import QSize, Qt, pyqtSignal
+from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtGui import QColor, QPalette
 
-from mathnotelib._enums import FileType
-from mathnotelib.ui import constants
-from mathnotelib.ui.flashcard_navbar import BUTTON_CSS, FlashcardNavBar
+from .style import BUTTON_CSS
+from ..models import Flashcard, FlashcardSideName
+from ..ui import constants
 
-from ..exceptions import LaTeXCompilationError
-from ..models import TrackedText
+
 
 
 logger = logging.getLogger("mathnote")
@@ -48,7 +47,7 @@ class PdfWindow(QWidget):
         # add widgets
         self.pdf_layout.addWidget(self.pdf_viewer)
 
-    def _load_pdf(self, pdf_path: Path, markdown: TrackedText) -> QPdfDocument.Error:
+    def _load_pdf(self, pdf_path: Path, force_zoom=False) -> QPdfDocument.Error:
         """ loads pdf into pdf_viewer and set viewer settings
         -- params --
         pdf_path: (str) absolute path to pdf
@@ -61,23 +60,23 @@ class PdfWindow(QWidget):
             self.document = pdf_document
             self.pdf_viewer.setDocument(pdf_document)
             # todo: latex does can not generate files with fixed width and auto height so we use this hack
-            if len(markdown) < 100 and markdown.filetype() == FileType.LaTeX:
+            if force_zoom:
                 self.pdf_viewer.setZoomMode(QPdfView.ZoomMode.Custom)
                 self.pdf_viewer.setZoomFactor(ZOOM_FACTOR)
             else:
                 self.pdf_viewer.setZoomMode(QPdfView.ZoomMode.FitToWidth)
         return load_status
 
-    def display_pdf(self, pdf_path: Path, markdown: TrackedText):
+    def display_pdf(self, pdf_path: Path, force_zoom=False):
         """
         -- params --
         pdf_path: absolute path to pdf
         return: load status
         """
-        load_status = self._load_pdf(pdf_path, markdown)
+        load_status = self._load_pdf(pdf_path, force_zoom=force_zoom)
         if load_status != QPdfDocument.Error.None_:
             self.document = None
-            raise LaTeXCompilationError(f"failed to compile card: {pdf_path}. load status: {load_status}")
+            raise ValueError(f"failed to display card with path: {pdf_path}\nload status: {load_status}")
 
 #
 #
@@ -118,11 +117,23 @@ class FlashcardView(QWidget):
         self.main_layout.addWidget(self.pdf_stack)
         self.main_layout.addWidget(self.btn_bar)
 
-    def display_pdf(self, path: Path, markdown: TrackedText):
-        self.pdf_window.display_pdf(path, markdown)
-#
-#
-#
+    def display_compiled_card(self, card: Flashcard):
+        question = card.sides[FlashcardSideName.QUESTION]
+        answer = card.sides[FlashcardSideName.ANSWER]
+        proof = card.sides.get(FlashcardSideName.PROOF)
+        if question.pdf_path is None:
+            raise ValueError(f"Flashcard missing pdf_file for {card.question.content}")
+        if answer.pdf_path is None:
+            raise ValueError(f"Flashcard missing pdf_file for {card.answer.content}")
+        self.pdf_window_1.display_pdf(question.pdf_path)
+        self.pdf_window_2.display_pdf(answer.pdf_path)
+
+        if proof is not None and proof.pdf_path is not None:
+            self.pdf_window_3.display_pdf(proof.pdf_path)
+            self.btn_bar.show_proof_button.show()
+        else:
+            self.btn_bar.show_proof_button.hide()
+        self.info_bar.flashcard_type.setText(f"Section: {card.section_name.lower()}")
 
 class HButtonBar(QWidget):
     def __init__(self):

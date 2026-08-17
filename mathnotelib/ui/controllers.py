@@ -7,30 +7,28 @@ import threading
 from typing import Callable, Literal
 import logging
 
-from PyQt6.QtCore import QFileSystemWatcher, QModelIndex, QObject, QProcess, QTimer, Qt
+from PyQt6.QtCore import QFileSystemWatcher, QModelIndex, QObject, QThread, QTimer, Qt
 from PyQt6.QtGui import QStandardItem
 from PyQt6.QtWidgets import QHBoxLayout, QListView, QMainWindow, QStackedWidget, QWidget
 
-from mathnotelib.models.flashcard import Section, SectionRole
-from mathnotelib.ui.file_navbar import confirm_delete
-from mathnotelib.ui.flashcard_navbar import FlashcardNavBar
-
+from mathnotelib.services.flashcard_session import FlashcardWorker
 
 from . import constants
+from .file_navbar import confirm_delete
+from .flashcard_navbar import FlashcardNavBar
 from .navbar import CourseNavBar, NavBarContainer, NotesNavBar
 from .dialog import NewCourseDialog, NewNoteDialog, NameDialog, show_error_dialog
-from .svg_viewer import TabWidget, TabbedSvgViewer, ZMultiPageViewer
+from .notes_viewer import TabWidget, TabbedSvgViewer
 from .flashcard_viewer import FlashcardView
-from ..models import Category, Course, SourceFile, Note, Flashcard, TrackedText
+from ..models import Category, Course, SourceFile, Note, Flashcard, TrackedText, FlashcardSideName
 from ..utils import rendered_sorted_key
 from ..services import (CompileOptions, compile_source, NotesRepository, CourseRepository,
-                        NotesRepository, FlashcardSession, FlashcardCache, FlashcardCompiler, open_pdf)
-from .navbar import FlashcardNavBar
+                        NotesRepository, FlashcardSession, FlashcardCache, FlashcardCompiler, open_pdf,
+                        FlashcardWorker, DataGenerator, FlashcardBuilderStage, CleanStage, DataGenerator, ProcessingPipeline)
 from ..config import CONFIG
-from .._enums import OutputFormat
+from .._enums import FileType, OutputFormat
 from ..exceptions import (CompilationError, EndofFlashcards, LaTeXCompilationError, NoItemSelected, NoteExistsError, CategoryExistsError,
                           InvalidNameError, NoteExistsError, CourseExistsError, TypstCompilationError)
-from mathnotelib import config
 
 logger = logging.getLogger("mathnote")
 
@@ -595,22 +593,24 @@ class FlashcardController:
     def __init__(self, window: QMainWindow, navbar: FlashcardNavBar, view: FlashcardView):
         self.window = window
         self.navbar = navbar
-#        self.course_config = self.window
-#        self.session = session
         self.view = view
 
         self.cache = FlashcardCache(CONFIG.cache_dir())
         self.compiler = FlashcardCompiler(self.cache)
-        self.session = FlashcardSession(self.compiler)
+        self.session = FlashcardSession()
+        self.cancel_worker = threading.Event()
+        self.worker = FlashcardWorker(self.compiler, self.cancel_worker)
 
         self.course_repo = CourseRepository(CONFIG)
 
-        self.flashcards = []
-        self.current_data = {"Question": "", "Answer": "", "Proof": None}
         self.set_handlers()
         self._populate_view()
 
     def set_handlers(self):
+        self.worker.finished.connect(lambda: self.session.terminate())
+        self.worker.card_compiled.connect(lambda card: self.session.add_card(card))
+
+
         self.view.btn_bar.next_flashcard_button.clicked.connect(lambda: self.show_next_flashcard())
         self.view.btn_bar.prev_flashcard_button.clicked.connect(lambda: self.show_prev_flashcard())
 
@@ -646,72 +646,24 @@ class FlashcardController:
         self.navbar.course_config.course_combo.addItems(courses)
 
     # TODO
-    def run(self):
-        logger.debug(f"Calling {self.run}")
-        self.session.start()
-        self.view.show() # TODO: Probabably delete
+    def shutdown(self):
+        if self.worker is None:
+            return
+        self.cancel_worker.set()
 
-    def close(self):
-        logger.info(f"Closing app")
-        self.session.stop()
-
-    @with_error_dialog
-    def display_card(self, section_type: Literal['Answer', 'Question', 'Proof']):
-        card = self.session.current_card
-        if not card:
-            raise EndofFlashcards("End of flashcards has been reached")
-#        self.window.display_pdf(self.current_data[section_type][0], self.current_data[section_type][1])
+    # TODO remove this and have display(card). Buttons are connected to stack
 
     @with_error_dialog
     def show_next_flashcard(self, checked: bool = False):
-        logger.debug(f"Calling {self.show_next_flashcard}")
-        card = self.session.next_flashcard()
-        self.update_state(card)
+        card = self.session.next()
+        self.view.display_compiled_card(card)
 
 
     @with_error_dialog
     def show_prev_flashcard(self, checked: bool = False):
         logger.debug(f"Calling {self.show_prev_flashcard}")
-        card = self.session.prev_flashcard()
-        self.update_state(card)
-
-    # TODO: svg not even pdf files
-    # TODO fix pdf_path: None | Path -> Path
-    @with_error_dialog
-    def update_state(self, card: Flashcard):
-        # Last condition is redundant but tmp fix for type hinting
-#        if any(card.main_section.title_pdf, card.main_section.pdf_path):
-#            raise Error("Flashcard section contents are null")
-
-        if card.proof_section is not None and card.main_section.title_pdf is not None and card.main_section.title is not None:
-            self.view.btn_bar.show_proof_button.setHidden(False)
-            self.view.btn_bar.show_answer_button.setText("Answer")
-            self.current_data["Question"] = (card.main_section.title_pdf, card.main_section.title)
-            self.current_data["Answer"] = (card.main_section.pdf_path, card.main_section.content)
-            self.current_data["Proof"] = (card.proof_section.pdf_path, card.main_section.content)
-            self.view.display_pdf(card.main_section.title_pdf, card.main_section.title)
-
-
-        elif card.proof_section is not None and card.main_section.title is None and card.main_section.pdf_path is not None:
-            self.view.btn_bar.show_proof_button.setHidden(True)
-            self.view.btn_bar.show_answer_button.setText("Proof")
-            self.current_data["Question"] = (card.main_section.pdf_path, card.main_section.content)
-            self.current_data["Answer"] = (card.proof_section.pdf_path, card.main_section.content)
-            self.current_data["Proof"] = None
-            self.view.display_pdf(card.main_section.pdf_path, card.main_section.content)
-
-        else:
-            self.view.btn_bar.show_proof_button.setHidden(True)
-            self.view.btn_bar.show_answer_button.setText("Answer")
-            t = card.main_section.title if card.main_section.title is not None else TrackedText("")
-            self.current_data["Question"] = (card.main_section.title_pdf, card.main_section.title)
-            self.current_data["Answer"] = (card.main_section.pdf_path, card.main_section.content)
-            self.current_data["Proof"] = ("", "")
-            self.view.display_pdf(card.main_section.title_pdf, t)
-
-
-        self.view.info_bar.flashcard_type.setText(f"Section: {card.main_section.name.lower()}")
-
+        card = self.session.prev()
+        self.view.display_compiled_card(card)
 
     # TODO:  delete?
     def show_flashcard_info(self):
@@ -721,7 +673,7 @@ class FlashcardController:
             self.view.info_bar.info_button.set_message(message)
             return
 
-        info = card.sections[SectionRole.QUESTION].content.source
+        info = card.sides[FlashcardSideName.QUESTION].content.source
         if info is None:
             message = "No flashcards have been loaded"
             return
@@ -729,20 +681,14 @@ class FlashcardController:
             message = f"Source: {info}"
         self.view.info_bar.info_button.set_message(message)
 
-    # Why do we default to all sections?
-    def create_flashcards_from_file(self, path: Path, shuffle=False):
-        section_names = [member for member in CONFIG.section_names.keys()]
-        logger.info(f"Creating flashcards from {path}")
-        load_thread = threading.Thread(target=self.session.load_flashcards, args=(section_names, [path], shuffle))
-        load_thread.start()
-
+    # TODO: allow for flashcards from deck
     def create_flashcards(self):
-        course_name, section_names, weeks, random = self.get_flashcard_pipeline_config()
+        course_name, section_names_dict, weeks, random = self.get_flashcard_pipeline_config()
         course = self.course_repo.get_course(course_name)
 
         # catch user errors
         # TODO: implement
-        if not section_names or not course:
+        if not section_names_dict or not course:
 #            self.set_error_message(f"Invalid selection course={course}, section names={section_names}. You must select a course name and at least one section")
             logger.debug(f"Invalid selection (course={course}, section_names={section_names}) for generating flashcards")
             return
@@ -750,10 +696,24 @@ class FlashcardController:
 #        paths = [lecture.path for lecture in course.lectures if course.get_week(lecture) in weeks]
         paths = [lecture.path for lecture in course.lectures]
         logger.info(f"Creating flashcards from {len(paths)} paths")
-        load_thread = threading.Thread(target=self.session.load_flashcards, args=(section_names, paths, random))
-        load_thread.start()
 
-    def get_flashcard_pipeline_config(self) -> tuple[str, dict[str, dict[str, str]], set[int], bool]:
+        data_iterable = DataGenerator(paths)
+        clean_data_stage = CleanStage(CONFIG.macros())
+        build_stage = FlashcardBuilderStage(section_names_dict)
+        build_stage.add_subsection_finder("PROOF", ["THEOREM", "PROPOSITION", "LEMMA", "COROLLARY"])
+        pipeline = ProcessingPipeline(data_iterable)
+        pipeline.add_stage(clean_data_stage)
+        pipeline.add_stage(build_stage)
+
+        self.thread = QThread()
+        self.worker.moveToThread(self.thread)
+        self.thread.started.connect(self.worker.run(pipeline, shuffle=random))
+        self.worker.finished.connect(self.thread.quit())
+        self.thread.finished.connect(self.thread.deleteLater)
+        self.thread.start()
+        self.session.start()
+
+    def get_flashcard_pipeline_config(self) -> tuple[str, dict[str, dict[FileType, str]], set[int], bool]:
         """ Retreives user config from widgets. We need to do error checking... what if no boxes are checked """
         random = self.navbar.course_config.random_checkbox.isChecked()
         course_name = self.navbar.course_config.course_combo.currentText()

@@ -3,7 +3,6 @@ import shutil
 import sys
 import logging
 import logging.config
-from pathlib import Path
 
 from .cmd import CourseCommand, NoteCommand, NoteViewer
 from .config import CONFIG
@@ -13,6 +12,7 @@ TODO: refs?
 ensure notes reference note_macros.tex not macros.tex
 we copy all files for both notes and courses...
 """
+
 user_config_dir = CONFIG.config_dir()
 
 def _initialize_config_tree():
@@ -98,7 +98,6 @@ global_parser = argparse.ArgumentParser(prog="mathnote", description="Cli for st
 
 subparsers = global_parser.add_subparsers(title="Subcommands", help="Note taking commands", dest="command")
 course_parser = subparsers.add_parser("course", help="Create course file structure and inizialize course json file")
-flashcard_parser = subparsers.add_parser("flashcard", help="Generate flashcards from .tex files")
 note_parser = subparsers.add_parser("note", help="Create latex notes")
 view_parser = subparsers.add_parser("view", help="View notes with gui in browser")
 
@@ -135,15 +134,8 @@ note_parser_arguments = [
         ("--note-type", {"nargs": 1, "default": ["typ"], "help": "Sets note category to parent directory. Defaults to none"}),
         ]
 
-flashcard_parser_arguments = [
-        ("-f", "--file", {"nargs": 1, "help": "Load flashcards from file path. Must be full path, or flag must be set with '-d'/'--dir'"}),
-        ("-d", "--dir", {"nargs": 1, "help": "set current working directory"})
-        ]
-
 
 global_parser.add_argument("--update-config", action="store_true", help="Update macro and preamble files. If any macro or preamble files have been modified --this command must be run before changes take effect")
-for arg in flashcard_parser_arguments:
-    flashcard_parser.add_argument(*arg[:-1], **arg[-1])
 
 for arg in course_parser_arguments:
     course_parser.add_argument(*arg[:-1], **arg[-1])

@@ -3,26 +3,37 @@ import logging
 from typing import Protocol
 import argparse
 import sys
+import json
 
 from PyQt6.QtWidgets import QApplication
 
-
-from .utils import load_json, dump_json
+from .ui import (MainWindow, TabbedSvgViewer,NavBarContainer, SettingsNavBar, CourseNavBar, NotesNavBar,
+                 FlashcardView, CourseController, LiveTypstController, NoteController, FlashcardController,
+                 ViewContainer, FlashcardNavBar, ViewController)
 from .config import Config
 from .models import Course
 from ._enums import FileType
 from .services import NotesRepository, CourseRepository
-from .ui import MainWindow
 
-from mathnotelib import config
 
+CONFIG = Config()
 
 logger = logging.getLogger("mathnote")
 
 
 """
-This code is fucked and needs to be re written
+This code is fucked and needs to be re-written
 """
+
+def load_json(file: str):
+    with open(file, "r") as f:
+        contents = json.load(f)
+    return contents
+
+
+def dump_json(file: str, contents: str) -> None:
+    with open(file, "w") as f:
+        json.dump(contents, f)
 
 class Command(Protocol):
     def cmd(self, namespace) -> None: ...
@@ -34,10 +45,30 @@ class NoteViewer(Command):
 
     def cmd(self, namespace: argparse.Namespace) -> None:
         app = QApplication(sys.argv)
-        window = MainWindow()
+
+        notes_view = TabbedSvgViewer()
+        flashcard_view = FlashcardView()
+        view_container = ViewContainer(notes_view, flashcard_view)
+
+        notes_navbar = NotesNavBar()
+        courses_navbar = CourseNavBar()
+        flashcards_navbar = FlashcardNavBar()
+        settings_navbar = SettingsNavBar(CONFIG)
+        navbar_container = NavBarContainer(notes_navbar, courses_navbar, flashcards_navbar, settings_navbar)
+
+        window = MainWindow(navbar_container, view_container)
+
+        notes_controller = NoteController(window, notes_navbar,notes_view)
+        coures_controller = CourseController(window, courses_navbar, notes_view)
+        preview_controller = LiveTypstController(window, notes_view)
+        flashcard_controller = FlashcardController(window, flashcards_navbar, flashcard_view)
+        view_controller = ViewController(navbar_container, view_container)
+
+        flashcard_controller.run()
         window.resize(800, 600)
         window.show()
         sys.exit(app.exec())
+
 
 
 

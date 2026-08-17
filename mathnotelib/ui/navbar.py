@@ -27,6 +27,7 @@ class NavBarContainer(QWidget):
         self.settings_widget = settings_widget
         self.flashcard_navbar = flashcard_navbar
         self.stack = QStackedWidget()
+
         self.initUI()
 
     def initUI(self):
@@ -38,12 +39,13 @@ class NavBarContainer(QWidget):
         #Init widgets
 
         self.search_widget = SearchWidget()
-        self.minimize_btn = QPushButton()
+
         self.courses_btn = QPushButton()
         self.notes_btn = QPushButton()
         self.settings_btn = QPushButton()
         self.flashcards_btn = QPushButton()
         self.menu_bar_layout = QHBoxLayout()
+        self.minimize_btn = QPushButton()
 
 
         #Configure

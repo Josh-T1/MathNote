@@ -7,36 +7,36 @@ from .source_file import TrackedText, FileType
 from ..exceptions import FlashcardNotFoundException
 
 
-class SectionRole(Enum):
+class FlashcardSideName(Enum):
     QUESTION = auto()
     ANSWER = auto()
     PROOF = auto()
 
 @dataclass
-class Section:
-    role: SectionRole
+class FlashcardSide:
     content: TrackedText
     pdf_path: Path | None = None
-#    title: TrackedText | None = None
-#    title_pdf: Path | None = None
 
 
 
 @dataclass
 class Flashcard:
-    sections: dict[SectionRole, Section]
+    section_name: str
+    sides: dict[FlashcardSideName, FlashcardSide]
     seen: bool = False
 
     def __post_init__(self):
-        if SectionRole.QUESTION not in self.sections:
+        if FlashcardSideName.QUESTION not in self.sides:
             raise ValueError("Flashcard requires QUESTION section")
+        if FlashcardSideName.ANSWER not in self.sides:
+            raise ValueError("Flashcard requires ANSWER section")
 
     @property
-    def question(self) -> Section:
-        return self.sections[SectionRole.QUESTION]
+    def question(self) -> FlashcardSide:
+        return self.sides[FlashcardSideName.QUESTION]
 
-    def answer(self) -> Section:
-        return self.sections[SectionRole.ANSWER]
+    def answer(self) -> FlashcardSide:
+        return self.sides[FlashcardSideName.ANSWER]
 
     def filetype(self) -> FileType:
         return self.question.content.filetype()

@@ -2,13 +2,15 @@ from .note import Note, Category, Metadata
 from .courses import Course
 from .source_file import (SourceFile, ProjectSourceFile, Lecture, Assignment, TrackedText,
                           langauage_char_registry, LanguageChars, StandaloneSourceFile)
-from .flashcard import Flashcard, Section, FlashcardDoubleLinkedList
+from .flashcard import Flashcard, FlashcardSide, FlashcardDoubleLinkedList,FlashcardSideName
 
 __all__ = [
         "Note",
         "Category",
-        "Course",
         "Metadata",
+
+        "Course",
+
         "SourceFile",
         "ProjectSourceFile",
         "Lecture",
@@ -17,7 +19,9 @@ __all__ = [
         "StandaloneSourceFile",
         "langauage_char_registry",
         "LanguageChars",
+
         "Flashcard",
-        "Section",
+        "FlashcardSide",
         "FlashcardDoubleLinkedList",
+        "FlashcardSideName"
         ]

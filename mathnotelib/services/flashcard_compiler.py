@@ -187,12 +187,11 @@ class FlashcardCompiler:
 
     def compile_card(self, card: Flashcard) -> None:
         """ Attemps to compile flashcard question/answer latex. If compilation fails """
-        if card.main_section.title is not None:
-            card.main_section.title_pdf = self._compile_tracked_text(card.main_section.title)
-
-        card.main_section.pdf_path = self._compile_tracked_text(card.main_section.content)
-        if card.proof_section is not None:
-            card.proof_section.pdf_path = self._compile_tracked_text(card.proof_section.content)
+        for v in card.sides.values():
+            pdf = self._compile_tracked_text(v.content)
+            if pdf is None:
+                raise ValueError(f"Failed to compile flashcard content: {v.content}")
+            v.pdf_path = pdf
 
     def _compile_tracked_text(self, text: TrackedText) -> Path | None:
         source = text.source

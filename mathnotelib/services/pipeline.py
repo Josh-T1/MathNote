@@ -1,11 +1,11 @@
 from functools import reduce
 import logging
-from typing import Optional, Union, Generator, Generic, get_args, get_origin, TypeVar
+from typing import Any, NotRequired, Union, Generator, Generic, get_args, get_origin, TypeVar
 from collections.abc import Iterable
 from pathlib import Path
 from abc import abstractmethod, ABC
 
-from ..models import Flashcard, langauage_char_registry, Section, TrackedText
+from ..models import Flashcard, langauage_char_registry, TrackedText, FlashcardSide, FlashcardSideName
 from .._enums import FileType
 from ..config import CONFIG
 
@@ -153,36 +153,29 @@ class CleanStage(Stage[TrackedText, TrackedText]):
         return arg
 
 
-# TODO: All subclasses of SectionFinder assume typst optional arg content is contained in '[]' which is not necessairly true. Look at LanguageChars, this needs to be fixed at some point
-class SectionFinder(ABC):
-    @abstractmethod
-    def find_section(self, text: TrackedText) -> tuple[Section | None, int]:
-        pass
+def content_inside_paren(text: TrackedText, paren: tuple[str, str]) -> TrackedText:
+    """ It is assume the tex string passed starts paren[0] and for every opening paren we have a matching close paren """
+    paren_stack = []
+    if str(text[0]) != paren[0]:
+        raise ValueError(f"String passed does not begin with '{paren[0]}'. Text: {text[:50]}, {text.source}") # }}} <= keep lsp happy
 
-    @staticmethod
-    def _content_inside_paren(text: TrackedText, paren: tuple[str, str]) -> TrackedText:
-        """ It is assume the tex string passed starts paren[0] and for every opening paren we have a matching close paren """
-        paren_stack = []
-        if str(text[0]) != paren[0]:
-            raise ValueError(f"String passed does not begin with '{paren[0]}'. Text: {text[:50]}, {text.source}") # }}} <= keep lsp happy
+    for index, char in enumerate(str(text)):
+        if char == paren[0]:
+            paren_stack.append(char)
+        elif char == paren[1]:
+            paren_stack.pop()
+        if not paren_stack:
+            return text[1:index]
+    raise ValueError("Invalid string")
 
-        for index, char in enumerate(str(text)):
-            if char == paren[0]:
-                paren_stack.append(char)
-            elif char == paren[1]:
-                paren_stack.pop()
-            if not paren_stack:
-                return text[1:index]
-        raise ValueError("Invalid string")
-
-
-class SubSectionFinder(SectionFinder):
-    def __init__(self, name: str, parent_names: list[str]):
+# TODO: currently we do not filter by parents!
+class SubSectionFinder:
+    def __init__(self, name: str, parent_names: dict[str, dict[FileType, str]]):
         self.name = name
-        self.parents = {k:d for (k, d) in CONFIG.section_names.items() if k in parent_names}
+        self.parents = parent_names
         self.name_ptrn = CONFIG.section_names[self.name]
 
-    def find_section(self, text: TrackedText) -> tuple[Section | None, int]:
+    def find_sub_section(self, text: TrackedText) -> tuple[TrackedText, int] | tuple[None, int]:
         char_map = langauage_char_registry[text.filetype()]
 
         title_paren = (char_map.arg_open_delim, char_map.arg_close_delim)
@@ -194,35 +187,33 @@ class SubSectionFinder(SectionFinder):
 
         open_paren_index = len(member[1]) + 1
         if text[open_paren_index] == title_paren[0]:
-            title = self._content_inside_paren(text[open_paren_index:], title_paren)
+            title = content_inside_paren(text[open_paren_index:], title_paren)
             end_title_index = open_paren_index + len(title) +1 # open_paren_index includes \\name{, len(title) includes {title}_, -1 to get back to }
         else:
             title = None
             end_title_index = open_paren_index -1 if text.filetype() == FileType.Typst else open_paren_index + 1
 
-        content = self._content_inside_paren(text[end_title_index +1:], body_paren)
+        content = content_inside_paren(text[end_title_index +1:], body_paren)
         end_content_index = end_title_index + len(content) + 1 # +1 to make non inclusive. ie text[end_content_index] == a closing paren
-        section = Section(member[0], content)
 
-        if title is not None:
-            if text.filetype() == FileType.Typst and title is not None: # TODO clean this up
-                title = title.replace("title: ", "").replace('"', "")
-            section.title = title
+#        if title is not None:
+#            if text.filetype() == FileType.Typst and title is not None: # TODO clean this up
+#                title = title.replace("title: ", "").replace('"', "")
+#            section.title = title
 
-        return section, end_content_index
+        return content, end_content_index
 
     # Should this be ...?
     def is_section(self, text: TrackedText, cmd_prefix: str) -> tuple[bool, tuple[str, str]] | tuple[bool, None]:
         if len(text) < 2 or str(text[0]) != cmd_prefix:
             return (False, None)
-#        for name, d in self.parents.items():
-        ptrn = self.name_ptrn[text.filetype().value]
+        ptrn = self.name_ptrn[text.filetype()]
         if text[1:].startswith(ptrn):
             return (True, (self.name, ptrn))
         return (False, None)
 
 
-class MainSectionFinder(SectionFinder):
+class MainSectionFinder:
     r"""
     Finds sections of the form:
 
@@ -236,45 +227,46 @@ class MainSectionFinder(SectionFinder):
             content
             ]
     """
-    def __init__(self, names: list[str]):
+    def __init__(self, names: dict[str, dict[FileType, str]]):
         """
         -- Params --
         names: dict of form {Section name: section pattern,...}. e.g., {"DEFINITION": "defin"}
         """
-        self.names = {n: d for (n, d) in CONFIG.section_names.items() if n in names}
+        self.names = names
 
-    def find_section(self, text: TrackedText) -> tuple[Section | None, int]:
+    def find_section(self, text: TrackedText) -> tuple[Flashcard, int] | tuple[None, int]:
         char_map = langauage_char_registry[text.filetype()]
         title_paren = (char_map.arg_open_delim, char_map.arg_close_delim)
         body_paren = (char_map.opt_arg_open_delim, char_map.opt_arg_close_delim)
 
         is_section, member = self.is_section(text, char_map.cmd_prefix)
         if not is_section or member is None:
-            return None, 0
+            return (None, 0)
 
+        section_name = member[0]
         # text[len(self.name + 1)] is openening bracket character
         # Handle 2 cases: 1. Unamed section, 2. Named section
         open_paren_index = len(member[1]) + 1
 
         if str(text[open_paren_index]) == title_paren[0]:
-            title = self._content_inside_paren(text[open_paren_index:], title_paren)
+            title = content_inside_paren(text[open_paren_index:], title_paren)
             end_title_index = open_paren_index + len(title) +1 # open_paren_index includes \\name{, len(title) includes {title}_, -1 to get back to }
         else:
             title = None
             end_title_index = open_paren_index - 1
 
 
-        content = self._content_inside_paren(text[end_title_index +1:], body_paren)
+        content = content_inside_paren(text[end_title_index +1:], body_paren)
         end_content_index = end_title_index + len(content) + 1 # +1 to make non inclusive. ie text[end_content_index] == a closing paren
-        section = Section(member[0], content)
 
         if title is not None:
-            if text.filetype() == FileType.Typst and title is not None: # TODO clean this up
+            if text.filetype() == FileType.Typst:
                 title = title.replace("title: ", "").replace('"', "")
-            section.title = title
+            card = Flashcard(section_name, {FlashcardSideName.QUESTION: FlashcardSide(title), FlashcardSideName.ANSWER: FlashcardSide(content)})
+        else:
+            card = Flashcard(section_name, {FlashcardSideName.QUESTION: FlashcardSide(content)})
 
-
-        return section, end_content_index
+        return (card, end_content_index)
 
 
     def is_section(self, text: TrackedText, cmd_prefix: str) -> tuple[bool, tuple[str, str] | None]:
@@ -283,14 +275,14 @@ class MainSectionFinder(SectionFinder):
         if len(text) < 2 or str(text[0]) != cmd_prefix:
             return (False, None)
 
-        for name, d in self.names.items():
-            ptrn = d[text.filetype().value]
+        for name, filetype_d in self.names.items():
+            ptrn = filetype_d[text.filetype()]
             if text[1:].startswith(ptrn):
                 return (True, (name, ptrn))
         return (False, None)
 
 class FlashcardBuilderStage(Stage[TrackedText, list[Flashcard]]):
-    def __init__(self, names: list[str]):
+    def __init__(self, names: dict[str, dict[FileType, str]]):
         self.main_section_finder = MainSectionFinder(names)
         self.sub_section_finders = []
         self.char_map = None
@@ -329,23 +321,20 @@ class FlashcardBuilderStage(Stage[TrackedText, list[Flashcard]]):
                 for subsection_finder in self.sub_section_finders:
                     if parent_section not in subsection_finder.parents:
                         continue
-                    section, end_index = subsection_finder.find_section(data[counter:])
-                    if section != None:
-                        flashcards[-1].proof_section =  Section(subsection_finder.name, section.content, None)
+                    content, end_index = subsection_finder.find_sub_section(data[counter:])
+                    if content != None:
+                        flashcards[-1].sides[FlashcardSideName.PROOF] =  FlashcardSide(content)
                         counter += end_index
 
             # Add main section. i.e question, answer
-            new_section, end_index = self.main_section_finder.find_section(data[counter:])
+            card, end_index = self.main_section_finder.find_section(data[counter:])
 
-            if new_section is None:
+            if card is None:
                 counter += 1
                 continue
+            parent_section = card.section_name
 
-            parent_section = new_section.name
-
-            flashcards.append(
-                    Flashcard(new_section)
-                    )
+            flashcards.append(card)
             counter += end_index + 1  # This sets counter equal to last character in command, +1 to move to character after command
         return flashcards
 
@@ -354,7 +343,7 @@ class FlashcardBuilderStage(Stage[TrackedText, list[Flashcard]]):
         logger.debug(f"Calling {self.__class__.__name__}.process")
         chunk_flashcards = self.process_chunk(data)
 #        chunk_flashcards = self.re_format_flashcards(chunk_flashcards)
-        logger.debug(f"Returning {repr(chunk_flashcards)}")
+        logger.debug(f"Returning {len(chunk_flashcards)} flashcards")
         return chunk_flashcards
 
     def add_subsection_finder(self, sub_section_name: str, parents: list[str]):
