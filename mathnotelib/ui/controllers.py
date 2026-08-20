@@ -6,12 +6,12 @@ from pathlib import Path
 import threading
 from typing import Callable, Literal
 import logging
+import random
 
 from PyQt6.QtCore import QFileSystemWatcher, QModelIndex, QObject, QThread, QTimer, Qt
 from PyQt6.QtGui import QStandardItem
 from PyQt6.QtWidgets import QHBoxLayout, QListView, QMainWindow, QStackedWidget, QWidget
 
-from mathnotelib.services.flashcard_session import FlashcardWorker
 
 from . import constants
 from .file_navbar import confirm_delete
@@ -21,10 +21,9 @@ from .dialog import NewCourseDialog, NewNoteDialog, NameDialog, show_error_dialo
 from .notes_viewer import TabWidget, TabbedSvgViewer
 from .flashcard_viewer import FlashcardView
 from ..models import Category, Course, SourceFile, Note, Flashcard, TrackedText, FlashcardSideName
-from ..utils import rendered_sorted_key
 from ..services import (CompileOptions, compile_source, NotesRepository, CourseRepository,
                         NotesRepository, FlashcardSession, FlashcardCache, FlashcardCompiler, open_pdf,
-                        FlashcardWorker, DataGenerator, FlashcardBuilderStage, CleanStage, DataGenerator, ProcessingPipeline)
+                        DataGenerator, FlashcardBuilderStage, CleanStage, DataGenerator, ProcessingPipeline)
 from ..config import CONFIG
 from .._enums import FileType, OutputFormat
 from ..exceptions import (CompilationError, EndofFlashcards, LaTeXCompilationError, NoItemSelected, NoteExistsError, CategoryExistsError,
@@ -47,6 +46,9 @@ def with_error_dialog(func):
             show_error_dialog(self.window, f"Unexpected error: {e}")
     return wrapper
 
+def rendered_sorted_key(path: Path) -> int:
+    num = int(path.name.split(".")[0].split("-")[1])
+    return num
 
 
 class ViewContainer(QWidget):
@@ -597,27 +599,16 @@ class FlashcardController:
 
         self.cache = FlashcardCache(CONFIG.cache_dir())
         self.compiler = FlashcardCompiler(self.cache)
-        self.session = FlashcardSession()
-        self.cancel_worker = threading.Event()
-        self.worker = FlashcardWorker(self.compiler, self.cancel_worker)
-
+        self.session = FlashcardSession(self.compiler)
+        self.session.start()
         self.course_repo = CourseRepository(CONFIG)
 
         self.set_handlers()
         self._populate_view()
 
     def set_handlers(self):
-        self.worker.finished.connect(lambda: self.session.terminate())
-        self.worker.card_compiled.connect(lambda card: self.session.add_card(card))
-
-
         self.view.btn_bar.next_flashcard_button.clicked.connect(lambda: self.show_next_flashcard())
         self.view.btn_bar.prev_flashcard_button.clicked.connect(lambda: self.show_prev_flashcard())
-
-        # make btn bar emit 'Answer' vs 'Proof', ect
-        self.view.btn_bar.show_question_button.clicked.connect(lambda: self.display_card("Question"))
-        self.view.btn_bar.show_answer_button.clicked.connect(lambda: self.display_card("Answer"))
-        self.view.btn_bar.show_proof_button.clicked.connect(lambda: self.display_card("Proof"))
         self.navbar.command_bar.create_flashcards_button.clicked.connect(lambda: self.create_flashcards())
         self.view.info_bar.info_button.clicked.connect(lambda: self.show_flashcard_info())
         self.navbar.course_config.update_filters.connect(lambda: self.handle_update_filters())
@@ -627,16 +618,14 @@ class FlashcardController:
         course = self.course_repo.get_course(text)
         if course is None:
             raise ValueError("Course directory not found")
-        day_per_week = max(len(course.days()), 2) # defualt to 2 if not set in course_info.json
-        num_weeks = math.ceil(len(course.lectures) / day_per_week)
 
-        model = self.navbar.course_config.filter_by_week_list_model
+        model = self.navbar.course_config.filter_by_lecture_list_model
         model.clear()
         all_box = QStandardItem('All')
         all_box.setCheckable(True)
         model.appendRow(all_box)
-        for i in range(1, num_weeks+1):
-            list_item = QStandardItem(f"Week {i}")
+        for i in range(1, len(course.lectures)):
+            list_item = QStandardItem(f"Lecture {i}")
             list_item.setCheckable(True)
             model.appendRow(list_item)
 
@@ -645,24 +634,17 @@ class FlashcardController:
         courses = self.course_repo.courses().keys()
         self.navbar.course_config.course_combo.addItems(courses)
 
-    # TODO
-    def shutdown(self):
-        if self.worker is None:
-            return
-        self.cancel_worker.set()
-
     # TODO remove this and have display(card). Buttons are connected to stack
-
     @with_error_dialog
     def show_next_flashcard(self, checked: bool = False):
-        card = self.session.next()
+        card = self.session.next_flashcard()
         self.view.display_compiled_card(card)
 
 
     @with_error_dialog
     def show_prev_flashcard(self, checked: bool = False):
         logger.debug(f"Calling {self.show_prev_flashcard}")
-        card = self.session.prev()
+        card = self.session.prev_flashcard()
         self.view.display_compiled_card(card)
 
     # TODO:  delete?
@@ -683,20 +665,8 @@ class FlashcardController:
 
     # TODO: allow for flashcards from deck
     def create_flashcards(self):
-        course_name, section_names_dict, weeks, random = self.get_flashcard_pipeline_config()
-        course = self.course_repo.get_course(course_name)
-
-        # catch user errors
-        # TODO: implement
-        if not section_names_dict or not course:
-#            self.set_error_message(f"Invalid selection course={course}, section names={section_names}. You must select a course name and at least one section")
-            logger.debug(f"Invalid selection (course={course}, section_names={section_names}) for generating flashcards")
-            return
-        # fix
-#        paths = [lecture.path for lecture in course.lectures if course.get_week(lecture) in weeks]
-        paths = [lecture.path for lecture in course.lectures]
+        paths, section_names_dict, shuffle = self.generate_pipe_config()
         logger.info(f"Creating flashcards from {len(paths)} paths")
-
         data_iterable = DataGenerator(paths)
         clean_data_stage = CleanStage(CONFIG.macros())
         build_stage = FlashcardBuilderStage(section_names_dict)
@@ -704,36 +674,42 @@ class FlashcardController:
         pipeline = ProcessingPipeline(data_iterable)
         pipeline.add_stage(clean_data_stage)
         pipeline.add_stage(build_stage)
+        load_thread = threading.Thread(target=self.session.load_flashcards, args=(pipeline, shuffle))
+        load_thread.start()
 
-        self.thread = QThread()
-        self.worker.moveToThread(self.thread)
-        self.thread.started.connect(self.worker.run(pipeline, shuffle=random))
-        self.worker.finished.connect(self.thread.quit())
-        self.thread.finished.connect(self.thread.deleteLater)
-        self.thread.start()
-        self.session.start()
+    def stop(self):
+        self.session.stop()
 
-    def get_flashcard_pipeline_config(self) -> tuple[str, dict[str, dict[FileType, str]], set[int], bool]:
+    # TODO replace weeks by lecture
+    def generate_pipe_config(self) -> tuple[list[Path], dict[str, dict[FileType, str]], bool]:
         """ Retreives user config from widgets. We need to do error checking... what if no boxes are checked """
-        random = self.navbar.course_config.random_checkbox.isChecked()
+        # Lecture numberes
         course_name = self.navbar.course_config.course_combo.currentText()
-        checked_sections = self._get_checked_items_from_listView(self.navbar.course_config.section_list.section_list)
-        weeks_items = self._get_checked_items_from_listView(self.navbar.course_config.filter_by_week_list)
-        weeks_text = [week.text() for week in weeks_items]
-        # Clean filter by weeks params
-        if "ALL" in [week.upper() for week in weeks_text] or not weeks_text:
-            weeks = {i for i in range(1, 13+1)} # TODO: verify weeks
+        course = self.course_repo.get_course(course_name)
+        if not course:
+            raise ValueError(f"Course name {course} not recognized")
+        lec_list_items = self._get_checked_items_from_listView(self.navbar.course_config.filter_by_lecture_list)
+        lec_text_items = [lec.text() for lec in lec_list_items]
+        if "ALL" in [lec.upper() for lec in lec_text_items] or not lec_text_items:
+            lectures = {i for i in range(1, len(course.lectures))}
         else:
-            weeks = {int(week.split(" ")[-1]) for week in weeks_text}
+            lectures = {int(lecture.split(" ")[-1]) for lecture in lec_text_items}
 
-        # Clean checked section params
+        # Sections
+        checked_sections = self._get_checked_items_from_listView(self.navbar.course_config.section_list.section_list)
         section_names_pretty = [item.text().upper() for item in checked_sections]
         if "ALL" in [section.upper() for section in section_names_pretty]:
             section_names = CONFIG.section_names
         else:
-            section_names = {k: d for (k, d) in CONFIG.section_names.items() if k in section_names_pretty} # TODO: what is pretty
-#            section_names = [getattr(SectionNames, section_pretty).value for section_pretty in section_names_pretty if hasattr(SectionNames, section_pretty)]
-        return course_name, section_names, weeks, random
+            section_names = {k: d for (k, d) in CONFIG.section_names.items() if k in section_names_pretty}
+
+        # Filter paths and shuffle
+        shuffle = self.navbar.course_config.random_checkbox.isChecked()
+        paths = [lecture.path for lecture in course.lectures if lecture.number() in lectures]
+        if shuffle:
+            random.shuffle(paths)
+
+        return paths, section_names, shuffle
 
     def _get_checked_items_from_listView(self, listview: QListView):
         """ Given a QListView object, all items that are in the 'checked' state are returned """
@@ -747,8 +723,8 @@ class FlashcardController:
         return checked_items
 
     def open_main(self):
-        course_name, *_ = self.get_flashcard_pipeline_config()
+        course_name = self.navbar.course_config.course_combo.currentText()
         course = self.course_repo.get_course(course_name)
-        if course is not None:
-            open_pdf(course.main_file)
-
+        if not course:
+            raise ValueError(f"Course name {course} not recognized")
+        open_pdf(course.main_file)

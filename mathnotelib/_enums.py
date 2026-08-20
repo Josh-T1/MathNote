@@ -24,8 +24,6 @@ class FileType(Enum):
         }
         return extension_map.get(extension, cls.Unsupported)
 
-
-
 # TODO: delete?
 class CourseSubdir(Enum):
     Assignment = auto()
@@ -43,6 +41,7 @@ class OutputFormat(Enum):
                 OutputFormat.SVG: ".svg"
                 }[self]
 
+# TODO: do I even use this?
 class LatexmkReturnCode(IntEnum):
     SUCCESS = 0
     BAD_ARGS = 10

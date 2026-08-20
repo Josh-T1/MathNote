@@ -112,7 +112,8 @@ class FlashcardCache:
 
     def clear(self) -> None:
         """Clear the cache."""
-        self._cache.clear()
+        # TODO
+#        self._cache.clear()
 
     def update(self, other: dict[str, Path]) -> None:
         """Update cache with another dictionary."""
@@ -202,11 +203,6 @@ class FlashcardCompiler:
             template_func = typst_template
         string = str(text)
 
-
-        if (file := self.cache.get(string)):
-            logger.debug(f"Getting file {text.source} from cache")
-            return file # should probabily be Path
-
         with tempfile.TemporaryDirectory() as tmpdir:
             source_file_path = Path(tmpdir) / f"temp{ext}"
             pdf_file_path = Path(tmpdir) / "temp.pdf"
@@ -221,8 +217,8 @@ class FlashcardCompiler:
             if not pdf_file_path.is_file(): # Error != no pdf produced
                     return None
 
-            logger.info(f"Successfully generated pdf")
             new_path = pdf_file_path.rename(self.cache.cache_pdf / f"{self.cache.hash_markdown(string)}.pdf").resolve()
+            self.cache[new_path.name] = new_path
         return new_path
 
 

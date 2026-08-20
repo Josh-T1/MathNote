@@ -190,7 +190,7 @@ class SubSectionFinder:
             title = content_inside_paren(text[open_paren_index:], title_paren)
             end_title_index = open_paren_index + len(title) +1 # open_paren_index includes \\name{, len(title) includes {title}_, -1 to get back to }
         else:
-            title = None
+            title = TrackedText("")
             end_title_index = open_paren_index -1 if text.filetype() == FileType.Typst else open_paren_index + 1
 
         content = content_inside_paren(text[end_title_index +1:], body_paren)
@@ -252,14 +252,14 @@ class MainSectionFinder:
             title = content_inside_paren(text[open_paren_index:], title_paren)
             end_title_index = open_paren_index + len(title) +1 # open_paren_index includes \\name{, len(title) includes {title}_, -1 to get back to }
         else:
-            title = None
+            title = TrackedText("")
             end_title_index = open_paren_index - 1
 
 
         content = content_inside_paren(text[end_title_index +1:], body_paren)
         end_content_index = end_title_index + len(content) + 1 # +1 to make non inclusive. ie text[end_content_index] == a closing paren
 
-        if title is not None:
+        if len(title.text) > 0:
             if text.filetype() == FileType.Typst:
                 title = title.replace("title: ", "").replace('"', "")
             card = Flashcard(section_name, {FlashcardSideName.QUESTION: FlashcardSide(title), FlashcardSideName.ANSWER: FlashcardSide(content)})
@@ -333,7 +333,9 @@ class FlashcardBuilderStage(Stage[TrackedText, list[Flashcard]]):
                 counter += 1
                 continue
             parent_section = card.section_name
-
+#            print(card.sides[FlashcardSideName.QUESTION].content)
+#            if FlashcardSideName.ANSWER in card.sides:
+#                print(card.sides[FlashcardSideName.ANSWER].content)
             flashcards.append(card)
             counter += end_index + 1  # This sets counter equal to last character in command, +1 to move to character after command
         return flashcards

@@ -63,8 +63,7 @@ class NoteViewer(Command):
         preview_controller = LiveTypstController(window, notes_view)
         flashcard_controller = FlashcardController(window, flashcards_navbar, flashcard_view)
         view_controller = ViewController(navbar_container, view_container)
-
-        flashcard_controller.run()
+        window.set_close_callback(flashcard_controller.stop)
         window.resize(800, 600)
         window.show()
         sys.exit(app.exec())

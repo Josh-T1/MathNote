@@ -19,7 +19,6 @@ class Config:
     # Should we even take args?
     def __init__(self,
 #                 macro_names: list[str] | None=None,
-#                 section_names: dict[str, str] | None=None,
                  log_level: str = "INFO",
                  iterm2_enabled: bool = False,
                  set_note_title: bool = True,
@@ -31,7 +30,6 @@ class Config:
             root_path: Root directory for MathNote data
             templates_path: Directory containing all template files (i.e., templates_path/LaTeX(Typst)/{template}.tex(typ))
             macro_names: List of macro names used in typestting projects
-            section_names: Mapping of section names to their abbreviations
             log_level: Logging level
             iterm2_enabled: If set to true additional iterm2 functinality is enabled. Default iterm2_enabled=False
             template_files: Dict: filetype -> (template_name -> template_path). Maps filetype to a a new map, which maps template name to template path
@@ -42,14 +40,13 @@ class Config:
             return
         self._initizialized = True
 
-        if isinstance(root_path, Path) and root_path.is_dir:
+        if isinstance(root_path, Path) and root_path.is_dir():
             self.root_path = root_path
         else:
             self.root_path = Path.home() / "MathNote"
 
         self.templates_path = Path(__file__).parent / "templates"
         self.macro_names = []
-#        self.section_names = section_names if section_names is not None else {}
         self.log_level = log_level
         self.iterm2_enabled = iterm2_enabled
         self.set_note_title = set_note_title
@@ -92,7 +89,7 @@ class Config:
 
         self._macros: dict[FileType, dict] | None = None
         self._update_config()
-
+    # TODO: this is fucked
     def _update_config(self):
         """ Updates default values with values specified in config file """
         config_dir = self.config_dir()
@@ -103,13 +100,13 @@ class Config:
         if not config_path.is_file():
             raise EnvironmentError("Environment was incorrectly initialized, missing config file")
 
-        with open(config_path, 'r') as f:
-            data = json.load(f)
-            for k, v in data.items():
-                if not isinstance(v, bool) and not isinstance(v, int) and not v: # skip emtpy entries
-                    continue
-                if hasattr(self, k):
-                    setattr(self, k, v)
+#        with open(config_path, 'r') as f:
+#            data = json.load(f)
+#            for k, v in data.items():
+#                if not isinstance(v, bool) and not isinstance(v, int) and not v: # skip emtpy entries
+#                    continue
+#                if hasattr(self, k):
+#                    setattr(self, k, v)
 
         files = [
                 "main_template",

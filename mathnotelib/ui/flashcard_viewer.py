@@ -21,9 +21,8 @@ logger = logging.getLogger("mathnote")
 ZOOM_FACTOR = 3
 
 class PdfWindow(QWidget):
-    def __init__(self, widget):
+    def __init__(self):
         super().__init__()
-        self.parent_widget = widget
         self.document: QPdfDocument | None = None
         self.initui()
 
@@ -34,7 +33,7 @@ class PdfWindow(QWidget):
         self.setLayout(self.pdf_layout)
 
         # create widgets
-        self.scroll_area = QScrollArea(self.parent_widget)
+        self.scroll_area = QScrollArea()
         self.pdf_viewer = QPdfView(self.scroll_area)
         self._palette = QPalette()
 
@@ -101,9 +100,9 @@ class FlashcardView(QWidget):
         self.btn_bar = HButtonBar()
         self.info_bar = InfoBar()
         self.pdf_stack = QStackedWidget()
-        self.pdf_window_1 = PdfWindow(self)
-        self.pdf_window_2 = PdfWindow(self)
-        self.pdf_window_3 = PdfWindow(self)
+        self.pdf_window_1 = PdfWindow()
+        self.pdf_window_2 = PdfWindow()
+        self.pdf_window_3 = PdfWindow()
 
 
         self.pdf_stack.setContentsMargins(0, 0, 0, 0)
@@ -117,23 +116,39 @@ class FlashcardView(QWidget):
         self.main_layout.addWidget(self.pdf_stack)
         self.main_layout.addWidget(self.btn_bar)
 
+        self.btn_bar.show_question_button.clicked.connect(lambda: self.pdf_stack.setCurrentWidget(self.pdf_window_1))
+        self.btn_bar.show_answer_button.clicked.connect(lambda: self.pdf_stack.setCurrentWidget(self.pdf_window_2))
+        self.btn_bar.show_proof_button.clicked.connect(lambda: self.pdf_stack.setCurrentWidget(self.pdf_window_3))
+
+
     def display_compiled_card(self, card: Flashcard):
+        self.pdf_stack.setCurrentWidget(self.pdf_window_1)
         question = card.sides[FlashcardSideName.QUESTION]
-        answer = card.sides[FlashcardSideName.ANSWER]
+        answer = card.sides.get(FlashcardSideName.ANSWER)
         proof = card.sides.get(FlashcardSideName.PROOF)
+
+        success = (answer and answer.pdf_path) or (proof and proof.pdf_path)
         if question.pdf_path is None:
-            raise ValueError(f"Flashcard missing pdf_file for {card.question.content}")
-        if answer.pdf_path is None:
-            raise ValueError(f"Flashcard missing pdf_file for {card.answer.content}")
+            raise ValueError(f"Flashcard missing pdf_file for {question.content}")
+        # TODO should it be answer
+        if not success:
+            raise ValueError(f"Flashcard missing answer section")
+
         self.pdf_window_1.display_pdf(question.pdf_path)
-        self.pdf_window_2.display_pdf(answer.pdf_path)
+
+        if answer is not None and answer.pdf_path is not None:
+            self.pdf_window_2.display_pdf(answer.pdf_path)
+            self.btn_bar.show_answer_button.show()
+        else:
+            self.btn_bar.show_answer_button.hide()
 
         if proof is not None and proof.pdf_path is not None:
             self.pdf_window_3.display_pdf(proof.pdf_path)
             self.btn_bar.show_proof_button.show()
         else:
             self.btn_bar.show_proof_button.hide()
-        self.info_bar.flashcard_type.setText(f"Section: {card.section_name.lower()}")
+        self.info_bar.flashcard_type.setText(f"Section: {card.section_name.lower().capitalize()}")
+
 
 class HButtonBar(QWidget):
     def __init__(self):
@@ -238,8 +253,3 @@ class InfoBar(QWidget):
         self.bar_layout.addStretch()
         self.bar_layout.addStretch()
         self.bar_layout.addWidget(self.info_button)
-
-
-
-
-

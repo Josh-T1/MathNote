@@ -25,11 +25,9 @@ class Flashcard:
     sides: dict[FlashcardSideName, FlashcardSide]
     seen: bool = False
 
-    def __post_init__(self):
-        if FlashcardSideName.QUESTION not in self.sides:
-            raise ValueError("Flashcard requires QUESTION section")
-        if FlashcardSideName.ANSWER not in self.sides:
-            raise ValueError("Flashcard requires ANSWER section")
+    def valid(self):
+        answer = FlashcardSideName.ANSWER in self.sides or FlashcardSideName.PROOF in self.sides
+        return answer and FlashcardSideName.QUESTION in self.sides
 
     @property
     def question(self) -> FlashcardSide:
@@ -60,6 +58,14 @@ class FlashcardDoubleLinkedList:
     def clear(self) -> None:
         self.head = None
         self.current = None
+
+    def num_unseen_cards(self) -> int:
+        current = self.current
+        counter = 0
+        while current:
+            current = current.next
+            counter += 1
+        return counter
 
     def remove(self, index: int) -> None:
         """ Remove node at index """

@@ -1,3 +1,5 @@
+import typing
+from PyQt6 import QtGui
 from PyQt6.QtWidgets import QHBoxLayout, QMainWindow, QStackedWidget, QWidget
 from PyQt6.QtCore import Qt
 
@@ -9,12 +11,18 @@ from .constants import VIEWER_WIDTH
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, navbar: NavBarContainer, viewer: ViewContainer):
+    def __init__(self,
+                 navbar: NavBarContainer,
+                 viewer: ViewContainer,
+                 close_callback: None | typing.Callable =None
+                 ):
         super().__init__()
         self.navbar_container = navbar
         self.viewer_container = viewer
         self.initUi()
         self._nav_minimal: bool = False
+        self._callback = close_callback
+
 
     def initUi(self):
         self.navbar_stack = QStackedWidget() # TODO
@@ -55,5 +63,10 @@ class MainWindow(QMainWindow):
         self.navbar_container.setVisible(not self._nav_minimal)
         self.minimal_nav_bar.setVisible(self._nav_minimal)
 
+    def set_close_callback(self, callback: typing.Callable):
+        self._callback = callback
 
-
+    def closeEvent(self, a0: typing.Optional[QtGui.QCloseEvent]) -> None:
+        if self._callback:
+            self._callback()
+        return super().closeEvent(a0)

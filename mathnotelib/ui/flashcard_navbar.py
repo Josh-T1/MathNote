@@ -117,46 +117,35 @@ class FlashcardFromCourseConfigWidget(QWidget):
 
     def initUi(self):
         self.setContentsMargins(0, 0, 0, 0)
-#        self.setFixedWidth(150)
-
-#        self.setObjectName("TabButton")
-#        self.setStyleSheet("#TabButton { border: 1px solid #555; }")
-#        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-
         self.config_layout = QVBoxLayout()
         self.config_layout.setContentsMargins(0, 0, 0, 0)
         self.config_layout.setSpacing(0)
         self.setLayout(self.config_layout)
-        # Create Widgets
+
         self.course_combo_label = QLabel()
         self.course_combo= QComboBox()
-        self.filter_by_week_list = QListView()
+        self.filter_by_lecture_list = QListView()
         # TODO
-        self.filter_by_week_list.setStyleSheet("""
+        self.filter_by_lecture_list.setStyleSheet("""
     QListView {
         border-radius: 6px;
         background: #222;
     }
 """)
-        self.filter_by_week_list_label = QLabel()
+        self.filter_by_lecture_list_label = QLabel()
 
 
 
         self.random_checkbox_label = QLabel("Randomize")
         self.random_checkbox = QCheckBox()
-        self.filter_by_week_list_model = QStandardItemModel()
-
-        # Add iterm2 widgets if enabled
-#        if CONFIG.iterm2_enabled:
-#            self.launch_iterm_button = QPushButton("Launch iterm")
-#            self.config_layout.addWidget(self.launch_iterm_button)
+        self.filter_by_lecture_list_model = QStandardItemModel()
 
         # Configure
         self.random_checkbox.setChecked(True)
         self.course_combo_label.setText("Select Course")
-        self.filter_by_week_list_label.setText("Filter by week")
-        self.filter_by_week_list.setModel(self.filter_by_week_list_model)
-        self.filter_by_week_list.setMaximumHeight(150)
+        self.filter_by_lecture_list_label.setText("Filter by lecture")
+        self.filter_by_lecture_list.setModel(self.filter_by_lecture_list_model)
+        self.filter_by_lecture_list.setMaximumHeight(150)
 
         self.course_combo.currentIndexChanged.connect(lambda: self.update_filters.emit())
 
@@ -172,10 +161,10 @@ class FlashcardFromCourseConfigWidget(QWidget):
         self.course_combo.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         self.course_combo.setContentsMargins(0, 8, 0, 12)
 
-        self.filter_by_week_list_label.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
-        self.filter_by_week_list_label.setContentsMargins(0, 12, 0, 8)
-        self.filter_by_week_list.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
-        self.filter_by_week_list.setContentsMargins(0, 8, 0, 12)
+        self.filter_by_lecture_list_label.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        self.filter_by_lecture_list_label.setContentsMargins(0, 12, 0, 8)
+        self.filter_by_lecture_list.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        self.filter_by_lecture_list.setContentsMargins(0, 8, 0, 12)
 
         self.random_checkbox_label.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         self.random_checkbox_label.setContentsMargins(0, 12, 0, 8)
@@ -185,8 +174,8 @@ class FlashcardFromCourseConfigWidget(QWidget):
         self.config_layout.addWidget(self.course_combo_label)
         self.config_layout.addWidget(self.course_combo)
         self.config_layout.addWidget(self.section_list)
-        self.config_layout.addWidget(self.filter_by_week_list_label)
-        self.config_layout.addWidget(self.filter_by_week_list)
+        self.config_layout.addWidget(self.filter_by_lecture_list_label)
+        self.config_layout.addWidget(self.filter_by_lecture_list)
         self.config_layout.addWidget(self.random_checkbox_label)
         self.config_layout.addWidget(self.random_checkbox)
 
