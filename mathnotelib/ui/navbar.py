@@ -7,36 +7,45 @@ from PyQt6.QtCore import Qt
 from .style import ICON_CSS, LABEL_CSS, TITLE_LABEL_CSS
 from . import constants
 from .search import SearchWidget
-from .file_navbar import NotesNavBar, CourseNavBar
-from .flashcard_navbar import FlashcardNavBar
+from .file_navbar import NotesNavbar, CourseNavbar, SettingsNavbar
+from .flashcard_navbar import FlashcardNavbar
 from ..config import Config
 
-# TODO: type hint setting widget + rename settings navbar?
-class NavBarContainer(QWidget):
+class NavbarContainer(QWidget):
 
     def __init__(self,
-                 notes_navbar: NotesNavBar,
-                 courses_navbar: CourseNavBar,
-                 flashcard_navbar: FlashcardNavBar,
-                 settings_widget
+                 notes_navbar: NotesNavbar,
+                 courses_navbar: CourseNavbar,
+                 flashcard_navbar: FlashcardNavbar,
+                 settings_navbar: SettingsNavbar,
                  ):
         super().__init__()
+        self.container_stack = TightStackedWidget()
         self.tree_visible: bool = True
         self.notes_navbar = notes_navbar
         self.courses_navbar = courses_navbar
-        self.settings_widget = settings_widget
+        self.settings_navbar = settings_navbar
         self.flashcard_navbar = flashcard_navbar
         self.stack = QStackedWidget()
-
         self.initUI()
 
     def initUI(self):
+        self.visible_widget = QWidget()
+        self.collapsed_widget = CollapsedNavbarContainer()
+
         main_layout = QVBoxLayout()
-        main_layout.setContentsMargins(5, 8, 5, 8)
-        main_layout.setSpacing(4)
-        self.setLayout(main_layout)
-        self.setFixedWidth(250)
-        #Init widgets
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+
+        visible_layout = QVBoxLayout()
+        visible_layout.setContentsMargins(5, 8, 5, 8)
+        visible_layout.setSpacing(4)
+        visible_layout.setContentsMargins(5, 8, 5, 8)
+        visible_layout.setSpacing(4)
+
+        self.visible_widget.setLayout(visible_layout)
+        self.visible_widget.setFixedWidth(250)
+
 
         self.search_widget = SearchWidget()
 
@@ -47,7 +56,6 @@ class NavBarContainer(QWidget):
         self.menu_bar_layout = QHBoxLayout()
         self.minimize_btn = QPushButton()
 
-
         #Configure
         self.settings_btn.setToolTip("Settings")
         self.minimize_btn.setToolTip("Minimize Navbar")
@@ -55,7 +63,6 @@ class NavBarContainer(QWidget):
         self.courses_btn.setToolTip("Courses")
         self.flashcards_btn.setToolTip("Flashcards")
 
-        self.stack.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.stack.setContentsMargins(0, 0, 0, 0)
         icons = [
                  (self.minimize_btn, "sidebar_left.png"),
@@ -78,32 +85,42 @@ class NavBarContainer(QWidget):
         for btn in icons:
             self.menu_bar_layout.addWidget(btn[0])
         self.menu_bar_layout.addSpacerItem(QSpacerItem(15, 15, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed))
-        main_layout.addLayout(self.menu_bar_layout)
-        main_layout.addWidget(self.search_widget)
-        main_layout.addWidget(self.stack)
+        visible_layout.addLayout(self.menu_bar_layout)
+        visible_layout.addWidget(self.search_widget)
+        visible_layout.addWidget(self.stack)
+        self.stack.setFixedWidth(240)
+#        collapsed_layout.addWidget(self.collapsed_container)
+
         self.stack.addWidget(self.notes_navbar)
         self.stack.addWidget(self.courses_navbar)
         self.stack.addWidget(self.flashcard_navbar)
-        self.stack.addWidget(self.settings_widget)
+        self.stack.addWidget(self.settings_navbar)
         self.stack.setCurrentWidget(self.notes_navbar)
 
 
-#    def set_navbar(self, widget: QWidget):
-#        self.stack.setCurrentWidget()
+        self.container_stack.addWidget(self.visible_widget)
+        self.container_stack.addWidget(self.collapsed_widget)
+        self.container_stack.setCurrentWidget(self.visible_widget)
 
-    def connect_toggle_button(self, callback: Callable[[], None]):
-        self.minimize_btn.clicked.connect(callback)
-
-#    def connect_doc_builder(self, builder_widget: QWidget):
-#        def callback(mode: str) -> None:
-#            if mode == "Preview":
-#                builder_widget.setHidden(True)
-#            else:
-#                builder_widget.setHidden(False)
-#        self.mode_selector.connect_mode_btn(callback)
+        main_layout.addWidget(self.container_stack)
+        self.setLayout(main_layout)
 
 
-class CollapsedNavBar(QWidget):
+class TightStackedWidget(QStackedWidget):
+    def sizeHint(self):
+        w = self.currentWidget()
+        return w.sizeHint() if w else super().sizeHint()
+
+    def minimumSizeHint(self):
+        w = self.currentWidget()
+
+        return w.minimumSizeHint() if w else super().minimumSizeHint()
+
+    def maximumSize(self):
+        w = self.currentWidget()
+        return w.maximumSize() if w else super().maximumSize()
+
+class CollapsedNavbarContainer(QWidget):
     def __init__(self) -> None:
         super().__init__()
         self.main_layout = QVBoxLayout()
@@ -111,10 +128,10 @@ class CollapsedNavBar(QWidget):
 
         self.setFixedWidth(35)
         self.setLayout(self.main_layout)
+        self.expand_btn = QPushButton()
         self.initUI()
 
     def initUI(self):
-        self.expand_btn = QPushButton()
         self.expand_btn.setStyleSheet(ICON_CSS)
         self.expand_btn.setIcon(QIcon(str(constants.ICON_PATH / "sidebar_right.png")))
         self.expand_btn.setFixedSize(constants.ICON_SIZE)

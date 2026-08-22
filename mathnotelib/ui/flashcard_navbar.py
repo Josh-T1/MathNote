@@ -17,7 +17,7 @@ from .style import BUTTON_CSS, TAB_BTN_EMPTY_CSS
 
 
 
-class FlashcardNavBar(QWidget):
+class FlashcardNavbar(QWidget):
 
     def __init__(self) -> None:
         super().__init__()

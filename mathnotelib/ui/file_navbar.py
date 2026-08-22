@@ -3,18 +3,19 @@ import json
 
 from PyQt6 import QtCore
 from PyQt6.QtGui import QIcon, QStandardItem, QStandardItemModel
-from PyQt6.QtWidgets import (QAbstractItemView, QFrame, QHBoxLayout, QLabel, QMenu, QMessageBox, QPushButton, QSizePolicy,
+from PyQt6.QtWidgets import (QAbstractItemView, QComboBox, QFrame, QHBoxLayout, QLabel, QMenu, QMessageBox, QPushButton, QSizePolicy,
                              QSpacerItem, QTreeView, QVBoxLayout, QWidget)
 from PyQt6.QtCore import  QModelIndex, QPoint, pyqtBoundSignal, pyqtSignal, Qt
 
+from mathnotelib.config import Config
 from mathnotelib.models.courses import Course
 
-from .style import ICON_CSS, TREE_VIEW_CSS
+from .style import ICON_CSS, LABEL_CSS, TITLE_LABEL_CSS, TREE_VIEW_CSS
 from . import constants
 from ..models import SourceFile, Category, Note
 from ..services import NotesRepository
 
-class BaseFileNavBar(QWidget):
+class BaseFileNavbar(QWidget):
     file_opened = pyqtSignal(SourceFile)
     load_item = pyqtSignal(QStandardItem, Category)
 
@@ -90,7 +91,7 @@ class BaseFileNavBar(QWidget):
         return note_item
 
 
-class CourseNavBar(BaseFileNavBar):
+class CourseNavbar(BaseFileNavbar):
     new_course = pyqtSignal()
     new_lecture = pyqtSignal()
     new_assignment = pyqtSignal()
@@ -150,7 +151,7 @@ class CourseNavBar(BaseFileNavBar):
         main_layout.addWidget(self.tree)
 
 
-class NotesNavBar(BaseFileNavBar):
+class NotesNavbar(BaseFileNavbar):
     new_note = pyqtSignal()
     new_category = pyqtSignal()
     delete = pyqtSignal()
@@ -348,25 +349,68 @@ def confirm_delete(window: QWidget, item: SourceFile | Course | Category) -> boo
     result = msg.exec()
     return result == QMessageBox.StandardButton.Yes
 
-class SettingsWidget(QWidget):
-    def __init__(self):
+
+
+class SettingsNavbar(QWidget):
+    def __init__(self, config: Config):
         super().__init__()
+        self.config = config
         self.initUI()
 
     def initUI(self):
-        # layout
         main_layout = QVBoxLayout()
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.setSpacing(0)
-        self.setFixedSize(constants.VIEWER_WIDTH, constants.VIEWER_HEIGHT)
+        main_layout.setContentsMargins(5, 8, 5, 8)
+        main_layout.setSpacing(4)
+        main_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         self.setLayout(main_layout)
-        self.setStyleSheet("background-color: #282828;")
+        self.setFixedWidth(200)
+        self.setLayout(main_layout)
+        # Create Widgets
+        settings_title = QLabel("Settings")
+        root_label = QLabel("Root")
+        section_names_label = QLabel("Section Names")
+        editor_label = QLabel("Editor")
+        log_level_label = QLabel("Log level")
+        iterm_2_label = QLabel("Iterm2")
+        note_title_label = QLabel("note_title")
 
-        self.title = QLabel("Settings")
-        spacer = QWidget()
+        self.log_level_combo = QComboBox()
 
-        self.title.setStyleSheet("font-size: 24px;")
-        spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.apply_btn = QPushButton("Apply")
+        self.revert_btn = QPushButton("Revert")
 
-        main_layout.addWidget(self.title, alignment=Qt.AlignmentFlag.AlignTop)
-        main_layout.addWidget(spacer)
+        #Configure Widgets
+        log_levels = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+        self.log_level_combo.addItems(log_levels)
+
+
+        label_widget = [
+                (root_label, QPushButton()),
+                (section_names_label, QPushButton()),
+                (log_level_label, self.log_level_combo),
+                (editor_label, QPushButton()),
+                (iterm_2_label, QPushButton()),
+                (note_title_label, QPushButton())
+                 ]
+
+        settings_title.setStyleSheet(TITLE_LABEL_CSS)
+
+        main_layout.addWidget(settings_title)
+        for label, widget in label_widget:
+            row_layout = QHBoxLayout()
+            label.setStyleSheet(LABEL_CSS)
+            label.setFixedHeight(constants.LABEL_HEIGHT)
+
+            row_layout.addWidget(label)
+            row_layout.addWidget(widget)
+            main_layout.addLayout(row_layout)
+
+        button_row = QHBoxLayout()
+        button_row.addWidget(self.revert_btn)
+        button_row.addWidget(self.apply_btn)
+        main_layout.addLayout(button_row)
+
+
+#        settings_label = QLabel("Settings")
+#        main_layout.addWidget(settings_label, alignment=Qt.AlignmentFlag.AlignTop)
+

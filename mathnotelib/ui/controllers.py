@@ -15,8 +15,8 @@ from PyQt6.QtWidgets import QHBoxLayout, QListView, QMainWindow, QStackedWidget,
 
 from . import constants
 from .file_navbar import confirm_delete
-from .flashcard_navbar import FlashcardNavBar
-from .navbar import CourseNavBar, NavBarContainer, NotesNavBar
+from .flashcard_navbar import FlashcardNavbar
+from .navbar import CourseNavbar, NavbarContainer, NotesNavbar
 from .dialog import NewCourseDialog, NewNoteDialog, NameDialog, show_error_dialog
 from .notes_viewer import TabWidget, TabbedSvgViewer
 from .flashcard_viewer import FlashcardView
@@ -74,7 +74,7 @@ class ViewContainer(QWidget):
 
 
 class ViewController(QObject):
-    def __init__(self, navbar_container: NavBarContainer, view_container: ViewContainer):
+    def __init__(self, navbar_container: NavbarContainer, view_container: ViewContainer):
         self.navbar_cont = navbar_container
         self.window_cont = view_container
         self.connect_handlers()
@@ -83,6 +83,18 @@ class ViewController(QObject):
         self.navbar_cont.notes_btn.clicked.connect(lambda: self.set_notes_view())
         self.navbar_cont.courses_btn.clicked.connect(lambda: self.set_course_notes_view())
         self.navbar_cont.flashcards_btn.clicked.connect(lambda: self.set_flashcard_view())
+        self.navbar_cont.minimize_btn.clicked.connect(lambda: self.toggle_navbar_container())
+        self.navbar_cont.collapsed_widget.expand_btn.clicked.connect(lambda: self.toggle_navbar_container())
+        self.navbar_cont.settings_btn.clicked.connect(lambda: self.set_settings_view())
+
+    def set_settings_view(self):
+        self.navbar_cont.stack.setCurrentWidget(self.navbar_cont.settings_navbar)
+
+    def toggle_navbar_container(self):
+        if self.navbar_cont.container_stack.currentWidget() == self.navbar_cont.collapsed_widget:
+            self.navbar_cont.container_stack.setCurrentWidget(self.navbar_cont.visible_widget)
+        else:
+            self.navbar_cont.container_stack.setCurrentWidget(self.navbar_cont.collapsed_widget)
 
     def set_flashcard_view(self):
         self.navbar_cont.stack.setCurrentWidget(self.navbar_cont.flashcard_navbar)
@@ -99,7 +111,7 @@ class ViewController(QObject):
 
 
 class NoteController(QObject):
-    def __init__(self, window: QMainWindow, navbar: NotesNavBar, viewer: TabbedSvgViewer):
+    def __init__(self, window: QMainWindow, navbar: NotesNavbar, viewer: TabbedSvgViewer):
         self.window = window
         self.navbar = navbar
         self.viewer = viewer
@@ -288,7 +300,7 @@ class NoteController(QObject):
 
 
 class CourseController(QObject):
-    def __init__(self, window: QMainWindow, navbar: CourseNavBar, viewer: TabbedSvgViewer):
+    def __init__(self, window: QMainWindow, navbar: CourseNavbar, viewer: TabbedSvgViewer):
         self.window = window
         self.navbar = navbar
         self.viewer = viewer
@@ -592,7 +604,7 @@ class LiveTypstController:
 
 
 class FlashcardController:
-    def __init__(self, window: QMainWindow, navbar: FlashcardNavBar, view: FlashcardView):
+    def __init__(self, window: QMainWindow, navbar: FlashcardNavbar, view: FlashcardView):
         self.window = window
         self.navbar = navbar
         self.view = view

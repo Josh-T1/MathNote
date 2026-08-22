@@ -192,32 +192,6 @@ class ZMultiPageViewer(QGraphicsView):
         self.resetTransform()
         self._zoom = 1
 
-
-class LiveIcon(QWidget):
-    def __init__(self, diameter=100, parent=None):
-        super().__init__(parent)
-        self.diameter = diameter
-        self.setFixedSize(diameter, diameter)
-        self.focused = True
-        self.live = False
-
-        self.not_live_color = QColor("grey")
-        self.focused_color = QColor("red")
-        self.un_focused_color = QColor("grey")
-
-    def paintEvent(self, event):
-        if self.live:
-            color = self.focused_color if self.focused else self.un_focused_color
-        else:
-            color = self.not_live_color
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        painter.setBrush(QBrush(color))
-        painter.setPen(Qt.PenStyle.SolidLine)
-        painter.drawEllipse(0, 0, self.diameter, self.diameter)
-
-
-
 class TabWidget(QWidget):
     def __init__(self, label: str,
                  switch_callback: Callable[[], None],
@@ -229,7 +203,6 @@ class TabWidget(QWidget):
         # By default QWidget are automatically painted and instances of classes subclassing QWidget do not have autoamatic painting
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
 
-        self.live_icon = LiveIcon(diameter=8)
         self.is_live = False
         self.is_focused = False
         self.label = label
@@ -285,35 +258,35 @@ class TabWidget(QWidget):
                 lambda: self.close_callback(self)
                 )
 
-        col0_layout.addWidget(self.live_icon)
-
-        policy = self.live_icon.sizePolicy()
-        policy.setRetainSizeWhenHidden(True)
-        self.live_icon.setSizePolicy(policy)
-        self.live_icon.hide()
-
         col1_layout.addWidget(self.tab_btn)
         col2_layout.addWidget(close_btn)
+
+    def make_style_sheet(self) -> str:
+        outline = "1px solid red" if self.is_live else "none"
+        background_color = "#555" if self.is_focused else "transparent"
+
+        return f"""
+        border-top: {outline};
+        border-left: {outline};
+        border-right: {outline};
+        border-bottom: none;
+        background-color: {background_color};
+        """
 
 
     def toggle_live(self):
         self.is_live = not self.is_live
-
         if self.is_live is False:
-            self.live_icon.hide()
-            return
+            self.setStyleSheet(self.make_style_sheet())
         else:
-            self.live_icon.show()
+            self.setStyleSheet(self.make_style_sheet())
 
     def set_focus(self, focus=True):
-        # TODO move to style sheet
         self.is_focused = focus
-        # handle tab
         if self.is_focused:
-            self.setStyleSheet("background-color: #555;")
-
+            self.setStyleSheet(self.make_style_sheet())
         else:
-            self.setStyleSheet("background-color: transparent;")
+            self.setStyleSheet(self.make_style_sheet())
 
 
 class ToolTabBar(QWidget):
@@ -324,7 +297,7 @@ class ToolTabBar(QWidget):
         self.toolbar = self.build_tool_bar()
         self.main_layout = QHBoxLayout()
         self.main_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
-        self.main_layout.setSpacing(2)
+        self.main_layout.setSpacing(0)
         self.main_layout.addWidget(self.toolbar)
         self.main_layout.setContentsMargins(0, 0, 0, 0)
         self.setLayout(self.main_layout)
@@ -334,7 +307,7 @@ class ToolTabBar(QWidget):
     def build_tool_bar(self) -> QWidget:
         cont = QWidget()
         layout = QHBoxLayout()
-        layout.setSpacing(2)
+        layout.setSpacing(0)
         layout.setAlignment(Qt.AlignmentFlag.AlignRight)
         layout.setContentsMargins(0, 0, 0, 0)
         cont.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)

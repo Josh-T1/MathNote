@@ -7,9 +7,9 @@ import json
 
 from PyQt6.QtWidgets import QApplication
 
-from .ui import (MainWindow, TabbedSvgViewer,NavBarContainer, SettingsNavBar, CourseNavBar, NotesNavBar,
+from .ui import (MainWindow, TabbedSvgViewer,NavbarContainer, SettingsNavbar, CourseNavbar, NotesNavbar,
                  FlashcardView, CourseController, LiveTypstController, NoteController, FlashcardController,
-                 ViewContainer, FlashcardNavBar, ViewController)
+                 ViewContainer, FlashcardNavbar, ViewController)
 from .config import Config
 from .models import Course
 from ._enums import FileType
@@ -50,11 +50,11 @@ class NoteViewer(Command):
         flashcard_view = FlashcardView()
         view_container = ViewContainer(notes_view, flashcard_view)
 
-        notes_navbar = NotesNavBar()
-        courses_navbar = CourseNavBar()
-        flashcards_navbar = FlashcardNavBar()
-        settings_navbar = SettingsNavBar(CONFIG)
-        navbar_container = NavBarContainer(notes_navbar, courses_navbar, flashcards_navbar, settings_navbar)
+        notes_navbar = NotesNavbar()
+        courses_navbar = CourseNavbar()
+        flashcards_navbar = FlashcardNavbar()
+        settings_navbar = SettingsNavbar(CONFIG)
+        navbar_container = NavbarContainer(notes_navbar, courses_navbar, flashcards_navbar, settings_navbar)
 
         window = MainWindow(navbar_container, view_container)
 

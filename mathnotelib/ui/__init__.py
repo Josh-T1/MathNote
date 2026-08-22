@@ -1,8 +1,8 @@
 from .window import MainWindow
 from .notes_viewer import TabbedSvgViewer
-from .navbar import NavBarContainer, SettingsNavBar
-from .file_navbar import CourseNavBar, NotesNavBar
-from .flashcard_navbar import FlashcardNavBar
+from .navbar import NavbarContainer, SettingsNavbar
+from .file_navbar import CourseNavbar, NotesNavbar
+from .flashcard_navbar import FlashcardNavbar
 from .flashcard_viewer import FlashcardView
 from .controllers import (CourseController, LiveTypstController, NoteController, FlashcardController,
                           ViewContainer, ViewController)
@@ -12,13 +12,13 @@ __all__ = [
 
         "TabbedSvgViewer",
 
-        "NavBarContainer",
-        "SettingsNavBar",
+        "NavbarContainer",
+        "SettingsNavbar",
 
-        "CourseNavBar",
-        "NotesNavBar",
+        "CourseNavbar",
+        "NotesNavbar",
 
-        "FlashcardNavBar",
+        "FlashcardNavbar",
 
         "FlashcardView",
 
