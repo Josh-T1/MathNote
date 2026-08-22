@@ -5,7 +5,7 @@ from .course_repo import CourseRepository
 from .filesystem import open_cmd, open_file_with_editor
 from .note_repo import NotesRepository
 from .pipeline import (MainSectionFinder, ProcessingPipeline, FlashcardBuilderStage,
-                       CleanStage, DataGenerator, TrackedText)
+                       CleanStage, DataGenerator, TrackedText, FormatStage)
 from .flashcard_session import FlashcardSession
 
 
@@ -32,6 +32,7 @@ __all__ = [
         "CleanStage",
         "DataGenerator",
         "TrackedText",
+        "FormatStage",
 
         "FlashcardSession",
         ]

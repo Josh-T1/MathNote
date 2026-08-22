@@ -5,8 +5,8 @@ from PyQt6.QtWidgets import (QHBoxLayout, QLabel, QMessageBox, QStackedWidget, Q
                              QWidget, QPushButton, QScrollArea)
 from PyQt6.QtPdfWidgets import QPdfView
 from PyQt6.QtPdf import QPdfDocument
-from PyQt6.QtCore import pyqtSignal
-from PyQt6.QtGui import QColor, QPalette
+from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QColor, QIcon, QPalette, QPixmap
 
 from .style import BUTTON_CSS
 from ..models import Flashcard, FlashcardSideName
@@ -46,7 +46,7 @@ class PdfWindow(QWidget):
         # add widgets
         self.pdf_layout.addWidget(self.pdf_viewer)
 
-    def _load_pdf(self, pdf_path: Path, force_zoom=False) -> QPdfDocument.Error:
+    def _load_pdf(self, pdf_path: Path) -> QPdfDocument.Error:
         """ loads pdf into pdf_viewer and set viewer settings
         -- params --
         pdf_path: (str) absolute path to pdf
@@ -59,20 +59,17 @@ class PdfWindow(QWidget):
             self.document = pdf_document
             self.pdf_viewer.setDocument(pdf_document)
             # todo: latex does can not generate files with fixed width and auto height so we use this hack
-            if force_zoom:
-                self.pdf_viewer.setZoomMode(QPdfView.ZoomMode.Custom)
-                self.pdf_viewer.setZoomFactor(ZOOM_FACTOR)
-            else:
-                self.pdf_viewer.setZoomMode(QPdfView.ZoomMode.FitToWidth)
+            self.pdf_viewer.setZoomMode(QPdfView.ZoomMode.Custom)
+            self.pdf_viewer.setZoomFactor(2.1)
         return load_status
 
-    def display_pdf(self, pdf_path: Path, force_zoom=False):
+    def display_pdf(self, pdf_path: Path):
         """
         -- params --
         pdf_path: absolute path to pdf
         return: load status
         """
-        load_status = self._load_pdf(pdf_path, force_zoom=force_zoom)
+        load_status = self._load_pdf(pdf_path)
         if load_status != QPdfDocument.Error.None_:
             self.document = None
             raise ValueError(f"failed to display card with path: {pdf_path}\nload status: {load_status}")
@@ -93,8 +90,8 @@ class FlashcardView(QWidget):
         self.setLayout(self.main_layout)
         self.setContentsMargins(0, 0, 0, 0)
 
-        self.setMinimumSize(constants.VIEWER_WIDTH, 300)
-        self.resize(constants.VIEWER_WIDTH, 300)
+        self.setMinimumWidth(constants.VIEWER_WIDTH)
+        self.setMaximumHeight(850)
 
         # Create widgets
         self.btn_bar = HButtonBar()
@@ -147,7 +144,6 @@ class FlashcardView(QWidget):
             self.btn_bar.show_proof_button.show()
         else:
             self.btn_bar.show_proof_button.hide()
-        self.info_bar.flashcard_type.setText(f"Section: {card.section_name.lower().capitalize()}")
 
 
 class HButtonBar(QWidget):
@@ -236,20 +232,35 @@ class InfoBar(QWidget):
     def initUi(self):
         self.bar_layout = QHBoxLayout()
         self.bar_layout.setContentsMargins(0, 0, 0, 0)
-        self.bar_layout.setSpacing(2)
+        self.bar_layout.setSpacing(8)
         self.setFixedHeight(30)
         self.setLayout(self.bar_layout)
 
         # Create widgets
         self.info_button = InfoButton(diameter=16)
-        self.flashcard_type = QLabel()
-
+#        self.flashcard_type = QLabel()
+        self.deck_icon = QLabel()
+        pixmap = QPixmap(str(constants.ICON_PATH / "deck_cards.png"))
+        scaled = pixmap.scaled(constants.ICON_SIZE, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+        self.deck_icon.setPixmap(scaled)
+        self.text_label = QLabel()
+        self.text_label.setTextFormat(Qt.TextFormat.RichText)
+#        self.deck_icon.setFixedSize(scaled.size())
         # Configure widgets
-        self.flashcard_type.setStyleSheet("font-size: 18px; color: white; font-family: Arial")
+#        self.flashcard_type.setStyleSheet("font-size: 18px; color: white; font-family: Arial")
 
         # Add widgets
-        self.bar_layout.addStretch()
-        self.bar_layout.addWidget(self.flashcard_type)
-        self.bar_layout.addStretch()
-        self.bar_layout.addStretch()
+#        self.bar_layout.addStretch()
+#        self.bar_layout.addWidget(self.flashcard_type)
+        self.bar_layout.setAlignment(Qt.AlignmentFlag.AlignRight)
+        self.bar_layout.addWidget(self.text_label)
+        self.bar_layout.addWidget(self.deck_icon)
         self.bar_layout.addWidget(self.info_button)
+
+        self.set_count(0, 0)
+
+    def set_count(self, current: int, total: int):
+        self.text_label.setText(
+            f'<span style="color:white; font-weight:bold; font-size:16px;">{current}</span>'
+            f'<span style="color:#999999; font-size:14px;"> / {total}</span>'
+        )

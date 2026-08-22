@@ -351,6 +351,18 @@ class FlashcardBuilderStage(Stage[TrackedText, list[Flashcard]]):
     def add_subsection_finder(self, sub_section_name: str, parents: list[str]):
         self.sub_section_finders.append(SubSectionFinder(sub_section_name, parents))
 
+class FormatStage(Stage[list[Flashcard], list[Flashcard]]):
+    def process(self, data: list[Flashcard]) -> list[Flashcard]:
+        for card in data:
+            qs = card.sides[FlashcardSideName.QUESTION]
+            ans = card.sides.get(FlashcardSideName.ANSWER)
+            pf = card.sides.get(FlashcardSideName.PROOF)
+            if len(qs.content) == 0 and (ans is not None and pf is not None):
+                card.sides[FlashcardSideName.QUESTION] = ans
+                card.sides[FlashcardSideName.ANSWER] = pf
+                del card.sides[FlashcardSideName.PROOF]
+        return data
+
 
 class ProcessingPipeline(Generic[Output]):
     def __init__(self, data_iterable: Iterable):

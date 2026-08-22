@@ -4,7 +4,10 @@ from typing import OrderedDict
 import hashlib
 import tempfile
 
-from ..models import SourceFile
+from PyQt6.QtGui import QTextDocument
+from PyQt6.QtPrintSupport import QPrinter
+
+from ..models import SourceFile, FlashcardSideName
 
 from .compiler import CompileOptions, compile_source
 from ..models import TrackedText, Flashcard
@@ -15,7 +18,9 @@ logger = logging.getLogger(__name__)
 
 
 # TODO make package dynamic
-def latex_template(tex: str) -> str:
+def latex_template(tex: str, prefix: str | None = None) -> str:
+    if prefix is not None:
+        tex = fr"\emph{{{prefix}}}: {tex}"
     """ Flashcard contents are compiled with the following template """
     return fr"""
 \documentclass[preview, border=0.1in]{{standalone}}
@@ -27,13 +32,16 @@ def latex_template(tex: str) -> str:
 \end{{document}}"""
 
 # TODO make package dynamic
-def typst_template(typ: str, packages: list[dict[str, list[str]]] | None = None) -> str:
+def typst_template(typ: str, prefix: str | None = None, packages: list[dict[str, list[str]]] | None = None) -> str:
+    if prefix is not None:
+        typ = f'#emph("{prefix}"): {typ}'
     return fr"""
 #set page(
         width: 14cm,
         height: auto,
         margin: 5pt
         )
+#set text(14pt)
 #import "@local/notes:1.0.0": *
 
 {typ}
@@ -188,13 +196,23 @@ class FlashcardCompiler:
 
     def compile_card(self, card: Flashcard) -> None:
         """ Attemps to compile flashcard question/answer latex. If compilation fails """
-        for v in card.sides.values():
-            pdf = self._compile_tracked_text(v.content)
+        for k, v in card.sides.items():
+            hash = self.cache.hash_markdown(str(v.content))
+            cached_res = self.cache.get(hash)
+            if isinstance(cached_res, Path):
+                print("In cache")
+                v.pdf_path = cached_res
+                continue
+            if k == FlashcardSideName.QUESTION:
+                prefix = card.section_name.lower().capitalize()
+                pdf = self._compile_tracked_text(v.content, prefix=prefix)
+            else:
+                pdf = self._compile_tracked_text(v.content)
             if pdf is None:
                 raise ValueError(f"Failed to compile flashcard content: {v.content}")
             v.pdf_path = pdf
 
-    def _compile_tracked_text(self, text: TrackedText) -> Path | None:
+    def _compile_tracked_text(self, text: TrackedText, prefix: str | None = None) -> Path | None:
         source = text.source
         ext = text.filetype().extension
         if text.filetype() == FileType.LaTeX:
@@ -206,7 +224,7 @@ class FlashcardCompiler:
         with tempfile.TemporaryDirectory() as tmpdir:
             source_file_path = Path(tmpdir) / f"temp{ext}"
             pdf_file_path = Path(tmpdir) / "temp.pdf"
-            source_file_path.write_text(template_func(string), encoding='utf-8')
+            source_file_path.write_text(template_func(string, prefix=prefix), encoding='utf-8')
             file = SourceFile(source_file_path)
             options = CompileOptions(source_file_path, OutputFormat.PDF)
             return_code = compile_source(file, options)
@@ -218,7 +236,19 @@ class FlashcardCompiler:
                     return None
 
             new_path = pdf_file_path.rename(self.cache.cache_pdf / f"{self.cache.hash_markdown(string)}.pdf").resolve()
-            self.cache[new_path.name] = new_path
+            self.cache[new_path.stem] = new_path
         return new_path
 
+
+    # TODO: untested
+    def text_to_pdf(self, text: str) -> Path:
+        doc = QTextDocument()
+        doc.setPlainText(text)
+
+        printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+        printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
+        path = self.cache.cache_pdf / f"{self.cache.hash_markdown(text)}-error.pdf"
+        printer.setOutputFileName(str(path))
+        doc.print(printer)
+        return path
 

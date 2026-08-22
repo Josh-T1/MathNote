@@ -1,9 +1,9 @@
 from __future__ import annotations
-import math
 from io import UnsupportedOperation
 import tempfile
 from pathlib import Path
 import threading
+import time
 from typing import Callable, Literal
 import logging
 import random
@@ -23,10 +23,10 @@ from .flashcard_viewer import FlashcardView
 from ..models import Category, Course, SourceFile, Note, Flashcard, TrackedText, FlashcardSideName
 from ..services import (CompileOptions, compile_source, NotesRepository, CourseRepository,
                         NotesRepository, FlashcardSession, FlashcardCache, FlashcardCompiler, open_pdf,
-                        DataGenerator, FlashcardBuilderStage, CleanStage, DataGenerator, ProcessingPipeline)
+                        DataGenerator, FlashcardBuilderStage, CleanStage, DataGenerator, ProcessingPipeline, FormatStage)
 from ..config import CONFIG
 from .._enums import FileType, OutputFormat
-from ..exceptions import (CompilationError, EndofFlashcards, LaTeXCompilationError, NoItemSelected, NoteExistsError, CategoryExistsError,
+from ..exceptions import (CompilationError, EndofFlashcards, FlashcardCompilationError, FlashcardNotFoundException, LaTeXCompilationError, NoItemSelected, NoteExistsError, CategoryExistsError,
                           InvalidNameError, NoteExistsError, CourseExistsError, TypstCompilationError)
 
 logger = logging.getLogger("mathnote")
@@ -353,7 +353,7 @@ class CourseController(QObject):
                 assert isinstance(course, Course), f"Tree item has unexpected type '{type(course)}', expected 'Course'"
                 return course, parent
             parent = parent.parent()
-        raise Exception("Unexpected error: unable to determine course")
+        raise Exception("Unable to determine course")
 
     def _search_tree(self, item: QStandardItem, name: str) -> QStandardItem | None:
         if item.data(constants.COURSE_DIR) == name:
@@ -600,7 +600,7 @@ class FlashcardController:
         self.cache = FlashcardCache(CONFIG.cache_dir())
         self.compiler = FlashcardCompiler(self.cache)
         self.session = FlashcardSession(self.compiler)
-        self.session.start()
+#        self.session.start()
         self.course_repo = CourseRepository(CONFIG)
 
         self.set_handlers()
@@ -612,6 +612,7 @@ class FlashcardController:
         self.navbar.command_bar.create_flashcards_button.clicked.connect(lambda: self.create_flashcards())
         self.view.info_bar.info_button.clicked.connect(lambda: self.show_flashcard_info())
         self.navbar.course_config.update_filters.connect(lambda: self.handle_update_filters())
+        self.session.pos.connect(lambda x, y: self.handle_update_count(x, y))
 
     def handle_update_filters(self):
         text = self.navbar.course_config.course_combo.currentText()
@@ -638,7 +639,28 @@ class FlashcardController:
     @with_error_dialog
     def show_next_flashcard(self, checked: bool = False):
         card = self.session.next_flashcard()
-        self.view.display_compiled_card(card)
+        try:
+            self.view.display_compiled_card(card)
+        except Exception as e:
+            ans = card.sides.get(FlashcardSideName.ANSWER)
+            pf = card.sides.get(FlashcardSideName.PROOF)
+
+            if ans is None and pf is None:
+                question = card.sides[FlashcardSideName.QUESTION].content
+                raise ValueError(f"Missing second side\n Flashcard question: {question}\n source: {question.source}")
+
+            if ans is not None and ans.pdf_path is None:
+                ans.pdf_path = self.compiler.text_to_pdf(str(ans.content))
+
+            if pf is not None and pf.pdf_path is None:
+                pf.pdf_path = self.compiler.text_to_pdf(str(pf.content))
+
+            self.view.display_compiled_card(card)
+            raise FlashcardCompilationError("Failed to compile flashcard. Displaying raw LaTeX/Typst")
+
+
+    def handle_update_count(self, current: int, total: int):
+        self.view.info_bar.set_count(current, total)
 
 
     @with_error_dialog
@@ -667,15 +689,22 @@ class FlashcardController:
     def create_flashcards(self):
         paths, section_names_dict, shuffle = self.generate_pipe_config()
         logger.info(f"Creating flashcards from {len(paths)} paths")
+
         data_iterable = DataGenerator(paths)
         clean_data_stage = CleanStage(CONFIG.macros())
+        format_state = FormatStage()
         build_stage = FlashcardBuilderStage(section_names_dict)
         build_stage.add_subsection_finder("PROOF", ["THEOREM", "PROPOSITION", "LEMMA", "COROLLARY"])
         pipeline = ProcessingPipeline(data_iterable)
         pipeline.add_stage(clean_data_stage)
         pipeline.add_stage(build_stage)
+        pipeline.add_stage(format_state)
+
         load_thread = threading.Thread(target=self.session.load_flashcards, args=(pipeline, shuffle))
         load_thread.start()
+
+        time.sleep(0.1)
+        self.show_next_flashcard()
 
     def stop(self):
         self.session.stop()

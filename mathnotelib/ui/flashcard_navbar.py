@@ -98,7 +98,7 @@ class FlashcardFromDeckConfigWidget(QWidget):
         self.deck_combo.setContentsMargins(0, 8, 0, 12)
         self.deck_combo.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
 
-        section_names = ["definition", "theorem",  "lemma", "proposition", "corollary", "derivation", "All"]
+        section_names = ["All", "definition", "theorem",  "lemma", "proposition", "corollary", "derivation"]
         self.section_list = SectionListWidget(section_names)
 
         self.config_layout.addWidget(self.deck_combo_label)

@@ -97,14 +97,15 @@ class FlashcardDoubleLinkedList:
 
     def prepend(self, data: Flashcard) -> None:
         new_node = Node(data)
-        if (old_head := self.head):
+        if (old_head := self.head) is not None:
             self.head = new_node
             self.head.prev = old_head
             old_head.next = self.head
 
         else:
             self.current = new_node
-            self.head = self.tail = new_node
+            self.head = new_node
+            self.tail = new_node
 
     def get_next(self) -> Flashcard:
         # Current node exists and has next reference, then return next reference and set current to next
