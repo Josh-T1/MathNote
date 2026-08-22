@@ -267,13 +267,13 @@ class TabWidget(QWidget):
         col2_layout.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight)
         main_layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
 
-        tab_btn = QPushButton(self.label)
-        tab_btn.setFlat(True)
-        tab_btn.setFixedHeight(29)
-        tab_btn.setMinimumWidth(69)
-        tab_btn.setMaximumWidth(119)
-        tab_btn.clicked.connect(self.switch_callback)
-        tab_btn.setStyleSheet(TAB_BTN_EMPTY_CSS)
+        self.tab_btn = QPushButton(self.label)
+        self.tab_btn.setFlat(True)
+        self.tab_btn.setFixedHeight(29)
+        self.tab_btn.setMinimumWidth(69)
+        self.tab_btn.setMaximumWidth(119)
+        self.tab_btn.clicked.connect(self.switch_callback)
+        self.tab_btn.setStyleSheet(TAB_BTN_EMPTY_CSS)
 
 
         close_btn = QPushButton()
@@ -292,7 +292,7 @@ class TabWidget(QWidget):
         self.live_icon.setSizePolicy(policy)
         self.live_icon.hide()
 
-        col1_layout.addWidget(tab_btn)
+        col1_layout.addWidget(self.tab_btn)
         col2_layout.addWidget(close_btn)
 
 
@@ -526,20 +526,9 @@ class TabbedSvgViewer(QWidget):
         if not isinstance(current_viewer, ZMultiPageViewer):
             return
         current_viewer.load(svg_paths, tmpdir, preserve_state=preserve_state)
-        idx = self.stack.indexOf(current_viewer)
-        if source is None:
+
+        focused_tab = self.tab_bar.get_focused_tab()
+        if focused_tab is None or source is None:
             return
-        try:
-            widget = self.tab_bar.main_layout.itemAt(idx).widget()
-            btn = widget.layout().itemAt(0).widget()
-
-            if isinstance(btn, QPushButton):
-                btn.setText(source.name)
-                btn.setToolTip(source.name)
-                btn.setStyleSheet(TAB_BTN_CSS)
-
-            if isinstance(widget, TabWidget):
-                widget.source_file = source
-
-        except Exception as e:
-            pass
+        focused_tab.source_file = source
+        focused_tab.tab_btn.setText(source.name)
