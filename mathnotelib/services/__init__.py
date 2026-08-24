@@ -6,7 +6,7 @@ from .filesystem import open_cmd, open_file_with_editor
 from .note_repo import NotesRepository
 from .pipeline import (MainSectionFinder, ProcessingPipeline, FlashcardBuilderStage,
                        CleanStage, DataGenerator, TrackedText, FormatStage)
-from .flashcard_session import FlashcardSession
+from .flashcard_session import FlashcardSession, DeckRepository
 
 
 __all__ = [
@@ -35,4 +35,5 @@ __all__ = [
         "FormatStage",
 
         "FlashcardSession",
+        "DeckRepository"
         ]

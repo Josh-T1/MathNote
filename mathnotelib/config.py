@@ -20,7 +20,6 @@ class Config:
     def __init__(self,
 #                 macro_names: list[str] | None=None,
                  log_level: str = "INFO",
-                 iterm2_enabled: bool = False,
                  set_note_title: bool = True,
                  editor: str = "vim",
                  root_path: Path | None = None,
@@ -31,7 +30,6 @@ class Config:
             templates_path: Directory containing all template files (i.e., templates_path/LaTeX(Typst)/{template}.tex(typ))
             macro_names: List of macro names used in typestting projects
             log_level: Logging level
-            iterm2_enabled: If set to true additional iterm2 functinality is enabled. Default iterm2_enabled=False
             template_files: Dict: filetype -> (template_name -> template_path). Maps filetype to a a new map, which maps template name to template path
             editor: Default editor to open files, nvim and vim are the only supported options
         """
@@ -48,7 +46,6 @@ class Config:
         self.templates_path = Path(__file__).parent / "templates"
         self.macro_names = []
         self.log_level = log_level
-        self.iterm2_enabled = iterm2_enabled
         self.set_note_title = set_note_title
         self.template_files: dict[FileType, dict[str, Path]] = {}
         self.editor = editor
@@ -99,7 +96,7 @@ class Config:
         config_path = config_dir / "config.json"
         if not config_path.is_file():
             raise EnvironmentError("Environment was incorrectly initialized, missing config file")
-
+        # The issue here is the loaded values are str not objects
 #        with open(config_path, 'r') as f:
 #            data = json.load(f)
 #            for k, v in data.items():

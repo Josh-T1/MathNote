@@ -39,9 +39,9 @@ def typst_template(typ: str, prefix: str | None = None, packages: list[dict[str,
 #set page(
         width: 14cm,
         height: auto,
-        margin: 5pt
+        margin: 15pt
         )
-#set text(14pt)
+#set text(11pt)
 #import "@local/notes:1.0.0": *
 
 {typ}

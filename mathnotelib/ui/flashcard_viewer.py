@@ -13,8 +13,6 @@ from ..models import Flashcard, FlashcardSideName
 from ..ui import constants
 
 
-
-
 logger = logging.getLogger("mathnote")
 
 
@@ -154,9 +152,9 @@ class HButtonBar(QWidget):
 
     def initUi(self):
         self.bar_layout = QHBoxLayout()
-        self.bar_layout.setContentsMargins(0, 0, 0, 0)
+        self.bar_layout.setContentsMargins(0, 48, 0, 0)
         self.setLayout(self.bar_layout)
-        self.setFixedHeight(50)
+#        self.setFixedHeight(50)
 
         # Create widgets
         self.next_flashcard_button = QPushButton("Next", self)

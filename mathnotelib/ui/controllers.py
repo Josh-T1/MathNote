@@ -8,32 +8,28 @@ from typing import Callable, Literal
 import logging
 import random
 
-from PyQt6.QtCore import QFileSystemWatcher, QModelIndex, QObject, QThread, QTimer, Qt
+from PyQt6.QtCore import QFileSystemWatcher, QModelIndex, QObject, QTimer, Qt
 from PyQt6.QtGui import QStandardItem
 from PyQt6.QtWidgets import QHBoxLayout, QListView, QMainWindow, QStackedWidget, QWidget
 
 
 from . import constants
-from .file_navbar import confirm_delete
 from .flashcard_navbar import FlashcardNavbar
 from .navbar import CourseNavbar, NavbarContainer, NotesNavbar
-from .dialog import NewCourseDialog, NewNoteDialog, NameDialog, show_error_dialog
-from .notes_viewer import TabWidget, TabbedSvgViewer
+from .dialog import NewCourseDialog, NameDialog, NewTypesetFileDialog, confirm_delete
+from .file_viewer import TabWidget, TabbedSvgViewer
 from .flashcard_viewer import FlashcardView
-from ..models import Category, Course, SourceFile, Note, Flashcard, TrackedText, FlashcardSideName
+from ..models import Category, Course, SourceFile, Note, FlashcardSideName
 from ..services import (CompileOptions, compile_source, NotesRepository, CourseRepository,
-                        NotesRepository, FlashcardSession, FlashcardCache, FlashcardCompiler, open_pdf,
+                        NotesRepository, FlashcardSession, FlashcardCache, FlashcardCompiler, open_pdf, DeckRepository,
                         DataGenerator, FlashcardBuilderStage, CleanStage, DataGenerator, ProcessingPipeline, FormatStage)
 from ..config import CONFIG
 from .._enums import FileType, OutputFormat
 from ..exceptions import (CompilationError, EndofFlashcards, FlashcardCompilationError, FlashcardNotFoundException, LaTeXCompilationError, NoItemSelected, NoteExistsError, CategoryExistsError,
-                          InvalidNameError, NoteExistsError, CourseExistsError, TypstCompilationError)
+                          InvalidNameError, NoteExistsError, CourseExistsError, TypstCompilationError, FlashcardCompilationError, NoItemSelected)
 
-logger = logging.getLogger("mathnote")
+from .dialog import show_error_dialog
 
-# TODO: add input cleaning. Replace spaces with "_", remove ".ext" if they exist
-
-# Is there a way to type hint this as exception so that an error is not wrapped around a method intended to fail and be caucht here# Is there a way to type hint this as exception so that an error is not wrapped around a method intended to fail and be caucht here# Is there a way to type hint this as exception so that an error is not wrapped around a method intended to fail and be caucht here?
 def with_error_dialog(func):
     def wrapper(self: NoteController | CourseController | FlashcardController, *args, **kwargs):
         try:
@@ -45,6 +41,12 @@ def with_error_dialog(func):
         except Exception as e:
             show_error_dialog(self.window, f"Unexpected error: {e}")
     return wrapper
+
+logger = logging.getLogger("mathnote")
+
+# TODO: add input cleaning. Replace spaces with "_", remove ".ext" if they exist
+
+# Is there a way to type hint this as exception so that an error is not wrapped around a method intended to fail and be caucht here# Is there a way to type hint this as exception so that an error is not wrapped around a method intended to fail and be caucht here# Is there a way to type hint this as exception so that an error is not wrapped around a method intended to fail and be caucht here?
 
 def rendered_sorted_key(path: Path) -> int:
     num = int(path.name.split(".")[0].split("-")[1])
@@ -195,7 +197,7 @@ class NoteController(QObject):
             self.handle_load_item(parent, target_category)
 
     def _delete_item(self, item: Note | Category, idx: QModelIndex) -> bool:
-        delete = confirm_delete(self.window, item)
+        delete = confirm_delete(self.window, item.name)
         if not delete:
             return False
         del_map = {
@@ -256,7 +258,7 @@ class NoteController(QObject):
             return
         # Now that parent item in tre is set, we create relevant files/dir's and add to tree
         if item_type == "Note":
-            dialog = NewNoteDialog()
+            dialog = NewTypesetFileDialog()
             if not dialog.exec(): return
             name, ftype = dialog.get_data()
             note = self.notes_repo.create_note(name, cat, ftype)
@@ -608,7 +610,7 @@ class FlashcardController:
         self.window = window
         self.navbar = navbar
         self.view = view
-
+        self.deck_repo = DeckRepository(CONFIG)
         self.cache = FlashcardCache(CONFIG.cache_dir())
         self.compiler = FlashcardCompiler(self.cache)
         self.session = FlashcardSession(self.compiler)
@@ -616,7 +618,8 @@ class FlashcardController:
         self.course_repo = CourseRepository(CONFIG)
 
         self.set_handlers()
-        self._populate_view()
+        self._populate_course_navbar()
+        self._populate_deck_navbar()
 
     def set_handlers(self):
         self.view.btn_bar.next_flashcard_button.clicked.connect(lambda: self.show_next_flashcard())
@@ -625,7 +628,45 @@ class FlashcardController:
         self.view.info_bar.info_button.clicked.connect(lambda: self.show_flashcard_info())
         self.navbar.course_config.update_filters.connect(lambda: self.handle_update_filters())
         self.session.pos.connect(lambda x, y: self.handle_update_count(x, y))
+        self.navbar.deck_config.new_deck_btn.clicked.connect(lambda: self.handle_new_deck())
+        self.navbar.deck_config.trash_btn.clicked.connect(lambda: self.handle_delete_deck())
+        self.navbar.deck_config.rename_btn.clicked.connect(lambda: self.handle_rename_deck())
 
+    @with_error_dialog
+    def handle_rename_deck(self):
+        curr_name = self.navbar.deck_config.deck_combo.currentText()
+        idx = self.navbar.deck_config.deck_combo.currentIndex()
+        dialog = NameDialog()
+        if not dialog.exec():
+            return
+        new_name = dialog.get_data()
+        self.deck_repo.rename_deck(curr_name, new_name)
+        self.navbar.deck_config.deck_combo.setItemText(idx, new_name)
+
+    @with_error_dialog
+    def handle_delete_deck(self):
+        name = self.navbar.deck_config.deck_combo.currentText()
+        idx = self.navbar.deck_config.deck_combo.currentIndex()
+        delete = confirm_delete(self.window, name)
+        if not delete:
+            return
+        self.deck_repo.delete_deck(name)
+        # remove from combobox
+        self.navbar.deck_config.deck_combo.removeItem(idx) # TODO
+
+
+    @with_error_dialog
+    def handle_new_deck(self):
+        dialog = NewTypesetFileDialog()
+        if not dialog.exec():
+            return
+        name, ftype = dialog.get_data()
+        self.deck_repo.new_deck(name, ftype)
+        self.navbar.deck_config.deck_combo.addItem(name)
+        self.navbar.deck_config.deck_combo.setCurrentIndex(self.navbar.deck_config.deck_combo.count() - 1)
+
+
+    @with_error_dialog
     def handle_update_filters(self):
         text = self.navbar.course_config.course_combo.currentText()
         course = self.course_repo.get_course(text)
@@ -642,10 +683,13 @@ class FlashcardController:
             list_item.setCheckable(True)
             model.appendRow(list_item)
 
-    def _populate_view(self):
+    def _populate_course_navbar(self):
         """ Use model data to populate view """
         courses = self.course_repo.courses().keys()
         self.navbar.course_config.course_combo.addItems(courses)
+
+    def _populate_deck_navbar(self):
+        self.navbar.deck_config.deck_combo.addItems(self.deck_repo.decks.keys())
 
     # TODO remove this and have display(card). Buttons are connected to stack
     @with_error_dialog
@@ -699,8 +743,13 @@ class FlashcardController:
 
     # TODO: allow for flashcards from deck
     def create_flashcards(self):
-        paths, section_names_dict, shuffle = self.generate_pipe_config()
-        logger.info(f"Creating flashcards from {len(paths)} paths")
+        if self.navbar.stack.currentWidget() == self.navbar.course_config:
+            paths, section_names_dict, shuffle = self.generate_pipe_course_config()
+            logger.info(f"Creating flashcards from {len(paths)} paths")
+        else:
+            path, section_names_dict, shuffle = self.generate_pipe_deck_config()
+            paths = [path]
+
 
         data_iterable = DataGenerator(paths)
         clean_data_stage = CleanStage(CONFIG.macros())
@@ -721,8 +770,23 @@ class FlashcardController:
     def stop(self):
         self.session.stop()
 
+    def generate_pipe_deck_config(self) -> tuple[Path, dict[str, dict[FileType, str]], bool]:
+        filename = self.navbar.deck_config.deck_combo.currentText()
+        path = self.deck_repo.decks.get(filename)
+        if path is None:
+            raise ValueError("Deck with name '{filename}' is not recognized")
+
+        shuffle = self.navbar.deck_config.random_checkbox.isChecked()
+        checked_sections = self._get_checked_items_from_listView(self.navbar.deck_config.section_list.section_list)
+        section_names_pretty = [item.text().upper() for item in checked_sections]
+        if "ALL" in [section.upper() for section in section_names_pretty]:
+            section_names = CONFIG.section_names
+        else:
+            section_names = {k: d for (k, d) in CONFIG.section_names.items() if k in section_names_pretty}
+        return path, section_names, shuffle
+
     # TODO replace weeks by lecture
-    def generate_pipe_config(self) -> tuple[list[Path], dict[str, dict[FileType, str]], bool]:
+    def generate_pipe_course_config(self) -> tuple[list[Path], dict[str, dict[FileType, str]], bool]:
         """ Retreives user config from widgets. We need to do error checking... what if no boxes are checked """
         # Lecture numberes
         course_name = self.navbar.course_config.course_combo.currentText()

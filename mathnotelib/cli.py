@@ -29,6 +29,7 @@ def _initialize_project_tree():
     """ Create MathNote directory with required subdirectories and files """
     if not CONFIG.root_path.is_dir():
         CONFIG.root_path.mkdir()
+
     preambles_path = CONFIG.root_path / "Preambles"
     preambles_path.mkdir()
     shutil.copytree(CONFIG.templates_path, preambles_path, dirs_exist_ok=True)
@@ -37,6 +38,8 @@ def _initialize_project_tree():
     note_dir.mkdir()
     preambles_path = note_dir / "Preambles"
     preambles_path.mkdir()
+    flashcard_decks_dir = CONFIG.root_path / "Decks"
+    flashcard_decks_dir.mkdir()
     shutil.copytree(CONFIG.templates_path, preambles_path, dirs_exist_ok=True)
 #    refs = resourses_dir / "refs.tex"
 #    refs.touch()

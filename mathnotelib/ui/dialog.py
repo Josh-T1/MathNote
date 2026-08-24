@@ -1,7 +1,12 @@
 from PyQt6.QtWidgets import (QCheckBox, QComboBox, QDateEdit, QDialog, QDialogButtonBox, QFormLayout,
                              QHBoxLayout, QLineEdit, QMessageBox ,QTimeEdit,QWidget)
 
+from ..exceptions import (CompilationError, EndofFlashcards, FlashcardCompilationError, FlashcardNotFoundException, LaTeXCompilationError, NoItemSelected, NoteExistsError, CategoryExistsError,
+                          InvalidNameError, NoteExistsError, CourseExistsError, TypstCompilationError)
 from .._enums import FileType
+from ..models import SourceFile, Course, Category
+
+
 
 def show_error_dialog(window: QWidget, msg: str):
     dialog = QMessageBox(window)
@@ -77,7 +82,7 @@ class NameDialog(QDialog):
         return self.name.text()
 
 
-class NewNoteDialog(QDialog):
+class NewTypesetFileDialog(QDialog):
     def __init__(self):
         super().__init__()
         self.initUI()
@@ -119,3 +124,25 @@ class DaysOfWeekSelector(QWidget):
     def set_selected_days(self, days):
         for d, cb in self.checkboxes.items():
             cb.setChecked(d in days)
+
+def confirm_delete(window: QWidget, item_name: str) -> bool:
+    """
+    Show a confirmation dialog before deleting.
+
+    Args:
+        parent: Parent widget (e.g. main window).
+        name: Name of the object to delete.
+        kind: Type of object (e.g. "note", "course", "file").
+
+    Returns:
+        True if user confirmed, False otherwise.
+    """
+    msg = QMessageBox(window)
+    msg.setIcon(QMessageBox.Icon.Warning)
+    msg.setWindowTitle(f"Delete {item_name}")
+    msg.setText(f"Are you sure you want to delete '{item_name}'?")
+    msg.setInformativeText("This action cannot be undone.")
+    msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel)
+    msg.setDefaultButton(QMessageBox.StandardButton.Cancel)
+    result = msg.exec()
+    return result == QMessageBox.StandardButton.Yes

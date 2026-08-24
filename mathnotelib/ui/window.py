@@ -32,14 +32,13 @@ class MainWindow(QMainWindow):
         self.main_layout.setSpacing(0)
         self.main_layout.setContentsMargins(0, 0, 0, 12)
 
-        self.filter = EventFilter(self.navbar_container.search_widget)
-
-        self.installEventFilter(self.filter)
+#        self.filter = EventFilter(self.navbar_container.search_widget)
+#        self.installEventFilter(self.filter)
         # Configure
         self.setStyleSheet(MAIN_WINDOW_CSS)
         self.viewer_container.notes_viewer.addTab(focus=True)
         # Add to layout
-        self.main_layout.addWidget(self.navbar_container, stretch=1)
+        self.main_layout.addWidget(self.navbar_container)
         self.main_layout.addWidget(self.viewer_container)
 
     def set_close_callback(self, callback: typing.Callable):

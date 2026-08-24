@@ -11,6 +11,8 @@ from PyQt6.QtCore import QObject, pyqtSignal
 from .pipeline import ProcessingPipeline
 from ..models import Flashcard, FlashcardDoubleLinkedList
 from ..services import FlashcardCompiler
+from ..config import Config
+from .._enums import FileType
 
 logger = logging.getLogger("mathnote")
 
@@ -193,3 +195,56 @@ class StoppableThread(threading.Thread):
     def stop(self):
         logger.debug(f"Setting {self.__class__.__name__} stop event")
         self._stop_event.set()
+
+
+
+class DeckRepository:
+    def __init__(self, config: Config):
+        self.config = config
+        self.root_deck_path = config.root_path / "decks" #TODO: move this to config section
+        self._decks: dict[str, Path] = {}
+
+    @property
+    def decks(self) -> dict[str, Path]:
+        if len(self._decks) == 0:
+            decks = self._load_decks()
+            self._decks = decks
+            return self._decks
+        else:
+            return self._decks
+
+    def _load_decks(self) -> dict[str, Path]:
+        decks = {}
+        for file in self.root_deck_path.iterdir():
+            if file.suffix in [".typ", ".tex"]:
+                decks[file.stem] = file
+        return decks
+
+    def new_deck(self, name: str, ftype: FileType):
+        names = self.decks.keys()
+        if name in names:
+            raise ValueError(f"Deck '{name}' already exists")
+        new_file = self.root_deck_path / f"{name}{ftype.extension}"
+        new_file.touch()
+        self._decks = self._load_decks()
+
+    def rename_deck(self, old_name: str, new_name: str):
+        old_file = self.decks.get(old_name)
+        if old_file is None:
+            raise ValueError(f"Deck '{old_name}' does not exist")
+
+        if new_name in self.decks.keys():
+            raise ValueError(f"Deck '{new_name}' already exists")
+        new_path = self.root_deck_path / f"{new_name}{old_file.suffix}"
+        old_file.rename(new_path)
+
+
+    def delete_deck(self, name: str):
+        file = self.decks.get(name)
+        # Should I even catch the error, or just let it get raised in unlink()?
+        if file is None:
+            raise ValueError(f"Deck '{name}' does not exist")
+        else:
+            file.unlink()
+
+

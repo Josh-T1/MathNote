@@ -1,5 +1,5 @@
 from .window import MainWindow
-from .notes_viewer import TabbedSvgViewer
+from .file_viewer import TabbedSvgViewer
 from .navbar import NavbarContainer, SettingsNavbar
 from .file_navbar import CourseNavbar, NotesNavbar
 from .flashcard_navbar import FlashcardNavbar
