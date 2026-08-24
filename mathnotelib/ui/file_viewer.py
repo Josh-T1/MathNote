@@ -346,9 +346,6 @@ class ToolTabBar(QWidget):
         count = self.main_layout.count()
         self.main_layout.insertWidget(max(0, count - 1), tab)
 
-    def connect_tab_btn(self, callback: Callable[[], None]) -> None:
-        self.add_tab_btn.clicked.connect(callback)
-
 
     def get_tabs(self) -> list[TabWidget]:
         tabs = []
@@ -385,6 +382,7 @@ class ToolTabBar(QWidget):
 
     def focus_tab(self, idx: int):
         # TODO remove for loop
+        curr_tab_idx = -1
         for i in range(self.main_layout.count()): # -1 to account for settings widget in toolbar
             item = self.main_layout.itemAt(i)
             if item is None:
@@ -392,7 +390,8 @@ class ToolTabBar(QWidget):
             tab = item.widget()
             if not isinstance(tab, TabWidget):
                 return
-            if i == idx:
+            curr_tab_idx += 1
+            if curr_tab_idx == idx:
                 tab.set_focus(focus=True)
             else:
                 tab.set_focus(focus=False)
@@ -420,7 +419,7 @@ class TabbedSvgViewer(QWidget):
         self.stack = QStackedWidget()
         # Configure widgets
         self.setMinimumSize(constants.VIEWER_WIDTH, constants.VIEWER_HEIGHT)
-        self.tab_bar.connect_tab_btn(lambda: self.addTab(focus=True))
+        self.tab_bar.add_tab_btn.clicked.connect(lambda: self.addTab(focus=True))
         self.stack.setStyleSheet("background-color: white;")
         self.stack.setContentsMargins(0, 0, 0, 0)
         # Add widgets to layout
@@ -428,26 +427,30 @@ class TabbedSvgViewer(QWidget):
         self.main_layout.addWidget(self.stack)
 
 
-    def close_tab(self, widget: QWidget, toolbar_layout: QLayout, tab_widget: QWidget):
+    def close_tab(self, widget: QWidget, toolbar_layout: QLayout, tab_widget: TabWidget):
         # TODO: Issue is that you can close tabs without every selecting said tab. This implies tab 5 can be focused, we delete tab 3 and then tab 2 becomes focused instead of tab 5
-        tab_widget.deleteLater()
         toolbar_layout.removeWidget(widget)
+        tab_widget.deleteLater()
 
         idx = self.stack.indexOf(widget)
+        largest_idx = self.stack.count() -1
         if idx == -1: # widget is not in stack
             return
 
-        self.stack.removeWidget(widget)
-        widget.deleteLater()
-        if self.stack.count() == 0:
+        if self.stack.count() == 1:
+            self.stack.removeWidget(widget)
             self.addTab(focus=False)
             self.tab_bar.focus_tab(1)
-        else:
-#            next_idx = idx if self.stack.count() -1 >= idx else self.stack.count()- 1
-            next_idx = self.stack.count() - 1
-            self.stack.setCurrentIndex(next_idx)
-            self.tab_bar.focus_tab(next_idx)
 
+        elif self.stack.count() > 1 and tab_widget.is_focused:
+            next_idx = idx + 1 if largest_idx > idx else idx - 1
+            self.stack.setCurrentIndex(next_idx)
+            self.stack.removeWidget(widget)
+            self.tab_bar.focus_tab(next_idx)
+        else:
+            self.stack.removeWidget(widget)
+
+        widget.deleteLater()
 
     def change_tab(self, widget: QWidget):
         idx = self.stack.indexOf(widget)
@@ -485,7 +488,11 @@ class TabbedSvgViewer(QWidget):
                 close_callable
                 )
         # First tab should auto focus
-        if self.stack.count() == 1 or focus:
+        if self.stack.count() == 1:
+            self.stack.setCurrentWidget(view)
+            self.tab_bar.focus_tab(0)
+
+        elif self.stack.count() > 1 and focus:
             self.change_tab(view)
 
 
