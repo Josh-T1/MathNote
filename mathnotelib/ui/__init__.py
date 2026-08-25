@@ -5,7 +5,7 @@ from .file_navbar import CourseNavbar, NotesNavbar
 from .flashcard_navbar import FlashcardNavbar
 from .flashcard_viewer import FlashcardView
 from .controllers import (CourseController, LiveTypstController, NoteController, FlashcardController,
-                          ViewContainer, ViewController)
+                          ViewContainer, ViewController, SettingsController)
 
 __all__ = [
         'MainWindow',
@@ -28,4 +28,5 @@ __all__ = [
         "FlashcardController",
         "ViewContainer",
         "ViewController",
+        "SettingsController"
         ]

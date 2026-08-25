@@ -130,6 +130,17 @@ QLabel {{
 }}
 """
 
+BOXED_LABEL_CSS = f"""
+QLabel {{
+    border: 1px solid {COLOR_TEXT_SECONDARY};
+    border-radius: 3px;
+    background-color: {COLOR_FOCUSED};
+    color: {COLOR_TEXT_PRIMARY};
+    padding: 1px 18px 1px 3px;
+    min-width: 6em;
+}}
+"""
+
 TITLE_LABEL_CSS = f"""
 QLabel {{
     font-size: 18px;

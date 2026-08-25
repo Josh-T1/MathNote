@@ -196,7 +196,7 @@ class ZMultiPageViewer(QGraphicsView):
 class TabWidget(QWidget):
     def __init__(self, label: str,
                  switch_callback: Callable[[], None],
-                 close_callback: Callable[[QWidget], None],
+                 close_callback: Callable[["TabWidget"], None],
                  source: SourceFile | None = None,
                  parent=None,
                  ) -> None:
@@ -330,23 +330,6 @@ class ToolTabBar(QWidget):
         self.live_preview_btn.clicked.connect(lambda: self.preview.emit())
         return cont
 
-    def add_tab_button(self,
-                       label: str,
-                       switch_callback: Callable[[], None],
-                       close_callback: Callable[[QLayout, QWidget], None]
-                       ) -> None:
-        """
-        Params:
-            close_callback: TODO, why do we have wrapped close? We do not just allow callbacks to have args
-            switch_callback: TODO
-        """
-
-        partial_close = partial(close_callback, self.main_layout)
-        tab = TabWidget(label, switch_callback, partial_close)
-        count = self.main_layout.count()
-        self.main_layout.insertWidget(max(0, count - 1), tab)
-
-
     def get_tabs(self) -> list[TabWidget]:
         tabs = []
         for i in range(self.main_layout.count()):
@@ -390,6 +373,7 @@ class ToolTabBar(QWidget):
             tab = item.widget()
             if not isinstance(tab, TabWidget):
                 return
+
             curr_tab_idx += 1
             if curr_tab_idx == idx:
                 tab.set_focus(focus=True)
@@ -427,9 +411,8 @@ class TabbedSvgViewer(QWidget):
         self.main_layout.addWidget(self.stack)
 
 
-    def close_tab(self, widget: QWidget, toolbar_layout: QLayout, tab_widget: TabWidget):
-        # TODO: Issue is that you can close tabs without every selecting said tab. This implies tab 5 can be focused, we delete tab 3 and then tab 2 becomes focused instead of tab 5
-        toolbar_layout.removeWidget(widget)
+    def close_tab(self, widget: QWidget, tab_widget: TabWidget):
+        self.tab_bar.main_layout.removeWidget(tab_widget)
         tab_widget.deleteLater()
 
         idx = self.stack.indexOf(widget)
@@ -440,7 +423,7 @@ class TabbedSvgViewer(QWidget):
         if self.stack.count() == 1:
             self.stack.removeWidget(widget)
             self.addTab(focus=False)
-            self.tab_bar.focus_tab(1)
+            self.tab_bar.focus_tab(0)
 
         elif self.stack.count() > 1 and tab_widget.is_focused:
             next_idx = idx + 1 if largest_idx > idx else idx - 1
@@ -472,21 +455,22 @@ class TabbedSvgViewer(QWidget):
             func = getattr(source, "pretty_name", lambda: source.name)
             file_name = func()
         elif source is None:
-            file_name = f"{self.stack.count() + 1}"
+            widgets = {int(tab.label) for tab in self.tab_bar.get_tabs() if tab.label.isdigit()}.union({0})
+            file_name = f"{max(widgets) + 1}"
         else:
             file_name = source.path.parent.parent.stem
 
         if self.max_tabs == self.stack.count():
             return
 
-        close_callable = functools.partial(self.close_tab, view)
-        switch_callable = functools.partial(self.change_tab, view)
+        close_callback = partial(self.close_tab, view)
+        switch_callback = partial(self.change_tab, view)
         self.stack.addWidget(view)
-        self.tab_bar.add_tab_button(
-                file_name,
-                switch_callable,
-                close_callable
-                )
+        # partial is destroying type hint... hopefully that is the only issue here
+        tab = TabWidget(file_name, switch_callback, close_callback)
+        count = self.tab_bar.main_layout.count()
+        self.tab_bar.main_layout.insertWidget(max(0, count - 1), tab)
+
         # First tab should auto focus
         if self.stack.count() == 1:
             self.stack.setCurrentWidget(view)

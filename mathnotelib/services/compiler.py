@@ -93,18 +93,11 @@ def compile_typst(filepath: Path, options: CompileOptions) -> CompilationResult:
         cmd,
         stdout = subprocess.PIPE,
         stderr = subprocess.PIPE,
-        cwd = filepath.parent # Hack, cant figure out how to specify out dir in tpyst compile
+        cwd = options.resolved_cwd()
         )
     if result.returncode != 0 or options.output_format == OutputFormat.PDF:
         return (result.returncode, result.stderr.decode("utf-8"), result.stdout.decode("utf-8"))
 
-    # Move files as a workaround for lack of output directory flag
-    files = filepath.glob(f"{options.resolved_output_file_stem()}*.svg")
-    for f in files:
-        try:
-            shutil.move(f, options.resolved_output_dir() / f"{options.resolved_output_file_stem()}.svg")
-        except Exception as e:
-            return (1, "Failed to move compiled files to output directory (see compiler.py, this is a hack for lack of typst --outdir)", "")
     return (result.returncode, result.stderr.decode("utf-8", errors="replace"), result.stdout.decode("utf-8", errors="replace"))
 
 def interpret_latexmk_exit_code(result: subprocess.CompletedProcess[bytes]) -> str:

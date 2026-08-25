@@ -10,12 +10,14 @@ import random
 
 from PyQt6.QtCore import QFileSystemWatcher, QModelIndex, QObject, QTimer, Qt
 from PyQt6.QtGui import QStandardItem
-from PyQt6.QtWidgets import QHBoxLayout, QListView, QMainWindow, QStackedWidget, QWidget
+from PyQt6.QtWidgets import QHBoxLayout, QListView, QMainWindow, QSizePolicy, QStackedWidget, QWidget
+
+from mathnotelib.ui.widgets import TightStackedWidget
 
 
 from . import constants
 from .flashcard_navbar import FlashcardNavbar
-from .navbar import CourseNavbar, NavbarContainer, NotesNavbar
+from .navbar import CourseNavbar, NavbarContainer, NotesNavbar, SettingsNavbar
 from .dialog import NewCourseDialog, NameDialog, NewTypesetFileDialog, confirm_delete
 from .file_viewer import TabWidget, TabbedSvgViewer
 from .flashcard_viewer import FlashcardView
@@ -59,24 +61,23 @@ class ViewContainer(QWidget):
         super().__init__()
         self.notes_viewer = notes_viewer
         self.flashcard_viewer = flashcard_viewer
-        self.view_stack = QStackedWidget()
+        self.view_stack = TightStackedWidget()
         self.initUi()
 
     def initUi(self):
         self.main_layout = QHBoxLayout()
         self.main_layout.setContentsMargins(0, 0, 0, 0)
-
         self.setLayout(self.main_layout)
 
         self.view_stack.addWidget(self.notes_viewer)
         self.view_stack.addWidget(self.flashcard_viewer)
         self.view_stack.setCurrentWidget(self.notes_viewer)
-
         self.main_layout.addWidget(self.view_stack)
 
 
 class ViewController(QObject):
-    def __init__(self, navbar_container: NavbarContainer, view_container: ViewContainer):
+    def __init__(self, window: QMainWindow, navbar_container: NavbarContainer, view_container: ViewContainer):
+        self.window = window
         self.navbar_cont = navbar_container
         self.window_cont = view_container
         self.connect_handlers()
@@ -101,14 +102,19 @@ class ViewController(QObject):
     def set_flashcard_view(self):
         self.navbar_cont.stack.setCurrentWidget(self.navbar_cont.flashcard_navbar)
         self.window_cont.view_stack.setCurrentWidget(self.window_cont.flashcard_viewer)
+        self.window.setFixedSize(1050, 875)
 
     def set_notes_view(self):
         self.navbar_cont.stack.setCurrentWidget(self.navbar_cont.notes_navbar)
         self.window_cont.view_stack.setCurrentWidget(self.window_cont.notes_viewer)
+        self.window.setMinimumSize(1050, 1000)
+        self.window.setMaximumSize(16777215, 16777215)  # Qt's default "no maximum" sentinel
 
     def set_course_notes_view(self):
         self.navbar_cont.stack.setCurrentWidget(self.navbar_cont.courses_navbar)
         self.window_cont.view_stack.setCurrentWidget(self.window_cont.notes_viewer)
+        self.window.setMinimumSize(1050, 1000)
+        self.window.setMaximumSize(16777215, 16777215)  # Qt's default "no maximum" sentinel
 
 
 
@@ -287,6 +293,8 @@ class NoteController(QObject):
         options = CompileOptions(file.path, OutputFormat.SVG, multi_page=True)
         options.set_output_dir(tmpdir_path)
         options.set_output_file_stem(constants.OUTPUT_FILE_STEM)
+        options.set_cwd(file.path.parent.parent)
+        options.root = file.path.parent.parent
 
         name_func: Callable[[], str] = getattr(file, "pretty_name", lambda: file.name)
         compilation_res = compile_source(file, options)
@@ -833,3 +841,10 @@ class FlashcardController:
         if not course:
             raise ValueError(f"Course name {course} not recognized")
         open_pdf(course.main_file)
+
+
+
+class SettingsController:
+    def __init__(self, window: QMainWindow, settings_navbar: SettingsNavbar):
+        self.settings_nav = settings_navbar
+        self.window = window

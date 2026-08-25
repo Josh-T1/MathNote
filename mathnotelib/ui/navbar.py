@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import (QComboBox, QHBoxLayout, QLabel, QPushButton, QSizeP
                              QSpacerItem, QStackedWidget, QVBoxLayout, QWidget)
 from PyQt6.QtCore import Qt
 
-from .style import BUTTON_CSS, COMBO_BOX_CSS, ICON_CSS, LABEL_CSS, TITLE_LABEL_CSS
+from .style import BOXED_LABEL_CSS, BUTTON_CSS, COMBO_BOX_CSS, ICON_CSS, LABEL_CSS, TITLE_LABEL_CSS
 from .widgets import TightStackedWidget
 from . import constants
 from .file_navbar import NotesNavbar, CourseNavbar
@@ -28,7 +28,7 @@ class SettingsNavbar(QWidget):
         self.setLayout(main_layout)
         # Create Widgets
         settings_title = QLabel("Settings")
-        root_label = QLabel("Root")
+
         section_names_label = QLabel("Section Names")
         log_level_label = QLabel("Log level")
         self.log_level_combo = QComboBox()
@@ -41,9 +41,18 @@ class SettingsNavbar(QWidget):
         log_levels = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
         self.log_level_combo.addItems(log_levels)
 
+        root_label = QLabel("Root")
+        root_val= QLabel()
+        root_layout = QHBoxLayout()
+        root_label.setStyleSheet(LABEL_CSS)
+        root_label.setFixedHeight(constants.LABEL_HEIGHT)
+        root_val.setStyleSheet(BOXED_LABEL_CSS)
+        root_val.setFixedHeight(constants.LABEL_HEIGHT)
+        root_layout.addWidget(root_label)
+        root_layout.addWidget(root_val)
 
         label_widget = [
-                (root_label, QComboBox()),
+#                (root_label, QComboBox()),
                 (section_names_label, QComboBox()),
                 (log_level_label, self.log_level_combo),
                  ]
@@ -51,6 +60,7 @@ class SettingsNavbar(QWidget):
         settings_title.setStyleSheet(TITLE_LABEL_CSS)
 
         main_layout.addWidget(settings_title)
+        main_layout.addLayout(root_layout)
         for label, widget in label_widget:
             row_layout = QHBoxLayout()
             label.setStyleSheet(LABEL_CSS)
@@ -63,9 +73,11 @@ class SettingsNavbar(QWidget):
             row_layout.addWidget(widget)
             main_layout.addLayout(row_layout)
 
+
         button_row = QHBoxLayout()
         button_row.addWidget(self.save)
         main_layout.addLayout(button_row)
+
 
 
 #        settings_label = QLabel("Settings")

@@ -9,7 +9,7 @@ from PyQt6.QtWidgets import QApplication
 
 from .ui import (MainWindow, TabbedSvgViewer,NavbarContainer, SettingsNavbar, CourseNavbar, NotesNavbar,
                  FlashcardView, CourseController, LiveTypstController, NoteController, FlashcardController,
-                 ViewContainer, FlashcardNavbar, ViewController)
+                 ViewContainer, FlashcardNavbar, ViewController, SettingsController)
 from .config import Config
 from .models import Course
 from ._enums import FileType
@@ -62,9 +62,9 @@ class NoteViewer(Command):
         coures_controller = CourseController(window, courses_navbar, notes_view)
         preview_controller = LiveTypstController(window, notes_view)
         flashcard_controller = FlashcardController(window, flashcards_navbar, flashcard_view)
-        view_controller = ViewController(navbar_container, view_container)
+        view_controller = ViewController(window, navbar_container, view_container)
+        settings_controller = SettingsController(window, settings_navbar)
         window.set_close_callback(flashcard_controller.stop)
-        window.resize(800, 600)
         window.show()
         sys.exit(app.exec())
 

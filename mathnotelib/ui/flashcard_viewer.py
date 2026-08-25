@@ -16,8 +16,6 @@ from ..ui import constants
 logger = logging.getLogger("mathnote")
 
 
-ZOOM_FACTOR = 3
-
 class PdfWindow(QWidget):
     def __init__(self):
         super().__init__()
@@ -56,9 +54,8 @@ class PdfWindow(QWidget):
         if load_status == QPdfDocument.Error.None_:
             self.document = pdf_document
             self.pdf_viewer.setDocument(pdf_document)
-            # todo: latex does can not generate files with fixed width and auto height so we use this hack
             self.pdf_viewer.setZoomMode(QPdfView.ZoomMode.Custom)
-            self.pdf_viewer.setZoomFactor(2.1)
+            self.pdf_viewer.setZoomFactor(2.1) # TODO this could probably be improved
         return load_status
 
     def display_pdf(self, pdf_path: Path):
@@ -88,8 +85,8 @@ class FlashcardView(QWidget):
         self.setLayout(self.main_layout)
         self.setContentsMargins(0, 0, 0, 0)
 
-        self.setMinimumWidth(constants.VIEWER_WIDTH)
-        self.setMaximumHeight(850)
+        self.setFixedWidth(constants.VIEWER_WIDTH)
+        self.setFixedHeight(850)
 
         # Create widgets
         self.btn_bar = HButtonBar()
