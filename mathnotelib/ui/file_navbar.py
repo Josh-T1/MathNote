@@ -129,6 +129,9 @@ class CourseNavbar(BaseFileNavbar):
         self.tree.clicked.connect(self._item_clicked_callback)
         if (header := self.tree.header()) is not None:
             header.hide()
+        self.tree.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
+        self.tree.setMinimumHeight(250)
+
         self.new_course_btn.setToolTip("New Course")
         self.new_lecture_btn.setToolTip("New Lecture")
         self.trash_btn.setToolTip("Delete")

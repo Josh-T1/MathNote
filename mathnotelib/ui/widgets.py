@@ -2,9 +2,9 @@ from typing import Iterable, Optional
 import json
 
 from PyQt6 import QtCore
-from PyQt6.QtGui import QStandardItemModel
-from PyQt6.QtCore import  QModelIndex, pyqtBoundSignal
-from PyQt6.QtWidgets import QStackedWidget
+from PyQt6.QtGui import QFontMetrics, QStandardItemModel
+from PyQt6.QtCore import  QModelIndex, Qt, pyqtBoundSignal
+from PyQt6.QtWidgets import QLabel, QStackedWidget
 
 
 from . import constants
@@ -107,3 +107,25 @@ class TightStackedWidget(QStackedWidget):
     def maximumSize(self):
         w = self.currentWidget()
         return w.maximumSize() if w else super().maximumSize()
+
+
+
+class PathLabel(QLabel):
+    def __init__(self, path: str = "", parent=None):
+        super().__init__(parent)
+        self._full_path = path
+        self.setText(path)
+
+    def set_path(self, path: str):
+        self._full_path = path
+        self._update_elided_text()
+
+    def resizeEvent(self, event):
+        self._update_elided_text()
+        super().resizeEvent(event)
+
+    def _update_elided_text(self):
+        metrics = QFontMetrics(self.font())
+        elided = metrics.elidedText(self._full_path, Qt.TextElideMode.ElideMiddle, self.width())
+        self.setText(elided)
+        self.setToolTip(self._full_path)  # full path still visible on hover

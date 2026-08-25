@@ -9,7 +9,7 @@ import logging
 import random
 
 from PyQt6.QtCore import QFileSystemWatcher, QModelIndex, QObject, QTimer, Qt
-from PyQt6.QtGui import QStandardItem
+from PyQt6.QtGui import QStandardItem, QStandardItemModel
 from PyQt6.QtWidgets import QHBoxLayout, QListView, QMainWindow, QSizePolicy, QStackedWidget, QWidget
 
 from mathnotelib.ui.widgets import TightStackedWidget
@@ -701,7 +701,7 @@ class FlashcardController:
 
     # TODO remove this and have display(card). Buttons are connected to stack
     @with_error_dialog
-    def show_next_flashcard(self, checked: bool = False):
+    def show_next_flashcard(self):
         card = self.session.next_flashcard()
         try:
             self.view.display_compiled_card(card)
@@ -728,7 +728,7 @@ class FlashcardController:
 
 
     @with_error_dialog
-    def show_prev_flashcard(self, checked: bool = False):
+    def show_prev_flashcard(self):
         logger.debug(f"Calling {self.show_prev_flashcard}")
         card = self.session.prev_flashcard()
         self.view.display_compiled_card(card)
@@ -757,7 +757,6 @@ class FlashcardController:
         else:
             path, section_names_dict, shuffle = self.generate_pipe_deck_config()
             paths = [path]
-
 
         data_iterable = DataGenerator(paths)
         clean_data_stage = CleanStage(CONFIG.macros())
@@ -848,3 +847,14 @@ class SettingsController:
     def __init__(self, window: QMainWindow, settings_navbar: SettingsNavbar):
         self.settings_nav = settings_navbar
         self.window = window
+        self._populate_view()
+
+    def _populate_view(self):
+        root_item = self.settings_nav.section_model.invisibleRootItem()
+        self.settings_nav.root_val.set_path(str(CONFIG.root_path))
+        self.settings_nav.section_model.appendRow(QStandardItem("yes"))
+        self.settings_nav.section_model.appendRow(QStandardItem("no"))
+
+
+
+
