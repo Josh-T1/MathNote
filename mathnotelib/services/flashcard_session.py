@@ -78,9 +78,13 @@ class FlashcardSession(QObject):
 
         self._pipe_finished = True
 
-    def next_flashcard(self) -> Flashcard:
-        while (self.compiled_flashcards.current is None or self.compiled_flashcards.current.next is None) and self._compile_thread is not None:
-            time.sleep(0.25)
+    def next_flashcard(self, first=False) -> Flashcard:
+        if first:
+            while self.compiled_flashcards.current is None and self._compile_thread is not None:
+                time.sleep(0.25)
+        else:
+            while (self.compiled_flashcards.current is None or self.compiled_flashcards.current.next is None) and self._compile_thread is not None:
+                time.sleep(0.25)
 
         with self.flashcard_lock:
             # if current card is compiled and has not been seen return it
@@ -201,7 +205,7 @@ class StoppableThread(threading.Thread):
 class DeckRepository:
     def __init__(self, config: Config):
         self.config = config
-        self.root_deck_path = config.root_path / "decks" #TODO: move this to config section
+        self.root_deck_path = config.root_path / "Decks" #TODO: move this to config section
         self._decks: dict[str, Path] = {}
 
     @property

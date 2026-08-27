@@ -1,9 +1,35 @@
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Optional
+from collections.abc import MutableMapping
+import json
 
 from .source_file import SourceFile
 
+class PersistentMetadata(MutableMapping):
+    def __init__(self, path: Path):
+        self._path = path
+        self._data: dict = json.loads(path.read_text()) if path.exists() else {}
+
+    def __getitem__(self, key):
+        return self._data[key]
+
+    def __setitem__(self, key, value):
+        self._data[key] = value
+        self._write()
+
+    def __delitem__(self, key):
+        del self._data[key]
+        self._write()
+
+    def __iter__(self):
+        return iter(self._data)
+
+    def __len__(self):
+        return len(self._data)
+
+    def _write(self):
+        self._path.write_text(json.dumps(self._data))
 
 @dataclass
 class Category:
@@ -12,8 +38,9 @@ class Category:
     """
     path: Path
     notes: list["Note"]
+    metadata: PersistentMetadata
     parent: Optional['Category'] = None
-    metadata: dict = field(default_factory=dict)
+
 
     def __eq__(self, other):
         if not isinstance(other, Category):

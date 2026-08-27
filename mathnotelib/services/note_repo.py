@@ -3,12 +3,13 @@ import json
 import shutil
 import logging
 
-from ..config import CONFIG, Config
-from ..models import Note, Category
+from ..models import Note, Category, PersistentMetadata
 from .._enums import FileType
 from ..exceptions import InvalidNameError, NoteExistsError, CategoryExistsError
+from ..config import CONFIG
 
-logger = logging.getLogger(__name__) # TODO
+logger = logging.getLogger(__name__)
+
 
 class NotesRepository:
     """Singleton class (one class per root directory) representing the notes repository"""
@@ -36,8 +37,8 @@ class NotesRepository:
 
     def build_root_category(self) -> Category:
         """Loads and returns Category object representing root of notes repository"""
-        metadata = self.load_metadata(self.repo_root / "cat-metadata.json")
-        root_cat = Category(self.repo_root, [], metadata=metadata)
+        metadata = PersistentMetadata(self.repo_root / "cat-metadata.json")
+        root_cat = Category(self.repo_root, [], metadata)
         notes = self._get_notes(root_cat)
         root_cat.notes = notes
         return root_cat
@@ -167,7 +168,7 @@ class NotesRepository:
             raise CategoryExistsError(f"Category with name '{new_name}' already exists under category {parent}")
 
         new_cat_path = cat.path.rename(new_dir)
-        new_cat = Category(new_cat_path, cat.notes, parent, metadata=cat.metadata)
+        new_cat = Category(new_cat_path, cat.notes, cat.metadata, parent)
         return new_cat
 
     def create_category(self, name: str, parent: Category) -> Category:
@@ -193,9 +194,9 @@ class NotesRepository:
                     )
         dir = parent.path / name
         meta_path = dir / "cat-metadata.json"
-        dir.mkdir()
         self._init_metadata(meta_path)
-        cat = Category(dir, [], parent=parent)
+        dir.mkdir()
+        cat = Category(dir, [], PersistentMetadata(meta_path), parent=parent)
         return cat
 
     def get_sub_categories(self, category: Category) -> list[Category]:
@@ -205,8 +206,8 @@ class NotesRepository:
             if not dir.is_dir():
                 continue
             if (dir / "cat-metadata.json").is_file():
-                metadata = self.load_metadata(dir / "cat-metadata.json")
-                cat = Category(dir, [], parent=category, metadata=metadata)
+                metadata = PersistentMetadata(dir / "cat-metadata.json")
+                cat = Category(dir, [], metadata, parent=category)
                 cat.notes = self._get_notes(cat)
                 children.append(cat)
         return children
@@ -218,17 +219,6 @@ class NotesRepository:
         with open(path, "w") as f:
             json.dump({}, f, indent=2)
 
-    def write_metadata(self, item: Note | Category):
-        """Saves items metadata to associated json file"""
-        file_name = "metadata.json" if isinstance(item, Note) else "cat-metadata.json"
-        with (item.path / file_name).open("w") as f:
-            json.dump(self.root_category.metadata, f, indent=2)
-
-    def load_metadata(self, path: Path) -> dict:
-        """Loads and returns Metadata object from json file data associated to path"""
-        with open(path, "r") as f:
-            d = json.load(f)
-        return d
 
     def reload_category(self, category: Category):
         notes = self._get_notes(category)

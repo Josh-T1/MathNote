@@ -155,6 +155,7 @@ class NoteController(QObject):
                 continue
             repo = NotesRepository(dir)
             repos[repo.name] = repo
+            # TODO
             if repo.root_category.metadata.get("open") is True:
                 self.current_notes_repo = repo
 
@@ -179,7 +180,6 @@ class NoteController(QObject):
         self.navbar.repo_combo.addItem(new_repo.name)
         self.navbar.repo_combo.setCurrentIndex(self.navbar.repo_combo.count()-1)
 
-
     @with_error_dialog
     def handle_delete_repository(self):
         repo = self.current_notes_repo
@@ -190,6 +190,7 @@ class NoteController(QObject):
             return
         idx = self.navbar.repo_combo.findText(repo.name)
         shutil.rmtree(repo.repo_root)
+        del self.notes_repositories[repo.name]
         if idx != -1:
             self.navbar.repo_combo.removeItem(idx)
 
@@ -245,16 +246,11 @@ class NoteController(QObject):
         repos = list(self.notes_repositories.keys())
         for name, repo in self.notes_repositories.items():
             if repo.root_category.metadata.get("open") == True:
-                idx = self.navbar.repo_combo.findText(name)
-                if idx == -1:
-                    return
                 self.current_notes_repo = repo
                 repos.sort(key=lambda repo_name: (repo_name != name, repo_name))
                 break
         self.navbar.repo_combo.addItems(repos)
-#        self.navbar.repo_combo.currentIndexChanged.emit(self.navbar.repo_combo.currentIndex())
         self._populate_list_view()
-
 
     def _populate_list_view(self):
         if self.current_notes_repo is None:
@@ -780,8 +776,8 @@ class FlashcardController:
 
 
     @with_error_dialog
-    def show_next_flashcard(self):
-        card = self.session.next_flashcard()
+    def show_next_flashcard(self, first=False):
+        card = self.session.next_flashcard(first=first)
         try:
             self.view.display_compiled_card(card)
         except Exception as e:
@@ -834,6 +830,7 @@ class FlashcardController:
         else:
             path, section_names_dict, shuffle = self.generate_pipe_deck_config()
             paths = [path]
+            print(paths, section_names_dict, shuffle)
 
         data_iterable = DataGenerator(paths)
         clean_data_stage = CleanStage(CONFIG.macros())
@@ -850,7 +847,7 @@ class FlashcardController:
         load_thread.start()
 
         time.sleep(0.1)
-        self.show_next_flashcard()
+        self.show_next_flashcard(first=True)
 
     def stop(self):
         self.session.stop()
@@ -925,6 +922,7 @@ class FlashcardController:
         keys.extend([name.lower().capitalize() for name in list(CONFIG.section_names.keys())])
         self.navbar.course_config.section_list.add_items(keys)
         self.navbar.deck_config.section_list.add_items(keys)
+        self.navbar.deck_config.deck_combo.addItems(list(self.deck_repo.decks.keys()))
 
 
 LABEL_ROLE = Qt.ItemDataRole.UserRole + 20   # which field this value-item maps to, e.g. "latex" / "typst"
