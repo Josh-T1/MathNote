@@ -1,6 +1,5 @@
 from .compiler import CompileOptions, compile_source, open_pdf
 from .flashcard_compiler import FlashcardCompiler, FlashcardCache
-from .parse import get_header_footer
 from .course_repo import CourseRepository
 from .filesystem import open_cmd, open_file_with_editor
 from .note_repo import NotesRepository
@@ -16,8 +15,6 @@ __all__ = [
 
         "FlashcardCompiler",
         "FlashcardCache",
-
-        "get_header_footer",
 
         "CourseRepository",
 

@@ -24,7 +24,7 @@ COLOR_TAB_UNFOCUSED    = "#262a2e"  # secondary/recessed panels (darker than bas
 
 COLOR_TAB_FOCUSED       = "#3a4046"  # active tab background (same as COLOR_FOCUSED)
 
-TREE_VIEW_CSS = F"""
+TREE_VIEW_CSS = f"""
 QTreeView {{
     background-color: {COLOR_LISTVIEW_BG};
     color: {COLOR_TEXT_PRIMARY};
@@ -132,7 +132,6 @@ QLabel {{
 
 BOXED_LABEL_CSS = f"""
 QLabel {{
-    border: 1px solid {COLOR_TEXT_SECONDARY};
     border-radius: 3px;
     background-color: {COLOR_FOCUSED};
     color: {COLOR_TEXT_PRIMARY};
@@ -178,11 +177,8 @@ QPushButton:disabled {{
 """
 
 
-
-
 COMBO_BOX_CSS = f"""
 QComboBox {{
-    border: 1px solid {COLOR_TEXT_SECONDARY};
     border-radius: 3px;
     background-color: {COLOR_FOCUSED};
     color: {COLOR_TEXT_PRIMARY};

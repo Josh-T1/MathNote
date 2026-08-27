@@ -1,15 +1,14 @@
 from typing import Optional
 
 from PyQt6.QtGui import QIcon, QStandardItem
-from PyQt6.QtWidgets import (QAbstractItemView, QFrame, QHBoxLayout, QMenu, QPushButton, QSizePolicy,
+from PyQt6.QtWidgets import (QAbstractItemView, QComboBox, QFrame, QHBoxLayout, QLabel, QMenu, QPushButton, QSizePolicy,
                              QSpacerItem, QTreeView, QVBoxLayout, QWidget)
 from PyQt6.QtCore import  QModelIndex, QPoint, pyqtSignal, Qt
 
-
-from .style import ICON_CSS, LABEL_CSS, TITLE_LABEL_CSS, TREE_VIEW_CSS
+from .style import BUTTON_CSS, COMBO_BOX_CSS, ICON_CSS, LABEL_CSS, TREE_VIEW_CSS
 from .constants import FILE_ROLE, COURSE_CONTAINER_ROLE, COURSE_DIR, LOADED_ROLE, DIR_ROLE, ICON_PATH, ICON_SIZE
-from ..models import SourceFile, Category
 from .widgets import StandardItemModel
+from ..models import SourceFile, Category
 
 class BaseFileNavbar(QWidget):
     file_opened = pyqtSignal(SourceFile)
@@ -21,11 +20,11 @@ class BaseFileNavbar(QWidget):
         self.tree = QTreeView()
         self.tree.setIndentation(10)
         self.tree.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        self._root_item = self.model.invisibleRootItem()
 
     def root_item(self) -> QStandardItem:
-        assert self._root_item is not None
-        return self._root_item
+        item = self.model.invisibleRootItem()
+        assert item is not None
+        return item
 
     def _toggle_tree(self, idx: QModelIndex) -> None:
         if self.tree.isExpanded(idx):
@@ -99,36 +98,24 @@ class CourseNavbar(BaseFileNavbar):
 
     def initUI(self):
         main_layout = QVBoxLayout()
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.setSpacing(4)
-        self.setLayout(main_layout)
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-        #Init widgets
+
         self.new_lecture_btn = QPushButton()
         self.new_course_btn = QPushButton()
         self.new_assignment_btn = QPushButton()
         self.trash_btn = QPushButton()
         self.menu_bar_layout = QHBoxLayout()
-        # Configure
-        self.tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-#        self.tree.customContextMenuRequested.connect(lambda p: self.open_menu(p))
-        icons = [
-                 (self.trash_btn, "trash.png"),
-                 (self.new_course_btn, "add_folder.png"),
-                 (self.new_lecture_btn, "l.png"),
-                 (self.new_assignment_btn, "a.png")
-                 ]
-        for icon, icon_name in icons:
-            icon.setIcon(QIcon(str(ICON_PATH / icon_name)))
-            icon.setFixedSize(ICON_SIZE)
-            icon.setStyleSheet(ICON_CSS)
 
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(4)
+
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+
+        self.tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.tree.setModel(self.model)
         self.tree.setFrameShape(QFrame.Shape.NoFrame)
         self.tree.setStyleSheet(TREE_VIEW_CSS)
         self.tree.clicked.connect(self._item_clicked_callback)
-        if (header := self.tree.header()) is not None:
-            header.hide()
+        if (header := self.tree.header()) is not None: header.hide()
         self.tree.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         self.tree.setMinimumHeight(250)
 
@@ -142,12 +129,24 @@ class CourseNavbar(BaseFileNavbar):
         self.new_lecture_btn.clicked.connect(self.new_lecture.emit)
         self.trash_btn.clicked.connect(self.delete.emit)
 
-        # Add to layout
-        for btn, _ in icons:
+        self.menu_bar_layout.setSpacing(4)
+        items = [
+                 (self.trash_btn, "trash.png"),
+                 (self.new_course_btn, "add_folder.png"),
+                 (self.new_lecture_btn, "l.png"),
+                 (self.new_assignment_btn, "a.png")
+                 ]
+        for btn, icon_name in items:
+            btn.setIcon(QIcon(str(ICON_PATH / icon_name)))
+            btn.setFixedSize(ICON_SIZE)
+            btn.setStyleSheet(ICON_CSS)
             self.menu_bar_layout.addWidget(btn)
+
         self.menu_bar_layout.addSpacerItem(QSpacerItem(15, 15, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed))
         main_layout.addLayout(self.menu_bar_layout)
         main_layout.addWidget(self.tree)
+
+        self.setLayout(main_layout)
 
 
 class NotesNavbar(BaseFileNavbar):
@@ -157,38 +156,46 @@ class NotesNavbar(BaseFileNavbar):
     rename = pyqtSignal()
     move_item = pyqtSignal(dict, QModelIndex)
 
+    new_repository = pyqtSignal()
+    delete_repository = pyqtSignal()
+    change_respository = pyqtSignal()
+
     def __init__(self):
         super().__init__()
         self.initUI()
         self.model.move_signal = self.move_item
-#        self.tree.setAcceptDrops(True)
-#        self.tree.setDropIndicatorShown(True)
-
 
     def initUI(self):
         main_layout = QVBoxLayout()
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.setSpacing(4)
-        self.setLayout(main_layout)
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-        #Init widgets
+        repo_layout_row1 = QHBoxLayout()
+        repo_layout_row2 = QHBoxLayout()
+
+        self.repo_label = QLabel("Notes Repository")
         self.new_note_btn = QPushButton()
         self.new_category_btn = QPushButton()
         self.trash_btn = QPushButton()
         self.menu_bar_layout = QHBoxLayout()
-        #Configure
+        self.new_repo_btn = QPushButton()
+        self.del_repo_btn = QPushButton()
+        self.repo_combo = QComboBox()
+
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(4)
+
+        repo_layout_row1.setContentsMargins(0, 8, 0, 0)
+        repo_layout_row2.setContentsMargins(0, 0, 0, 8)
+
+        self.repo_label.setStyleSheet(LABEL_CSS)
+        self.repo_combo.setStyleSheet(COMBO_BOX_CSS)
+        self.new_repo_btn.setStyleSheet(ICON_CSS)
+        self.new_repo_btn.setFixedSize(ICON_SIZE)
+        self.del_repo_btn.setStyleSheet(ICON_CSS)
+        self.del_repo_btn.setFixedSize(ICON_SIZE)
+        self.new_repo_btn.setIcon(QIcon(str(ICON_PATH / "add.png")))
+        self.del_repo_btn.setIcon(QIcon(str(ICON_PATH / "trash.png")))
+
         self.tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.tree.customContextMenuRequested.connect(lambda p: self.open_menu(p))
-        icons = [
-                 (self.trash_btn, "trash.png"),
-                 (self.new_category_btn, "add_folder.png"),
-                 (self.new_note_btn, "new_note.png")
-                 ]
-        for icon, icon_name in icons:
-            icon.setIcon(QIcon(str(ICON_PATH / icon_name)))
-            icon.setFixedSize(ICON_SIZE)
-            icon.setStyleSheet(ICON_CSS)
-
         self.tree.setModel(self.model)
         self.tree.setFrameShape(QFrame.Shape.NoFrame)
         self.tree.expanded.connect(self._expand_callback)
@@ -198,23 +205,49 @@ class NotesNavbar(BaseFileNavbar):
         self.tree.setAcceptDrops(True)
         self.tree.setDropIndicatorShown(True)
         self.tree.setDefaultDropAction(Qt.DropAction.MoveAction)
+        if (header := self.tree.header()) is not None: header.hide()
 
-        if (header := self.tree.header()) is not None:
-            header.hide()
-#            header.setText()
         self.model.setHeaderData(0, Qt.Orientation.Horizontal, "Notes")
+        self.menu_bar_layout.setSpacing(4)
+
         self.new_category_btn.setToolTip("New Category")
         self.new_note_btn.setToolTip("New Note")
         self.trash_btn.setToolTip("Delete")
         self.new_category_btn.clicked.connect(self.new_category.emit)
         self.new_note_btn.clicked.connect(self.new_note.emit)
         self.trash_btn.clicked.connect(self.delete.emit)
-        # Add to layout
-        for btn, _ in icons:
+        self.del_repo_btn.clicked.connect(self.delete_repository.emit)
+        self.new_repo_btn.clicked.connect(self.new_repository.emit)
+        self.repo_combo.currentIndexChanged.connect(self.change_respository.emit)
+
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+
+        items = [
+                 (self.trash_btn, "trash.png"),
+                 (self.new_category_btn, "add_folder.png"),
+                 (self.new_note_btn, "new_note.png")
+                 ]
+        for btn, icon_name in items:
+            btn.setIcon(QIcon(str(ICON_PATH / icon_name)))
+            btn.setFixedSize(ICON_SIZE)
+            btn.setStyleSheet(ICON_CSS)
             self.menu_bar_layout.addWidget(btn)
+
         self.menu_bar_layout.addSpacerItem(QSpacerItem(15, 15, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed))
+
+        repo_layout_row1.addWidget(self.repo_label)
+        repo_layout_row1.addStretch()
+
+        repo_layout_row2.addWidget(self.repo_combo)
+        repo_layout_row2.addWidget(self.new_repo_btn)
+        repo_layout_row2.addWidget(self.del_repo_btn)
+
+        main_layout.addLayout(repo_layout_row1)
+        main_layout.addLayout(repo_layout_row2)
         main_layout.addLayout(self.menu_bar_layout)
         main_layout.addWidget(self.tree)
+
+        self.setLayout(main_layout)
 
     def _expand_callback(self, index: QModelIndex):
         # Remark: the item will originally expand with the placeholder element. Once this occurs

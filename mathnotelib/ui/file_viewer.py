@@ -1,21 +1,17 @@
-import functools
-from pathlib import Path
 import tempfile
 from typing import Callable
 from functools import partial
 
-from PyQt6.QtGui import QBrush, QColor, QIcon, QMouseEvent, QPainter, QTransform, QWheelEvent
-from PyQt6.QtWidgets import (QWIDGETSIZE_MAX, QApplication, QFrame, QGestureEvent, QGraphicsEllipseItem, QGraphicsScene, QGraphicsView, QHBoxLayout,
-                             QLabel, QLayout, QLineEdit, QListWidget, QMainWindow, QMessageBox, QPinchGesture, QPushButton, QSizePolicy, QStackedWidget, QVBoxLayout, QWidget)
-from PyQt6.QtCore import QEvent, QFileSystemWatcher, QModelIndex, QProcess, QSize, QTimer, pyqtSignal, Qt
-from PyQt6.QtSvgWidgets import QGraphicsSvgItem, QSvgWidget
+from PyQt6.QtGui import QIcon, QMouseEvent, QTransform, QWheelEvent
+from PyQt6.QtWidgets import (QGestureEvent, QGraphicsScene, QGraphicsView, QHBoxLayout,
+                            QLineEdit, QPinchGesture, QPushButton, QSizePolicy, QStackedWidget, QVBoxLayout, QWidget)
+from PyQt6.QtCore import QEvent, QSize, QTimer, pyqtSignal, Qt
+from PyQt6.QtSvgWidgets import QGraphicsSvgItem
 from PyQt6 import QtCore
 
-from mathnotelib.models.source_file import Assignment, Lecture, SourceFile
-from mathnotelib.ui.flashcard_navbar import BUTTON_CSS
-
-from .style import CLOSE_TAB_BTN_CSS, COLOR_BACKGROUND_ALT, COLOR_FOCUSED, COLOR_FOCUSED_BORDER, COLOR_TEXT_PRIMARY, COLOR_TEXT_SECONDARY, ICON_CSS, PAGE_INPUT_CSS, TAB_BTN_CSS, TAB_BTN_EMPTY_CSS
-from . import constants
+from .style import CLOSE_TAB_BTN_CSS, COLOR_BACKGROUND_ALT, COLOR_FOCUSED, COLOR_FOCUSED_BORDER, COLOR_TEXT_PRIMARY, ICON_CSS, PAGE_INPUT_CSS, TAB_BTN_EMPTY_CSS
+from .constants import VIEWER_WIDTH, VIEWER_HEIGHT, ICON_PATH, ICON_SIZE
+from ..models import Assignment, Lecture, SourceFile
 
 
 class ZMultiPageViewer(QGraphicsView):
@@ -79,7 +75,7 @@ class ZMultiPageViewer(QGraphicsView):
         self.page_input.setStyleSheet(PAGE_INPUT_CSS)
         self.page_input.setAlignment(Qt.AlignmentFlag.AlignHCenter)
 #        self.page_input.returnPressed.connect(self._jump_to_page)
-        x, y = (constants.VIEWER_WIDTH - self.page_input.width()) // 2, 2
+        x, y = (VIEWER_WIDTH - self.page_input.width()) // 2, 2
         self.page_input.move(x, y)
 
     def wheelEvent(self, event: QWheelEvent | None) -> None:
@@ -131,20 +127,20 @@ class ZMultiPageViewer(QGraphicsView):
         if len(items := self._scene.items()) > 0:
             prev_item = items[-1]
             prev_bounds = prev_item.boundingRect()
-            prev_scale_y = constants.VIEWER_HEIGHT / prev_bounds.height()
+            prev_scale_y = VIEWER_HEIGHT / prev_bounds.height()
 #            self._y_offset += 10 * prev_scale_y
 
         item = QGraphicsSvgItem(path)
         item.setPos(0, self._y_offset)
 
         bounds = item.boundingRect()
-        scale_x = constants.VIEWER_WIDTH / bounds.width()
-        scale_y = constants.VIEWER_HEIGHT / bounds.height()
+        scale_x = VIEWER_WIDTH / bounds.width()
+        scale_y = VIEWER_HEIGHT / bounds.height()
         item.setTransform(QTransform().scale(scale_x, scale_y))
         self._y_offset += scale_y * bounds.height()
 
         self._scene.addItem(item)
-        self._scene.setSceneRect(0, 0, constants.VIEWER_WIDTH, self._y_offset)
+        self._scene.setSceneRect(0, 0, VIEWER_WIDTH, self._y_offset)
 
     def event(self, event: QtCore.QEvent | None) -> bool:
         if event is None: return False
@@ -251,7 +247,7 @@ class TabWidget(QWidget):
 
         close_btn = QPushButton()
         close_btn.setFixedSize(QSize(19, 20))
-        close_btn.setIcon(QIcon(str(constants.ICON_PATH / "exit.png")))
+        close_btn.setIcon(QIcon(str(ICON_PATH / "exit.png")))
         close_btn.setStyleSheet(CLOSE_TAB_BTN_CSS)
 
         close_btn.clicked.connect(
@@ -314,14 +310,14 @@ class ToolTabBar(QWidget):
         cont.setLayout(layout)
         self.live_preview_btn = QPushButton()
         self.live_preview_btn.setToolTip("Live Preview")
-        self.live_preview_btn.setIcon(QIcon(str(constants.ICON_PATH / "preview.png")))
-        self.live_preview_btn.setFixedSize(QSize(constants.ICON_SIZE))
+        self.live_preview_btn.setIcon(QIcon(str(ICON_PATH / "preview.png")))
+        self.live_preview_btn.setFixedSize(QSize(ICON_SIZE))
         self.live_preview_btn.setStyleSheet(ICON_CSS)
 
         self.add_tab_btn = QPushButton()
         self.add_tab_btn.setToolTip("New Tab")
-        self.add_tab_btn.setIcon(QIcon(str(constants.ICON_PATH / "add.png")))
-        self.add_tab_btn.setFixedSize(constants.ICON_SIZE)
+        self.add_tab_btn.setIcon(QIcon(str(ICON_PATH / "add.png")))
+        self.add_tab_btn.setFixedSize(ICON_SIZE)
         self.add_tab_btn.setStyleSheet(ICON_CSS)
 
         layout.addWidget(self.add_tab_btn, alignment=Qt.AlignmentFlag.AlignVCenter)
@@ -402,7 +398,7 @@ class TabbedSvgViewer(QWidget):
         self.tab_bar = ToolTabBar()
         self.stack = QStackedWidget()
         # Configure widgets
-        self.setMinimumSize(constants.VIEWER_WIDTH, constants.VIEWER_HEIGHT)
+        self.setMinimumSize(VIEWER_WIDTH, VIEWER_HEIGHT)
         self.tab_bar.add_tab_btn.clicked.connect(lambda: self.addTab(focus=True))
         self.stack.setStyleSheet("background-color: white;")
         self.stack.setContentsMargins(0, 0, 0, 0)
@@ -449,7 +445,7 @@ class TabbedSvgViewer(QWidget):
             - focus: if set to true tab widget is highlighted and set to 'focus' (live preview uses the focus property, see LiveTypstPreview)
         """
         view = ZMultiPageViewer()
-        view.setMinimumSize(constants.VIEWER_WIDTH, constants.VIEWER_HEIGHT)
+        view.setMinimumSize(VIEWER_WIDTH, VIEWER_HEIGHT)
 #        label = label if label is not None else f"{self.stack.count() + 1}"
         if isinstance(source, Lecture) or isinstance(source, Assignment):
             func = getattr(source, "pretty_name", lambda: source.name)

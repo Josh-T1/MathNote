@@ -1,24 +1,13 @@
-import logging
-from collections.abc import Callable
-from pathlib import Path
 from typing import Literal
 
-from PyQt6.QtWidgets import (QCheckBox, QComboBox, QHBoxLayout, QLabel, QListView, QMessageBox, QSizePolicy, QSpacerItem, QStackedWidget, QTreeView, QVBoxLayout,
-                             QWidget, QPushButton, QMainWindow, QSpacerItem, QSizePolicy, QScrollArea)
-from PyQt6.QtPdfWidgets import QPdfView
-from PyQt6.QtPdf import QPdfDocument
-from PyQt6.QtCore import QSize, Qt, pyqtSignal
-from PyQt6.QtGui import QColor, QIcon, QPalette, QStandardItem, QStandardItemModel
+from PyQt6.QtWidgets import (QCheckBox, QComboBox, QHBoxLayout, QLabel, QListView, QSizePolicy, QVBoxLayout,
+                             QWidget, QPushButton, QSizePolicy)
+from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QIcon, QStandardItem, QStandardItemModel
 
-from mathnotelib.ui.constants import ICON_PATH, ICON_SIZE
-
+from .constants import ICON_PATH, ICON_SIZE
 from .widgets import TightStackedWidget
-
-from ..exceptions import LaTeXCompilationError
-from ..config import CONFIG
-from ..models import TrackedText
-from .._enums import FileType
-from .style import BUTTON_CSS, COLOR_BACKGROUND, COLOR_BACKGROUND_ALT, COLOR_FOCUSED, COLOR_TAB_UNFOCUSED, COMBO_BOX_CSS, ICON_CSS, LIST_VIEW, TAB_BTN_EMPTY_CSS, TREE_VIEW_CSS
+from .style import BUTTON_CSS, COLOR_BACKGROUND, COLOR_TAB_UNFOCUSED, COMBO_BOX_CSS, ICON_CSS, LIST_VIEW, TAB_BTN_EMPTY_CSS
 
 
 class FlashcardNavbar(QWidget):
@@ -29,18 +18,19 @@ class FlashcardNavbar(QWidget):
         self._prev_name = "course"
         self.initUi()
 
-
     def initUi(self):
-
+        main_layout = QVBoxLayout()
         self.container_widget = QWidget()
-        self.container_widget.setObjectName("flashcard_navbar_container")
         self.container_layout = QVBoxLayout()
+        self.course_config = FlashcardFromCourseConfigWidget()
+        self.deck_config = FlashcardFromDeckConfigWidget()
+        self.button_layout = QHBoxLayout()
+
+        self.container_widget.setObjectName("flashcard_navbar_container")
+
         self.container_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
-        self.container_widget.setLayout(self.container_layout)
-        self.container_layout.setContentsMargins(0, 0, 0, 0)
         self.container_layout.setSpacing(4)
-
-
+        self.container_layout.setContentsMargins(0, 0, 0, 0)
         self.container_widget.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.container_widget.setStyleSheet("""
             #flashcard_navbar_container {
@@ -50,47 +40,46 @@ class FlashcardNavbar(QWidget):
         """)
         self.container_widget.setFixedHeight(580)
 
-        main_layout = QVBoxLayout()
-        main_layout.setContentsMargins(0, 12, 0, 0)
-        main_layout.setSpacing(4)
-        self.setLayout(main_layout)
-
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         self.setContentsMargins(0, 0, 0, 0)
-        #Init widgets
-        self.button_layout = QHBoxLayout()
+
+        self.container_widget.setLayout(self.container_layout)
+
+        main_layout.setContentsMargins(0, 12, 0, 0)
+        main_layout.setSpacing(4)
+
         self.button_layout.setContentsMargins(0, 0, 0, 0)
         self.button_layout.setSpacing(0)
 
         self.course_btn = TabButton("Courses")
         self.deck_btn = TabButton("Deck")
 
-
-        self.command_bar = CommandBar()
+        self.create_cards_btn = QPushButton("Create Flashcards")
+        self.create_cards_btn.setStyleSheet(BUTTON_CSS)
 
         self.course_btn.btn.clicked.connect(lambda: self.toggle("course"))
+        self.course_btn.setStyleSheet(self._btn_stylesheet("L", True))
+
         self.deck_btn.btn.clicked.connect(lambda: self.toggle("deck"))
+        self.deck_btn.setStyleSheet(self._btn_stylesheet("R", False))
 
         self.button_layout.addWidget(self.course_btn)
         self.button_layout.addWidget(self.deck_btn)
-
-        self.course_config = FlashcardFromCourseConfigWidget()
-        self.deck_config = FlashcardFromDeckConfigWidget()
 
         self.container_layout.addLayout(self.button_layout)
         self.container_layout.addWidget(self.stack)
 
         main_layout.addWidget(self.container_widget)
-        main_layout.addWidget(self.command_bar)
+        main_layout.addWidget(self.create_cards_btn)
         main_layout.addStretch()
+
         self.stack.addWidget(self.course_config)
         self.stack.addWidget(self.deck_config)
         self.stack.setCurrentWidget(self.course_config)
-        self.course_btn.setStyleSheet(self._btn_stylesheet("L", True))
-        self.deck_btn.setStyleSheet(self._btn_stylesheet("R", False))
 
-    def _btn_stylesheet(self, corner: Literal["L", "R"], focused: bool):
+        self.setLayout(main_layout)
 
+    def _btn_stylesheet(self, corner: Literal["L", "R"], focused: bool) -> str:
         color = COLOR_BACKGROUND if focused else COLOR_TAB_UNFOCUSED
         corner_side = "left" if corner == "L" else "right"
         return f"""
@@ -113,7 +102,6 @@ class FlashcardNavbar(QWidget):
             self.course_btn.setStyleSheet(self._btn_stylesheet("L", True))
             self.stack.setCurrentWidget(self.course_config)
 
-
 class FlashcardFromDeckConfigWidget(QWidget):
     new_deck = pyqtSignal()
 
@@ -122,88 +110,70 @@ class FlashcardFromDeckConfigWidget(QWidget):
         self.initUi()
 
     def initUi(self):
+        random_layout = QHBoxLayout()
         self.config_layout = QVBoxLayout()
+        self.section_list = SectionListWidget()
+        self.random_checkbox = QCheckBox()
+        self.filter_by_lecture_list_model = QStandardItemModel()
+        self.random_checkbox_label = QLabel("Shuffle")
+        self.deck_btn_bar_layout = QHBoxLayout()
+        self.deck_combo_label = QLabel("Select Deck")
+        self.deck_combo = QComboBox()
+        self.new_deck_btn = QPushButton()
+        self.trash_btn = QPushButton()
+        self.rename_btn = QPushButton()
+
         self.setContentsMargins(8, 0, 8, 0)
 
         self.config_layout.setContentsMargins(0, 0, 0, 0)
-        self.setLayout(self.config_layout)
-
         self.config_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         self.config_layout.setSpacing(0)
 
-
-        # Create widgets
-        random_layout = QHBoxLayout()
         random_layout.setContentsMargins(0, 12, 0, 0)
         random_layout.setSpacing(12)
         random_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
-        self.random_checkbox_label = QLabel("Shuffle")
-        self.random_checkbox = QCheckBox()
-        self.filter_by_lecture_list_model = QStandardItemModel()
-
-        # Configure
         self.random_checkbox.setChecked(False)
-        random_layout.addWidget(self.random_checkbox_label)
-        random_layout.addWidget(self.random_checkbox)
 
-        self.deck_btn_bar_layout = QHBoxLayout()
+        self.section_list.setStyleSheet(LIST_VIEW)
+
         self.deck_btn_bar_layout.setContentsMargins(0, 8, 0, 8)
         self.deck_btn_bar_layout.setSpacing(4)
         self.deck_btn_bar_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
-#        self.deck_combo_layout = QHBoxLayout()
-#        self.deck_combo_layout.setContentsMargins(0, 8, 0, 8)
-#        self.deck_combo_layout.setSpacing(4)
-#        self.deck_combo_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
-        self.deck_combo_label = QLabel("Select Deck")
         self.deck_combo_label.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         self.deck_combo_label.setContentsMargins(0, 12, 0, 0)
 
-        self.deck_combo = QComboBox()
         self.deck_combo.setStyleSheet(COMBO_BOX_CSS)
         self.deck_combo.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
 
-
-        self.new_deck_btn = QPushButton()
         self.new_deck_btn.setIcon(QIcon(str(ICON_PATH / "add.png")))
         self.new_deck_btn.setFixedSize(ICON_SIZE)
         self.new_deck_btn.setStyleSheet(ICON_CSS)
 
-        self.trash_btn = QPushButton()
         self.trash_btn.setIcon(QIcon(str(ICON_PATH / "trash.png")))
         self.trash_btn.setFixedSize(ICON_SIZE)
         self.trash_btn.setStyleSheet(ICON_CSS)
 
-        self.rename_btn = QPushButton()
         self.rename_btn.setIcon(QIcon(str(ICON_PATH / "edit.png")))
         self.rename_btn.setFixedSize(ICON_SIZE)
         self.rename_btn.setStyleSheet(ICON_CSS)
-#        self.deck_combo_layout.addWidget(self.deck_combo)
-#        self.deck_combo_layout.addWidget(self.new_deck_btn)
-#        self.deck_combo_layout.addWidget(self.trash_btn)
-#        self.deck_model = QStandardItemModel()
-#        self.deck_view = QTreeView()
-#        self.deck_view.setModel(self.deck_model)
-#        self.deck_view.setFixedHeight(200)
-#        self.deck_view.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
-#        self.deck_view.setStyleSheet(TREE_VIEW_CSS)
-#        self.deck_view.setContentsMargins(0, 8, 0, 12)
+
+        random_layout.addWidget(self.random_checkbox_label)
+        random_layout.addWidget(self.random_checkbox)
+
         self.deck_btn_bar_layout.addWidget(self.trash_btn)
         self.deck_btn_bar_layout.addWidget(self.rename_btn)
         self.deck_btn_bar_layout.addWidget(self.new_deck_btn)
 
-        section_names = ["All", "definition", "theorem",  "lemma", "proposition", "corollary", "derivation"]
-        self.section_list = SectionListWidget(section_names)
-        self.section_list.setStyleSheet(LIST_VIEW)
         self.config_layout.addWidget(self.deck_combo_label)
-#        self.config_layout.addLayout(self.deck_btn_bar_layout)
         self.config_layout.addLayout(self.deck_btn_bar_layout)
         self.config_layout.addWidget(self.deck_combo)
         self.config_layout.addWidget(self.section_list)
         self.config_layout.addLayout(random_layout)
-#        self.config_layout.addStretch()
+
+        self.setLayout(self.config_layout)
 
 
 class FlashcardFromCourseConfigWidget(QWidget):
@@ -212,7 +182,6 @@ class FlashcardFromCourseConfigWidget(QWidget):
     def __init__(self):
         super().__init__()
         self.initUi()
-
 
     def initUi(self):
         self.setContentsMargins(8, 0, 8, 0)
@@ -249,8 +218,7 @@ class FlashcardFromCourseConfigWidget(QWidget):
 
         self.course_combo.currentIndexChanged.connect(lambda: self.update_filters.emit())
 
-        section_names = ["All", "definition", "theorem",  "lemma", "proposition", "corollary", "derivation"]
-        self.section_list = SectionListWidget(section_names)
+        self.section_list = SectionListWidget()
         self.section_list.setFixedHeight(200)
         self.course_combo_label.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         self.course_combo_label.setContentsMargins(0, 12, 0, 8)
@@ -273,8 +241,6 @@ class FlashcardFromCourseConfigWidget(QWidget):
         random_layout.addWidget(self.random_checkbox)
         self.config_layout.addWidget(random_widget)
 
-
-
 class TabButton(QWidget):
 
     def __init__(self, label: str):
@@ -283,53 +249,38 @@ class TabButton(QWidget):
         self.initUi()
 
     def initUi(self):
-        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
-#        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-#        self.setFixedSize(QSize(80, 29))
-        self.setContentsMargins(0, 0, 0, 0)
         main_layout = QHBoxLayout()
+        self.btn = QPushButton(self.label)
+
         main_layout.setSpacing(0)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
 
-        self.btn = QPushButton(self.label)
         self.btn.setFlat(True)
-#        self.btn.setFixedWidth(80)
         self.btn.setFlat(True)
         self.btn.setFixedHeight(29)
         self.btn.setStyleSheet(TAB_BTN_EMPTY_CSS)
+
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
+        self.setContentsMargins(0, 0, 0, 0)
+
         main_layout.addWidget(self.btn)
         self.setLayout(main_layout)
 
 
-# TODO: this class is stupid
 class SectionListWidget(QWidget):
-    def __init__(self, section_names: list[str]):
+    def __init__(self):
         super().__init__()
-        self.section_names = section_names
         self.initUi()
 
-
     def initUi(self):
-        self.setContentsMargins(0, 0, 0, 0)
-#        self.setFixedWidth(150)
-
         main_layout = QVBoxLayout()
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.setSpacing(0)
-        self.setLayout(main_layout)
 
         self.section_list_label = QLabel("Select Section")
         self.section_list = QListView()
-        # TODO
-        self.section_list.setStyleSheet(LIST_VIEW)
-
         self.section_list_model = QStandardItemModel()
 
-        for item in self.section_names:
-            list_item = QStandardItem(item)
-            list_item.setCheckable(True)
-            self.section_list_model.appendRow(list_item)
+        self.section_list.setStyleSheet(LIST_VIEW)
         self.section_list.setModel(self.section_list_model)
 
         self.section_list.setContentsMargins(0, 8, 0, 12)
@@ -337,9 +288,21 @@ class SectionListWidget(QWidget):
         self.section_list_label.setContentsMargins(0, 12, 0, 8)
         self.section_list_label.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
 
+        self.setContentsMargins(0, 0, 0, 0)
+        self.setLayout(main_layout)
+
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+
         main_layout.addWidget(self.section_list_label)
         main_layout.addWidget(self.section_list)
 
+    def add_items(self, items: list[str]):
+        self.section_list_model.clear()
+        for item in items:
+            list_item = QStandardItem(item)
+            list_item.setCheckable(True)
+            self.section_list_model.appendRow(list_item)
 
 
 class CommandBar(QWidget):
@@ -356,6 +319,4 @@ class CommandBar(QWidget):
 
         self.create_flashcards_button = QPushButton("Create Flashcards")
         self.create_flashcards_button.setStyleSheet(BUTTON_CSS)
-#        self.create_flashcards_button.setMaximumWidth(150)
         main_layout.addWidget(self.create_flashcards_button)
-

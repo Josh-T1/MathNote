@@ -125,6 +125,11 @@ class Config:
                     template_path = self.templates_path / file_type.value / f"{file_stem}.{ext}"
                     self.template_files[file_type][file_stem] = template_path
 
+
+    @property
+    def note_repo_dir(self):
+        return self.root_path / "NoteRepositories"
+
     @classmethod
     def config_dir(cls):
         # TODO allow for root_dir?

@@ -1,12 +1,12 @@
 from typing import Callable
 from PyQt6.QtGui import QIcon, QStandardItemModel
-from PyQt6.QtWidgets import (QComboBox, QHBoxLayout, QLabel, QPushButton, QSizePolicy,
+from PyQt6.QtWidgets import (QAbstractItemView, QComboBox, QHBoxLayout, QLabel, QPushButton, QSizePolicy,
                              QSpacerItem, QStackedWidget, QTreeView, QVBoxLayout, QWidget)
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtEnum, pyqtSignal
 
 from .style import BOXED_LABEL_CSS, BUTTON_CSS, COLOR_FOCUSED, COMBO_BOX_CSS, ICON_CSS, LABEL_CSS, TITLE_LABEL_CSS, TREE_VIEW_CSS
 from .widgets import PathLabel, TightStackedWidget
-from . import constants
+from .constants import ICON_PATH, LABEL_HEIGHT, VIEWER_WIDTH, ICON_SIZE
 from .file_navbar import NotesNavbar, CourseNavbar
 from .flashcard_navbar import FlashcardNavbar
 from ..config import Config
@@ -14,6 +14,10 @@ from ..config import Config
 
 # this needs note repositories
 class SettingsNavbar(QWidget):
+    pattern_changed = pyqtSignal(object, str, str)
+    new_section = pyqtSignal()
+    delete_section = pyqtSignal()
+
     def __init__(self, config: Config):
         super().__init__()
         self.config = config
@@ -22,10 +26,14 @@ class SettingsNavbar(QWidget):
     def initUI(self):
         # Create layouts/Widgets
         main_layout = QVBoxLayout()
+        root_layout = QHBoxLayout()
+        btn_layout = QHBoxLayout()
+        log_layout = QHBoxLayout()
+
         ##Label
         self.root_label = QLabel("Root")
         self.root_val= PathLabel()
-        self.section_names_label = QLabel("Section Names")
+        self.section_names_label = QLabel("Sections")
         self.section_view = QTreeView()
         self.section_model = QStandardItemModel()
         self.log_level_label = QLabel("Log level")
@@ -33,6 +41,8 @@ class SettingsNavbar(QWidget):
         self.settings_title = QLabel("Settings")
         ##Btn
         self.save_btn = QPushButton("Save")
+        self.trash_btn = QPushButton()
+        self.new_btn = QPushButton()
 
 
         #Configure
@@ -40,6 +50,40 @@ class SettingsNavbar(QWidget):
         main_layout.setSpacing(12)
         main_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
+        btn_layout.setContentsMargins(0, 0, 0, 0)
+        btn_layout.setSpacing(4)
+        btn_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+
+        root_layout.setContentsMargins(0, 12, 0, 8)
+        root_layout.setSpacing(4)
+        root_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+
+        log_layout.setContentsMargins(0, 12, 0, 8)
+        log_layout.setSpacing(4)
+        log_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+
+        self.trash_btn.setIcon(QIcon(str(ICON_PATH / "trash.png")))
+        self.trash_btn.setFixedSize(ICON_SIZE)
+        self.trash_btn.setStyleSheet(ICON_CSS)
+        self.new_btn.setIcon(QIcon(str(ICON_PATH / "add.png")))
+        self.new_btn.setFixedSize(ICON_SIZE)
+        self.new_btn.setStyleSheet(ICON_CSS)
+
+        self.root_label.setContentsMargins(0, 0, 8, 0)
+
+        root_layout.addWidget(self.root_label)
+        root_layout.addWidget(self.root_val)
+
+        btn_layout.addWidget(self.section_names_label)
+        btn_layout.addWidget(self.trash_btn)
+        btn_layout.addWidget(self.new_btn)
+
+
+        log_layout.addWidget(self.log_level_label)
+        log_layout.addStretch()
+        log_layout.addWidget(self.log_level_combo)
+
+        # TODO controller should populate combo using config
         log_levels = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 
 
@@ -49,34 +93,30 @@ class SettingsNavbar(QWidget):
         self.log_level_combo.setStyleSheet(COMBO_BOX_CSS)
 
         self.root_label.setStyleSheet(LABEL_CSS)
-        self.root_label.setFixedHeight(constants.LABEL_HEIGHT)
+        self.root_label.setFixedHeight(LABEL_HEIGHT)
 
         self.root_val.setStyleSheet(BOXED_LABEL_CSS)
-        self.root_val.setFixedHeight(constants.LABEL_HEIGHT)
+        self.root_val.setFixedHeight(LABEL_HEIGHT)
 
         self.section_names_label.setStyleSheet(LABEL_CSS)
         self.section_view.setStyleSheet(TREE_VIEW_CSS)
         self.section_view.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         self.section_view.setMinimumHeight(200)
+        self.section_model.setColumnCount(2)
         self.section_view.setMaximumHeight(600)
         self.section_view.setModel(self.section_model)
+        self.section_view.setIndentation(10)
+        self.section_view.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         if (header := self.section_view.header()) is not None: header.hide()
 
         self.save_btn.setStyleSheet(BUTTON_CSS)
 
-        rows = [
-                [self.settings_title],
-                [self.root_label, self.root_val],
-                [self.section_names_label],
-                [self.section_view],
-                [self.log_level_label, self.log_level_combo],
-                [self.save_btn]
-                ]
-        for row in rows:
-            row_layout = QHBoxLayout()
-            for widget in row:
-                row_layout.addWidget(widget)
-            main_layout.addLayout(row_layout)
+        main_layout.addWidget(self.settings_title)
+        main_layout.addLayout(root_layout)
+        main_layout.addLayout(btn_layout)
+        main_layout.addWidget(self.section_view)
+        main_layout.addLayout(log_layout)
+        main_layout.addWidget(self.save_btn)
 
         self.setLayout(main_layout)
 
@@ -112,8 +152,6 @@ class NavbarContainer(QWidget):
 
         visible_layout.setContentsMargins(5, 8, 5, 8)
         visible_layout.setSpacing(4)
-        visible_layout.setContentsMargins(5, 8, 5, 8)
-        visible_layout.setSpacing(4)
 
         self.visible_widget.setLayout(visible_layout)
         self.visible_widget.setFixedWidth(250)
@@ -144,8 +182,8 @@ class NavbarContainer(QWidget):
                  (self.flashcards_btn, "cards.png")
                  ]
         for btn, btn_name in icons:
-            btn.setIcon(QIcon(str(constants.ICON_PATH / btn_name)))
-            btn.setFixedSize(constants.ICON_SIZE)
+            btn.setIcon(QIcon(str(ICON_PATH / btn_name)))
+            btn.setFixedSize(ICON_SIZE)
             btn.setStyleSheet(ICON_CSS)
             self.menu_bar_layout.addWidget(btn)
 
@@ -157,7 +195,7 @@ class NavbarContainer(QWidget):
 #        self.menu_bar.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         self.menu_bar_layout.addSpacerItem(QSpacerItem(15, 15, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed))
         self.menu_bar_layout.setContentsMargins(0, 0, 0, 8)
-        self.menu_bar_layout.setSpacing(2)
+        self.menu_bar_layout.setSpacing(4)
 
         self.menu_bar.setStyleSheet(f"""
             QWidget {{
@@ -202,8 +240,8 @@ class CollapsedNavbarContainer(QWidget):
         self.main_layout.setContentsMargins(5, 8, 5, 8)
 
         self.expand_btn.setStyleSheet(ICON_CSS)
-        self.expand_btn.setIcon(QIcon(str(constants.ICON_PATH / "sidebar_right.png")))
-        self.expand_btn.setFixedSize(constants.ICON_SIZE)
+        self.expand_btn.setIcon(QIcon(str(ICON_PATH / "sidebar_right.png")))
+        self.expand_btn.setFixedSize(ICON_SIZE)
         self.expand_btn.setToolTip("Open Sidebar")
 
         self.main_layout.addWidget(self.expand_btn, alignment=Qt.AlignmentFlag.AlignLeft)

@@ -1,12 +1,11 @@
 import logging
 from pathlib import Path
 
-from PyQt6.QtWidgets import (QHBoxLayout, QLabel, QMessageBox, QStackedWidget, QVBoxLayout,
-                             QWidget, QPushButton, QScrollArea)
+from PyQt6.QtWidgets import QHBoxLayout, QLabel, QMessageBox, QStackedWidget, QVBoxLayout, QWidget, QPushButton, QScrollArea
 from PyQt6.QtPdfWidgets import QPdfView
 from PyQt6.QtPdf import QPdfDocument
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QColor, QIcon, QPalette, QPixmap
+from PyQt6.QtGui import QColor, QPalette, QPixmap
 
 from .style import BUTTON_CSS
 from ..models import Flashcard, FlashcardSideName

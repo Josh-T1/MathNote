@@ -4,7 +4,7 @@ import shutil
 import logging
 
 from ..config import CONFIG, Config
-from ..models import Note, Category, Metadata
+from ..models import Note, Category
 from .._enums import FileType
 from ..exceptions import InvalidNameError, NoteExistsError, CategoryExistsError
 
@@ -14,16 +14,17 @@ class NotesRepository:
     """Singleton class (one class per root directory) representing the notes repository"""
     _instances: dict[Path, 'NotesRepository'] = {}
 
-    def __init__(self, config: Config):
+    def __init__(self, path: Path):
         if getattr(self, "_initialized", False):
             return
         self._initialized = True
-        self.config = config
-        self.repo_root = config.root_path / "Notes"
+        self.repo_root = path
+        if not (file := path / "cat-metadata.json").is_file():
+            file.touch()
+            self._init_metadata(file)
         self.root_category = self.build_root_category()
 
-    def __new__(cls, config: Config):
-        path = config.root_path / "Notes"
+    def __new__(cls, path: Path):
         if cls._instances.get(path) is None:
             instance = super().__new__(cls)
             instance._initialized = False
@@ -36,7 +37,7 @@ class NotesRepository:
     def build_root_category(self) -> Category:
         """Loads and returns Category object representing root of notes repository"""
         metadata = self.load_metadata(self.repo_root / "cat-metadata.json")
-        root_cat = Category(metadata, self.repo_root, [])
+        root_cat = Category(self.repo_root, [], metadata=metadata)
         notes = self._get_notes(root_cat)
         root_cat.notes = notes
         return root_cat
@@ -67,15 +68,13 @@ class NotesRepository:
 
         note_dir_path = parent.path / f"{name}.note"
         note_path = note_dir_path / f"{name}{note_type.extension}"
-        metadata_path = note_dir_path / "metadata.json"
         note_dir_path.mkdir()
-        self._init_metadata(metadata_path)
-        note_template = self.config.template_files[note_type]["note_template"]
+        note_template = CONFIG.template_files[note_type]["note_template"]
         shutil.copy(note_template, note_path)
-        new_note = Note(note_path, Metadata(set()), parent)
+        new_note = Note(note_path, parent)
         parent.notes.append(new_note)
 
-        if self.config.set_note_title:
+        if CONFIG.set_note_title:
             self.insert_title(new_note)
         return new_note
 
@@ -100,7 +99,6 @@ class NotesRepository:
 
         moved_path_ = target_dir /f"{note.name}{note.path.suffix}"
 
-
         if any(new_name.upper() == note.name.upper() for note in parent_cat.notes) or target_dir.exists():
             raise NoteExistsError(
                     f"Renaming {note.name} to {new_name} failed.\nA note with the same name (up to capatilization) already exists under the category {parent_cat.name}"
@@ -109,7 +107,7 @@ class NotesRepository:
         new_dir = old_dir.rename(target_dir)
         new_path_ = new_dir / f"{new_name}{note.path.suffix}"
         new_path = moved_path_.rename(new_path_)
-        new_note = Note(new_path, note.metadata, parent_cat)
+        new_note = Note(new_path, parent_cat)
         parent_cat.notes.append(new_note)
         return new_note
 
@@ -124,38 +122,20 @@ class NotesRepository:
         """Inserts auto generated title into note source file"""
         pass
 
-    def add_note_tag(self, note: Note, tag: str):
-        note.add_tag(tag)
-        self.write_metadata(note)
-
-    def delete_note_tag(self, note: Note, tag: str):
-        note.remove_tag(tag)
-        self.write_metadata(note)
 
     def _get_notes(self, category: Category) -> list[Note]:
         """Returns all notes directly under a given category (not recursive)"""
         notes = []
         for dir in category.path.iterdir():
-            if not dir.is_dir():
+            if not dir.is_dir() or not dir.name.endswith("note"):
                 continue
-            metadata_file = dir / "metadata.json"
-            if not metadata_file.is_file():
-                continue
-
-            metadata = self.load_metadata(metadata_file)
             for file in dir.iterdir():
                 if file.is_file() and file.suffix in {".typ", ".tex"}:
-                    note = Note(file, metadata, category)
+                    note = Note(file, category)
                     notes.append(note)
+        print(f"returning {len(notes)}")
         return notes
 
-    def add_category_tag(self, category: Category, tag: str):
-        category.add_tag(tag)
-        self.write_metadata(category)
-
-    def delete_category_tag(self, category: Category, tag: str):
-        category.remove_tag(tag)
-        self.write_metadata(category)
 
     def delete_category(self, cat: Category):
         dir = cat.path
@@ -187,7 +167,7 @@ class NotesRepository:
             raise CategoryExistsError(f"Category with name '{new_name}' already exists under category {parent}")
 
         new_cat_path = cat.path.rename(new_dir)
-        new_cat = Category(cat.metadata, new_cat_path, cat.notes, parent)
+        new_cat = Category(new_cat_path, cat.notes, parent, metadata=cat.metadata)
         return new_cat
 
     def create_category(self, name: str, parent: Category) -> Category:
@@ -215,8 +195,7 @@ class NotesRepository:
         meta_path = dir / "cat-metadata.json"
         dir.mkdir()
         self._init_metadata(meta_path)
-        metadata = Metadata(set())
-        cat = Category(metadata, dir, [], parent=parent)
+        cat = Category(dir, [], parent=parent)
         return cat
 
     def get_sub_categories(self, category: Category) -> list[Category]:
@@ -227,7 +206,7 @@ class NotesRepository:
                 continue
             if (dir / "cat-metadata.json").is_file():
                 metadata = self.load_metadata(dir / "cat-metadata.json")
-                cat = Category(metadata, dir, [], parent=category)
+                cat = Category(dir, [], parent=category, metadata=metadata)
                 cat.notes = self._get_notes(cat)
                 children.append(cat)
         return children
@@ -242,18 +221,14 @@ class NotesRepository:
     def write_metadata(self, item: Note | Category):
         """Saves items metadata to associated json file"""
         file_name = "metadata.json" if isinstance(item, Note) else "cat-metadata.json"
-        d = item.metadata.to_dict()
         with (item.path / file_name).open("w") as f:
-            json.dump(d, f, indent=2)
+            json.dump(self.root_category.metadata, f, indent=2)
 
-    def load_metadata(self, path: Path) -> Metadata:
+    def load_metadata(self, path: Path) -> dict:
         """Loads and returns Metadata object from json file data associated to path"""
         with open(path, "r") as f:
             d = json.load(f)
-        if "tags" not in d:
-            d["tags"] = set()
-        metadata = Metadata(d["tags"])
-        return metadata
+        return d
 
     def reload_category(self, category: Category):
         notes = self._get_notes(category)
@@ -324,12 +299,8 @@ class NotesRepository:
                 return note
 
         raise ValueError(f"Could not determine Note from path: {path}")
-
-
         # check this works on every iteration ++ check that note actually exsts under paretn
 
-
-
-
-
-
+    @property
+    def name(self) -> str:
+        return self.repo_root.name
