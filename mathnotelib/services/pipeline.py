@@ -1,13 +1,13 @@
 from functools import reduce
 import logging
-from typing import Any, NotRequired, Union, Generator, Generic, get_args, get_origin, TypeVar
+from typing import Union, Generator, Generic, get_args, get_origin, TypeVar
 from collections.abc import Iterable
 from pathlib import Path
 from abc import abstractmethod, ABC
 
 from ..models import Flashcard, langauage_char_registry, TrackedText, FlashcardSide, FlashcardSideName
-from .._enums import FileType
-from ..config import CONFIG
+from ..enums import FileType
+from ..config import CONFIG, Section
 
 logger = logging.getLogger("mathnote")
 
@@ -170,10 +170,9 @@ def content_inside_paren(text: TrackedText, paren: tuple[str, str]) -> TrackedTe
 
 # TODO: currently we do not filter by parents!
 class SubSectionFinder:
-    def __init__(self, name: str, parent_names: dict[str, dict[FileType, str]]):
+    def __init__(self, name: str):
         self.name = name
-        self.parents = parent_names
-        self.name_ptrn = CONFIG.section_names[self.name]
+        self.section = CONFIG.section_names[self.name]
 
     def find_sub_section(self, text: TrackedText) -> tuple[TrackedText, int] | tuple[None, int]:
         char_map = langauage_char_registry[text.filetype()]
@@ -207,7 +206,7 @@ class SubSectionFinder:
     def is_section(self, text: TrackedText, cmd_prefix: str) -> tuple[bool, tuple[str, str]] | tuple[bool, None]:
         if len(text) < 2 or str(text[0]) != cmd_prefix:
             return (False, None)
-        ptrn = self.name_ptrn[text.filetype()]
+        ptrn = self.section.patterns[text.filetype()]
         if text[1:].startswith(ptrn):
             return (True, (self.name, ptrn))
         return (False, None)
@@ -227,12 +226,12 @@ class MainSectionFinder:
             content
             ]
     """
-    def __init__(self, names: dict[str, dict[FileType, str]]):
+    def __init__(self, sections: dict[str, Section]):
         """
         -- Params --
         names: dict of form {Section name: section pattern,...}. e.g., {"DEFINITION": "defin"}
         """
-        self.names = names
+        self.sections = sections
 
     def find_section(self, text: TrackedText) -> tuple[Flashcard, int] | tuple[None, int]:
         char_map = langauage_char_registry[text.filetype()]
@@ -275,16 +274,16 @@ class MainSectionFinder:
         if len(text) < 2 or str(text[0]) != cmd_prefix:
             return (False, None)
 
-        for name, filetype_d in self.names.items():
-            ptrn = filetype_d[text.filetype()]
+        for name, section in self.sections.items():
+            ptrn = section.patterns[text.filetype()]
             if text[1:].startswith(ptrn):
                 return (True, (name, ptrn))
         return (False, None)
 
 class FlashcardBuilderStage(Stage[TrackedText, list[Flashcard]]):
-    def __init__(self, names: dict[str, dict[FileType, str]]):
-        self.main_section_finder = MainSectionFinder(names)
-        self.sub_section_finders = []
+    def __init__(self, sections: dict[str, Section]):
+        self.main_section_finder = MainSectionFinder(sections)
+        self.sub_section_finders: list[SubSectionFinder] = []
         self.char_map = None
 
     def _index_of_line_end(self, text: TrackedText) -> int:
@@ -319,7 +318,7 @@ class FlashcardBuilderStage(Stage[TrackedText, list[Flashcard]]):
             # add subsections to flashcard
             if parent_section:
                 for subsection_finder in self.sub_section_finders:
-                    if parent_section not in subsection_finder.parents:
+                    if parent_section not in subsection_finder.section.parents:
                         continue
                     content, end_index = subsection_finder.find_sub_section(data[counter:])
                     if content != None:
@@ -348,8 +347,8 @@ class FlashcardBuilderStage(Stage[TrackedText, list[Flashcard]]):
         logger.debug(f"Returning {len(chunk_flashcards)} flashcards")
         return chunk_flashcards
 
-    def add_subsection_finder(self, sub_section_name: str, parents: list[str]):
-        self.sub_section_finders.append(SubSectionFinder(sub_section_name, parents))
+    def add_subsection_finder(self, sub_section_name: str):
+        self.sub_section_finders.append(SubSectionFinder(sub_section_name))
 
 class FormatStage(Stage[list[Flashcard], list[Flashcard]]):
     def process(self, data: list[Flashcard]) -> list[Flashcard]:

@@ -1,12 +1,11 @@
-from typing import Callable
 from PyQt6.QtGui import QIcon, QStandardItemModel
 from PyQt6.QtWidgets import (QAbstractItemView, QComboBox, QHBoxLayout, QLabel, QPushButton, QSizePolicy,
                              QSpacerItem, QStackedWidget, QTreeView, QVBoxLayout, QWidget)
-from PyQt6.QtCore import Qt, pyqtEnum, pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal
 
 from .style import BOXED_LABEL_CSS, BUTTON_CSS, COLOR_FOCUSED, COMBO_BOX_CSS, ICON_CSS, LABEL_CSS, TITLE_LABEL_CSS, TREE_VIEW_CSS
 from .widgets import PathLabel, TightStackedWidget
-from .constants import ICON_PATH, LABEL_HEIGHT, VIEWER_WIDTH, ICON_SIZE
+from .constants import ICON_PATH, LABEL_HEIGHT, ICON_SIZE
 from .file_navbar import NotesNavbar, CourseNavbar
 from .flashcard_navbar import FlashcardNavbar
 from ..config import Config

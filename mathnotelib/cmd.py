@@ -12,7 +12,7 @@ from .ui import (MainWindow, TabbedSvgViewer,NavbarContainer, SettingsNavbar, Co
                  ViewContainer, FlashcardNavbar, ViewController, SettingsController)
 from .config import Config
 from .models import Course
-from ._enums import FileType
+from .enums import FileType
 from .services import NotesRepository, CourseRepository
 
 

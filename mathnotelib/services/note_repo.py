@@ -4,7 +4,7 @@ import shutil
 import logging
 
 from ..models import Note, Category, PersistentMetadata
-from .._enums import FileType
+from ..enums import FileType
 from ..exceptions import InvalidNameError, NoteExistsError, CategoryExistsError
 from ..config import CONFIG
 
@@ -134,7 +134,6 @@ class NotesRepository:
                 if file.is_file() and file.suffix in {".typ", ".tex"}:
                     note = Note(file, category)
                     notes.append(note)
-        print(f"returning {len(notes)}")
         return notes
 
 
@@ -194,8 +193,8 @@ class NotesRepository:
                     )
         dir = parent.path / name
         meta_path = dir / "cat-metadata.json"
-        self._init_metadata(meta_path)
         dir.mkdir()
+        self._init_metadata(meta_path)
         cat = Category(dir, [], PersistentMetadata(meta_path), parent=parent)
         return cat
 

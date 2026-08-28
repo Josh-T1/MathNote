@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import re
 from typing import Callable, Iterable, Iterator, SupportsIndex, Union
-from .._enums import FileType
+from ..enums import FileType
 
 """
 TODO: we get errors from latexmk, but output is still produced. Look into different error code meanings.

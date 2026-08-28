@@ -5,7 +5,7 @@ import subprocess
 
 from ..models import SourceFile, StandaloneSourceFile
 from .filesystem import open_cmd
-from .._enums import FileType, OutputFormat
+from ..enums import FileType, OutputFormat
 
 
 @dataclass

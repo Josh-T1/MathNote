@@ -12,7 +12,7 @@ from .pipeline import ProcessingPipeline
 from ..models import Flashcard, FlashcardDoubleLinkedList
 from ..services import FlashcardCompiler
 from ..config import Config
-from .._enums import FileType
+from ..enums import FileType
 
 logger = logging.getLogger("mathnote")
 

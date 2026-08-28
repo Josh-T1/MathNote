@@ -7,7 +7,7 @@ import re
 
 from ..config import Config
 from ..models import Course, Assignment, Lecture
-from .._enums import FileType
+from ..enums import FileType
 from ..exceptions import CourseExistsError, InvalidNameError
 
 logger = logging.getLogger(__name__) # TODO

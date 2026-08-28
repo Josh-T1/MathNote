@@ -24,8 +24,8 @@ from .dialog import show_error_dialog
 from ..models import Category, Course, SourceFile, Note, FlashcardSideName
 from ..services import (CompileOptions, compile_source, NotesRepository, CourseRepository, NotesRepository, FlashcardSession,
                         FlashcardCache, FlashcardCompiler, open_pdf, DeckRepository, DataGenerator, FlashcardBuilderStage, CleanStage, DataGenerator, ProcessingPipeline, FormatStage)
-from ..config import CONFIG
-from .._enums import FileType, OutputFormat
+from ..config import CONFIG, Section
+from ..enums import FileType, OutputFormat
 from ..exceptions import (CompilationError, FlashcardCompilationError, LaTeXCompilationError, NoItemSelected, NoteExistsError, CategoryExistsError,
                           InvalidNameError, NoteExistsError, CourseExistsError, TypstCompilationError, FlashcardCompilationError, NoItemSelected)
 
@@ -830,14 +830,13 @@ class FlashcardController:
         else:
             path, section_names_dict, shuffle = self.generate_pipe_deck_config()
             paths = [path]
-            print(paths, section_names_dict, shuffle)
 
         data_iterable = DataGenerator(paths)
         clean_data_stage = CleanStage(CONFIG.macros())
         format_state = FormatStage()
         build_stage = FlashcardBuilderStage(section_names_dict)
         # TODO
-        build_stage.add_subsection_finder("PROOF", ["THEOREM", "PROPOSITION", "LEMMA", "COROLLARY"])
+        build_stage.add_subsection_finder("PROOF")
         pipeline = ProcessingPipeline(data_iterable)
         pipeline.add_stage(clean_data_stage)
         pipeline.add_stage(build_stage)
@@ -852,7 +851,7 @@ class FlashcardController:
     def stop(self):
         self.session.stop()
 
-    def generate_pipe_deck_config(self) -> tuple[Path, dict[str, dict[FileType, str]], bool]:
+    def generate_pipe_deck_config(self) -> tuple[Path, dict[str, Section], bool]:
         filename = self.navbar.deck_config.deck_combo.currentText()
         path = self.deck_repo.decks.get(filename)
         if path is None:
@@ -867,7 +866,7 @@ class FlashcardController:
             section_names = {k: d for (k, d) in CONFIG.section_names.items() if k in section_names_pretty}
         return path, section_names, shuffle
 
-    def generate_pipe_course_config(self) -> tuple[list[Path], dict[str, dict[FileType, str]], bool]:
+    def generate_pipe_course_config(self) -> tuple[list[Path], dict[str, Section], bool]:
         """ Retreives user config from widgets. We need to do error checking... what if no boxes are checked """
         # Lecture numberes
         course_name = self.navbar.course_config.course_combo.currentText()
@@ -934,6 +933,29 @@ class SettingsController:
         self.settings_nav = settings_navbar
         self.window = window
         self._populate_view()
+        self.connect_handlers()
+
+    def connect_handlers(self):
+        self.settings_nav.new_section.connect(lambda: self.handle_new_section())
+        self.settings_nav.delete_section.connect(lambda: self.handle_delete_section())
+        self.settings_nav.pattern_changed.connect(lambda: self.pattern_changed())
+        self.settings_nav.save_btn.clicked.connect(lambda: self.handle_save())
+
+    @with_error_dialog
+    def handle_save(self):
+        CONFIG.save()
+
+    @with_error_dialog
+    def handle_new_section(self):
+        return
+
+    @with_error_dialog
+    def handle_delete_section(self):
+        return
+
+    @with_error_dialog
+    def pattern_changed(self):
+        return
 
     def _populate_view(self):
         self.settings_nav.root_val.set_path(str(CONFIG.root_path))
@@ -946,15 +968,14 @@ class SettingsController:
                 index.row(), index.parent(), True
             )
 
-    def _build_section_row(self, section_name: str, fmap: dict[FileType, str]) -> QStandardItem:
+    def _build_section_row(self, section_name: str, section: Section) -> QStandardItem:
         name_item = QStandardItem(section_name)
         flags = name_item.flags()
         flags &= ~Qt.ItemFlag.ItemIsEditable
         name_item.setFlags(flags)
         name_item.setData(section_name, SECTION_ROLE)
-
-        name_item.appendRow(self._build_pattern_row("LaTeX", section_name, fmap[FileType.LaTeX]))
-        name_item.appendRow(self._build_pattern_row("Typst", section_name, fmap[FileType.Typst]))
+        name_item.appendRow(self._build_pattern_row("LaTeX", section_name, section.patterns[FileType.LaTeX]))
+        name_item.appendRow(self._build_pattern_row("Typst", section_name, section.patterns[FileType.Typst]))
         return name_item
 
     def _build_pattern_row(self, label: str, section, value: str) -> list[QStandardItem]:
@@ -969,5 +990,4 @@ class SettingsController:
         value_item.setFlags(value_flags)
         value_item.setData(section, SECTION_ROLE)
         value_item.setData(label, LABEL_ROLE)
-
         return [label_item, value_item]

@@ -1,14 +1,16 @@
 {  
     "root": "",
 
-    "section_names": {},
-    
-    "editor": "vim",
+    "section-names": {}
 
-    "log_level": "DEBUG",
+    "macro-names": [],
 
-    "iterm2_enabled": false,
+    "Typst-packages": [],
 
-    "set_note_title": true
+    "LaTeX-packages": [],
+
+    "log-level": "DEBUG",
+
+    "set-note-title": true
 }   
 

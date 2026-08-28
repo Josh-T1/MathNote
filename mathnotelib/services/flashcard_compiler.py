@@ -11,7 +11,7 @@ from ..models import SourceFile, FlashcardSideName
 
 from .compiler import CompileOptions, compile_source
 from ..models import TrackedText, Flashcard
-from .._enums import FileType, OutputFormat
+from ..enums import FileType, OutputFormat
 
 
 logger = logging.getLogger(__name__)

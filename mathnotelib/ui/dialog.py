@@ -1,7 +1,7 @@
 from PyQt6.QtWidgets import (QCheckBox, QComboBox, QDateEdit, QDialog, QDialogButtonBox, QFormLayout,
                              QHBoxLayout, QLineEdit, QMessageBox ,QTimeEdit,QWidget)
 
-from .._enums import FileType
+from ..enums import FileType
 
 
 

@@ -1,11 +1,34 @@
 from pathlib import Path
-import json
 import shutil
 import os
 import re
+import json
 from typing import Optional
+from dataclasses import dataclass, field
 
-from ._enums import FileType
+from .enums import FileType
+
+@dataclass(frozen=True)
+class Section:
+    name: str
+    patterns: dict[FileType, str]
+    parents: frozenset[str] = field(default_factory=frozenset)
+
+    @property
+    def requires_parent(self) -> bool:
+        return len(self.parents) > 0
+
+    def to_dict(self) -> dict:
+        return {
+                "patterns": {ftype.name: ptrn for ftype, ptrn in self.patterns.items()},
+                "parents": sorted(self.parents)
+                }
+
+    @classmethod
+    def from_dict(cls, name: str, data: dict) -> "Section":
+        patterns = {FileType[k]: v for k, v in data["patterns"].items()}
+        parents = frozenset(data.get("parents", []))
+        return cls(name=name, patterns=patterns, parents=parents)
 
 
 class Config:
@@ -44,48 +67,63 @@ class Config:
             self.root_path = Path.home() / "MathNote"
 
         self.templates_path = Path(__file__).parent / "templates"
+        self.decks_dir = self.root_path / "Decks"
+        self.note_repo_dir = self.root_path / "NoteRepositories"
+        # figure out how to set this for each directory
+#        self.preambles_dir = self.root_path / "Preambles"
+        # TODO
         self.macro_names = []
         self.log_level = log_level
         self.set_note_title = set_note_title
         self.template_files: dict[FileType, dict[str, Path]] = {}
-        self.editor = editor
 
         self.typst_packages: list[str] = []
         self.latex_packages: list[str] = []
         # tmp - add to config
-        self.section_names: dict[str, dict[FileType, str]] = {
-                "DEFINITION": {
+        self.section_names: dict[str, Section] = {
+                "DEFINITION": Section("DEFINITION", {
                     FileType.LaTeX: "defin",
                     FileType.Typst: "definition"
-                    },
-                "THEOREM": {
+                    }),
+                "THEOREM": Section("THEOREM", {
                     FileType.LaTeX: "theo",
                     FileType.Typst: "theorem"
+                    }),
+
+                "COROLLARY": Section("COROLLARY", {
+                    FileType.LaTeX: "corollary",
+                    FileType.Typst: "corollary"
+                    }),
+                "LEMMA": Section("LEMMA", {
+                    FileType.LaTeX: "lemma",
+                    FileType.Typst: "proposition"
+                    }),
+                "PROPOSITION": Section("PROPOSITION", {
+                    FileType.LaTeX: "proposition",
+                    FileType.Typst: "proposition"
+                    }),
+                "FLASHCARD QUESTION": Section("FLASHCARD QUESTION", {
+                    FileType.LaTeX: "flashcardQ",
+                    FileType.Typst: "flashcardQ"
+                    }),
+                "FLASHCARD ANSWER": Section("FLASHCARD ANSWER", {
+                    FileType.LaTeX: "flashcardA",
+                    FileType.Typst: "flashcardA"
                     },
-                "PROOF": {
+                    parents=frozenset({"FLASHCARD QUESTION"})
+                    ),
+                "PROOF": Section("PROOF",
+                    {
                     FileType.LaTeX: "pf",
                     FileType.Typst: "proof"
                     },
-                "COROLLARY": {
-                    FileType.LaTeX: "corollary",
-                    FileType.Typst: "corollary"
-                    },
-                "LEMMA": {
-                    FileType.LaTeX: "lemma",
-                    FileType.Typst: "proposition"
-                    },
-                "PROPOSITION": {
-                    FileType.LaTeX: "proposition",
-                    FileType.Typst: "proposition"
-                    },
-                "UNAMED": {
-                    FileType.LaTeX: "unamed",
-                    FileType.Typst: "unamed"
-                    },
+                    parents=frozenset({"DEFINITION", "THEOREM", "COROLLARY", "LEMMA", "PROPOSITION", "FLASHCARD QUESTION"})
+                    ),
                 }
 
         self._macros: dict[FileType, dict] | None = None
-        self._update_config()
+#        self._update_config()
+
     # TODO: this is fucked
     def _update_config(self):
         """ Updates default values with values specified in config file """
@@ -126,10 +164,6 @@ class Config:
                     self.template_files[file_type][file_stem] = template_path
 
 
-    @property
-    def note_repo_dir(self):
-        return self.root_path / "NoteRepositories"
-
     @classmethod
     def config_dir(cls):
         # TODO allow for root_dir?
@@ -161,10 +195,26 @@ class Config:
             shutil.copy(note_macros_path, self.templates_path / file_type.value / f"note_macros{ext}")
             shutil.copy(note_preamble_path, self.templates_path / file_type.value / f"note_preamble{ext}")
 
+    # TODO validate parents
+    def save(self):
+        config_path = self.config_dir() / "config.json"
+        data = {
+            "root": str(self.root_path),
+            "section-names": {
+                name: section.to_dict() for name, section in self.section_names.items()
+            },
+            "macro-names": self.macro_names,
+            "typst-packages": self.typst_packages,
+            "latex-packages": self.latex_packages,
+            "log-level": self.log_level,
+        }
+        config_path.write_text(json.dumps(data, indent=2))
+
     @staticmethod
     def cache_dir():
         return Config.config_dir() / "cache"
 
+    # this aint it
     def macros(self) -> dict[FileType, dict[str, dict]]:
         r""" Gets all user commands from macro_path
         Macros beign parsed have the form:
