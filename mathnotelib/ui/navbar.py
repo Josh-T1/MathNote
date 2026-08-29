@@ -68,6 +68,9 @@ class SettingsNavbar(QWidget):
         self.new_btn.setFixedSize(ICON_SIZE)
         self.new_btn.setStyleSheet(ICON_CSS)
 
+        self.new_btn.clicked.connect(self.new_section.emit)
+        self.trash_btn.clicked.connect(self.delete_section.emit)
+
         self.root_label.setContentsMargins(0, 0, 8, 0)
 
         root_layout.addWidget(self.root_label)

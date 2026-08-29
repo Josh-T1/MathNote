@@ -17,7 +17,7 @@ from .constants import DIR_ROLE, COURSE_CONTAINER_ROLE, COURSE_DIR, FILE_ROLE, L
 from .widgets import TightStackedWidget
 from .flashcard_navbar import FlashcardNavbar
 from .navbar import CourseNavbar, NavbarContainer, NotesNavbar, SettingsNavbar
-from .dialog import NewCourseDialog, NameDialog, NewTypesetFileDialog, confirm_delete
+from .dialog import NewCourseDialog, NameDialog, NewSectionDialog, NewTypesetFileDialog, ParentSelectDialog, confirm_delete
 from .file_viewer import TabWidget, TabbedSvgViewer
 from .flashcard_viewer import FlashcardView
 from .dialog import show_error_dialog
@@ -926,8 +926,10 @@ class FlashcardController:
 
 LABEL_ROLE = Qt.ItemDataRole.UserRole + 20   # which field this value-item maps to, e.g. "latex" / "typst"
 SECTION_ROLE = Qt.ItemDataRole.UserRole + 21 # the section object, stored on the parent row
+PARENTS_ROLE = Qt.ItemDataRole.UserRole + 22 # the section object, stored on the parent row
 
-class SettingsController:
+
+class SettingsController(QObject):
     def __init__(self, window: QMainWindow, settings_navbar: SettingsNavbar):
         super().__init__()
         self.settings_nav = settings_navbar
@@ -940,6 +942,7 @@ class SettingsController:
         self.settings_nav.delete_section.connect(lambda: self.handle_delete_section())
         self.settings_nav.pattern_changed.connect(lambda: self.pattern_changed())
         self.settings_nav.save_btn.clicked.connect(lambda: self.handle_save())
+        self.settings_nav.section_view.doubleClicked.connect(self._on_item_double_clicked)
 
     @with_error_dialog
     def handle_save(self):
@@ -947,26 +950,80 @@ class SettingsController:
 
     @with_error_dialog
     def handle_new_section(self):
-        return
+        dialog = NewSectionDialog()
+        if not dialog.exec():
+            return
+        name, typ_ptrn, tex_ptrn = dialog.get_data()
+        if not typ_ptrn or not tex_ptrn:
+            raise ValueError("File pattern for both Typst and LaTeX files")
+        if not name:
+            raise ValueError("Null section name provided. Section name must be specified")
+        new_section = Section(name,{FileType.LaTeX: tex_ptrn, FileType.Typst: typ_ptrn})
+        CONFIG.section_names[name] = new_section
+        self._build_section(name, new_section)
 
     @with_error_dialog
     def handle_delete_section(self):
+        idx = self.settings_nav.section_view.currentIndex()
+        if not idx.isValid():
+            return None
+        item = self.settings_nav.section_model.itemFromIndex(idx)
+        if item is None:
+            return
+        if item.parent() is not None:
+            return None
+        section_name = item.data(SECTION_ROLE)
+        dependents = [
+            name for name, section in CONFIG.section_names.items()
+            if section_name in section.parents
+        ]
+        if dependents:
+            raise ValueError(
+                f"Cannot delete '{section_name}': it is a required parent for {', '.join(dependents)}"
+            )
+
+        confirmed = confirm_delete(self.window, section_name)
+        if not confirmed:
+            return
+
+        idx = item.index()
+        self.settings_nav.section_model.removeRow(idx.row(), idx.parent())
+        del CONFIG.section_names[section_name]
         return
 
     @with_error_dialog
     def pattern_changed(self):
         return
 
+    def _build_section(self, name: str, ftype_map):
+        section_item = self._build_section_row(name, ftype_map)
+        self.settings_nav.section_model.appendRow(section_item)
+        index = self.settings_nav.section_model.indexFromItem(section_item)
+        self.settings_nav.section_view.setFirstColumnSpanned(
+            index.row(), index.parent(), True
+        )
+
     def _populate_view(self):
         self.settings_nav.root_val.set_path(str(CONFIG.root_path))
 
         for name, ftype_map in CONFIG.section_names.items():
-            section_item = self._build_section_row(name, ftype_map)
-            self.settings_nav.section_model.appendRow(section_item)
-            index = self.settings_nav.section_model.indexFromItem(section_item)
-            self.settings_nav.section_view.setFirstColumnSpanned(
-                index.row(), index.parent(), True
-            )
+            self._build_section(name, ftype_map)
+
+    def _build_parent_row(self, section_name: str, parents: frozenset[str]):
+        label_item = QStandardItem("Parents")
+        label_flags = label_item.flags()
+        label_flags &= ~Qt.ItemFlag.ItemIsEditable
+        label_item.setFlags(label_flags)
+
+        display_text = ", ".join(sorted(parents)) if parents else "(none)"
+        value_item = QStandardItem(display_text)
+        value_flags = value_item.flags()
+        value_flags |= Qt.ItemFlag.ItemIsEditable
+        value_item.setFlags(value_flags)
+        value_item.setData(section_name, SECTION_ROLE)
+        value_item.setData("parents", LABEL_ROLE)
+        value_item.setData(parents, PARENTS_ROLE)
+        return [label_item, value_item]
 
     def _build_section_row(self, section_name: str, section: Section) -> QStandardItem:
         name_item = QStandardItem(section_name)
@@ -976,6 +1033,7 @@ class SettingsController:
         name_item.setData(section_name, SECTION_ROLE)
         name_item.appendRow(self._build_pattern_row("LaTeX", section_name, section.patterns[FileType.LaTeX]))
         name_item.appendRow(self._build_pattern_row("Typst", section_name, section.patterns[FileType.Typst]))
+        name_item.appendRow(self._build_parent_row(section_name, section.parents))
         return name_item
 
     def _build_pattern_row(self, label: str, section, value: str) -> list[QStandardItem]:
@@ -991,3 +1049,27 @@ class SettingsController:
         value_item.setData(section, SECTION_ROLE)
         value_item.setData(label, LABEL_ROLE)
         return [label_item, value_item]
+
+
+    def _on_item_double_clicked(self, index: QModelIndex):
+        item = self.settings_nav.section_model.itemFromIndex(index)
+        if item is None or item.data(LABEL_ROLE) != "parents":
+            return  # not a parents row — let normal inline editing happen for pattern rows
+
+        section_name = item.data(SECTION_ROLE)
+        current_parents = item.data(PARENTS_ROLE)
+        all_names = list(CONFIG.section_names.keys())
+
+        dialog = ParentSelectDialog(all_names, section_name, current_parents)
+        if not dialog.exec():
+            return
+
+        new_parents = dialog.get_selected()
+        item.setData(new_parents, PARENTS_ROLE)
+        item.setText(", ".join(sorted(new_parents)) if new_parents else "(none)")
+
+        # persist to CONFIG immediately, or batch until save_btn — your call
+        old_section = CONFIG.section_names[section_name]
+        CONFIG.section_names[section_name] = Section(
+            name=section_name, patterns=old_section.patterns, parents=new_parents
+        )

@@ -1,5 +1,6 @@
+from PyQt6.QtCore import QLine, Qt
 from PyQt6.QtWidgets import (QCheckBox, QComboBox, QDateEdit, QDialog, QDialogButtonBox, QFormLayout,
-                             QHBoxLayout, QLineEdit, QMessageBox ,QTimeEdit,QWidget)
+                             QHBoxLayout, QLineEdit, QListWidget, QListWidgetItem, QMessageBox, QPushButton ,QTimeEdit, QVBoxLayout,QWidget)
 
 from ..enums import FileType
 
@@ -143,3 +144,72 @@ def confirm_delete(window: QWidget, item_name: str) -> bool:
     msg.setDefaultButton(QMessageBox.StandardButton.Cancel)
     result = msg.exec()
     return result == QMessageBox.StandardButton.Yes
+
+
+class NewSectionDialog(QDialog):
+    def __init__(self):
+        super().__init__()
+        self.initUI()
+
+    def initUI(self):
+        layout = QFormLayout()
+        self.name = QLineEdit()
+        self.typst_pattern = QLineEdit()
+        self.latex_pattern = QLineEdit()
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+
+
+        layout.addRow("Name:", self.name)
+        layout.addRow("Typst pattern", self.typst_pattern)
+        layout.addRow("LaTeX pattern", self.latex_pattern)
+
+
+        self.setLayout(layout)
+        self.setWindowTitle("New Section")
+
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def get_data(self) -> tuple[str, str, str]:
+        name = " ".join([word.lower().capitalize() for word in self.name.text().split()])
+        return (name, self.typst_pattern.text(), self.latex_pattern.text())
+
+
+class ParentSelectDialog(QDialog):
+    def __init__(self, all_section_names: list[str], current_section: str, selected_parents: frozenset[str]):
+        super().__init__()
+        self.setWindowTitle(f"Select parents for {current_section}")
+        layout = QVBoxLayout()
+        self.setLayout(layout)
+
+        self.list_widget = QListWidget()
+        layout.addWidget(self.list_widget)
+
+        # a section can't be its own parent — exclude it
+        for name in sorted(n for n in all_section_names if n != current_section):
+            item = QListWidgetItem(name)
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            item.setCheckState(
+                Qt.CheckState.Checked if name in selected_parents else Qt.CheckState.Unchecked
+            )
+            self.list_widget.addItem(item)
+
+        btn_row = QHBoxLayout()
+        ok_btn = QPushButton("OK")
+        cancel_btn = QPushButton("Cancel")
+        ok_btn.clicked.connect(self.accept)
+        cancel_btn.clicked.connect(self.reject)
+        btn_row.addWidget(ok_btn)
+        btn_row.addWidget(cancel_btn)
+        layout.addLayout(btn_row)
+
+    def get_selected(self) -> frozenset[str]:
+        result = set()
+        for i in range(self.list_widget.count()):
+            item = self.list_widget.item(i)
+            if item is None:
+                return frozenset()
+            if item.checkState() == Qt.CheckState.Checked:
+                result.add(item.text())
+        return frozenset(result)

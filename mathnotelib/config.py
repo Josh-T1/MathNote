@@ -40,13 +40,7 @@ class Config:
             cls._instance = super().__new__(cls)
         return cls._instance
     # Should we even take args?
-    def __init__(self,
-#                 macro_names: list[str] | None=None,
-                 log_level: str = "INFO",
-                 set_note_title: bool = True,
-                 editor: str = "vim",
-                 root_path: Path | None = None,
-                 ):
+    def __init__(self, root_path: Path | None = None):
         """
         Args:
             root_path: Root directory for MathNote data
@@ -57,8 +51,7 @@ class Config:
             editor: Default editor to open files, nvim and vim are the only supported options
         """
 
-        if getattr(self, "_initizialized", False):
-            return
+        if getattr(self, "_initizialized", False): return
         self._initizialized = True
 
         if isinstance(root_path, Path) and root_path.is_dir():
@@ -66,66 +59,22 @@ class Config:
         else:
             self.root_path = Path.home() / "MathNote"
 
-        self.templates_path = Path(__file__).parent / "templates"
         self.decks_dir = self.root_path / "Decks"
         self.note_repo_dir = self.root_path / "NoteRepositories"
-        # figure out how to set this for each directory
-#        self.preambles_dir = self.root_path / "Preambles"
-        # TODO
-        self.macro_names = []
-        self.log_level = log_level
-        self.set_note_title = set_note_title
+        self.templates_path = Path(__file__).parent / "templates"
+
+        self.log_level = "DEBUG"
         self.template_files: dict[FileType, dict[str, Path]] = {}
+        self.section_names: dict[str, Section] = {}
+        self.macro_names = [] # TODO delete
+        self._macros: dict[FileType, dict] = {}
 
-        self.typst_packages: list[str] = []
+        self.typst_packages: dict[str, list] = {"local": list(), "global": list()}
         self.latex_packages: list[str] = []
-        # tmp - add to config
-        self.section_names: dict[str, Section] = {
-                "DEFINITION": Section("DEFINITION", {
-                    FileType.LaTeX: "defin",
-                    FileType.Typst: "definition"
-                    }),
-                "THEOREM": Section("THEOREM", {
-                    FileType.LaTeX: "theo",
-                    FileType.Typst: "theorem"
-                    }),
 
-                "COROLLARY": Section("COROLLARY", {
-                    FileType.LaTeX: "corollary",
-                    FileType.Typst: "corollary"
-                    }),
-                "LEMMA": Section("LEMMA", {
-                    FileType.LaTeX: "lemma",
-                    FileType.Typst: "proposition"
-                    }),
-                "PROPOSITION": Section("PROPOSITION", {
-                    FileType.LaTeX: "proposition",
-                    FileType.Typst: "proposition"
-                    }),
-                "FLASHCARD QUESTION": Section("FLASHCARD QUESTION", {
-                    FileType.LaTeX: "flashcardQ",
-                    FileType.Typst: "flashcardQ"
-                    }),
-                "FLASHCARD ANSWER": Section("FLASHCARD ANSWER", {
-                    FileType.LaTeX: "flashcardA",
-                    FileType.Typst: "flashcardA"
-                    },
-                    parents=frozenset({"FLASHCARD QUESTION"})
-                    ),
-                "PROOF": Section("PROOF",
-                    {
-                    FileType.LaTeX: "pf",
-                    FileType.Typst: "proof"
-                    },
-                    parents=frozenset({"DEFINITION", "THEOREM", "COROLLARY", "LEMMA", "PROPOSITION", "FLASHCARD QUESTION"})
-                    ),
-                }
+        self._load_config_from_json()
 
-        self._macros: dict[FileType, dict] | None = None
-#        self._update_config()
-
-    # TODO: this is fucked
-    def _update_config(self):
+    def _load_config_from_json(self):
         """ Updates default values with values specified in config file """
         config_dir = self.config_dir()
         if not config_dir.is_dir():
@@ -135,13 +84,28 @@ class Config:
         if not config_path.is_file():
             raise EnvironmentError("Environment was incorrectly initialized, missing config file")
         # The issue here is the loaded values are str not objects
-#        with open(config_path, 'r') as f:
-#            data = json.load(f)
-#            for k, v in data.items():
-#                if not isinstance(v, bool) and not isinstance(v, int) and not v: # skip emtpy entries
-#                    continue
-#                if hasattr(self, k):
-#                    setattr(self, k, v)
+        with open(config_path, 'r') as f:
+            data = json.load(f)
+
+        if "root" in data and (dir := Path(data["root"])).is_dir():
+            self.root_path = dir
+        else:
+            raise EnvironmentError(f"Root directory '{data["root"]}' does not exist")
+
+        if "section-names" in data:
+            self.section_names = {
+                    name: Section.from_dict(name, sec_data) for name, sec_data in data["section-names"].items()
+                    }
+
+        if "macro-names" in data:
+            self.macro_names = data["macro-names"]
+
+        if "log-level" in data:
+            self.log_level = data["log-level"]
+        if "Typst-packages" in data:
+            self.typst_packages = data["typst-packages"]
+        if "LaTeX-packages" in data:
+            self.latex_packages = data["LaTeX-packages"]
 
         files = [
                 "main_template",
@@ -163,10 +127,8 @@ class Config:
                     template_path = self.templates_path / file_type.value / f"{file_stem}.{ext}"
                     self.template_files[file_type][file_stem] = template_path
 
-
     @classmethod
     def config_dir(cls):
-        # TODO allow for root_dir?
         """
         Returns:
             platform-specific user config directory
@@ -267,8 +229,6 @@ class Config:
         #TODO: for now we just import required packages (probably better solution anyways)
         return {}
 
-CONFIG = Config()
-
 
 # TODO delete
 def get_hack_macros():
@@ -299,3 +259,6 @@ def load_macros(macros_path: Path, macro_names: list[str]) -> dict[str,dict]:
             tex_cmd = line.replace(match.group(0), "").strip()[1:-1] # remove enclosing curly braces
             macros[name] = {"num_args": match.group(2), "command": tex_cmd}
     return macros
+
+
+CONFIG = Config()
