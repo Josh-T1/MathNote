@@ -26,6 +26,8 @@ class ZMultiPageViewer(QGraphicsView):
         self.setScene(self._scene)
         self.setStyleSheet("background-color: transparent;")
 
+        self.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
+
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setContentsMargins(0, 0, 0, 0)
@@ -116,31 +118,18 @@ class ZMultiPageViewer(QGraphicsView):
         self.tmpdir = tmpdir
         paths = svg_paths if isinstance(svg_paths, list) else [svg_paths]
         for path in paths:
-            self._scene.items().clear() # TODO Change
             self.append_item(path)
         if preserve_state:
-#            QTimer.singleShot(10, lambda: self._restore())
             self._restore()
 
-
     def append_item(self, path: str):
-        if len(items := self._scene.items()) > 0:
-            prev_item = items[-1]
-            prev_bounds = prev_item.boundingRect()
-            prev_scale_y = VIEWER_HEIGHT / prev_bounds.height()
-#            self._y_offset += 10 * prev_scale_y
-
         item = QGraphicsSvgItem(path)
         item.setPos(0, self._y_offset)
-
         bounds = item.boundingRect()
-        scale_x = VIEWER_WIDTH / bounds.width()
-        scale_y = VIEWER_HEIGHT / bounds.height()
-        item.setTransform(QTransform().scale(scale_x, scale_y))
-        self._y_offset += scale_y * bounds.height()
-
+        scale = min(VIEWER_WIDTH / bounds.width(), VIEWER_HEIGHT / bounds.height())
+        item.setTransform(QTransform().scale(scale, scale))
+        self._y_offset += scale * bounds.height()
         self._scene.addItem(item)
-        self._scene.setSceneRect(0, 0, VIEWER_WIDTH, self._y_offset)
 
     def event(self, event: QtCore.QEvent | None) -> bool:
         if event is None: return False

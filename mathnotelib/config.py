@@ -67,7 +67,7 @@ class Config:
         self.template_files: dict[FileType, dict[str, Path]] = {}
         self.section_names: dict[str, Section] = {}
         self.macro_names = [] # TODO delete
-        self._macros: dict[FileType, dict] = {}
+        self.macros: dict[FileType, dict[str, str]] = {}
 
         self.typst_packages: dict[str, list] = {"local": list(), "global": list()}
         self.latex_packages: list[str] = []
@@ -126,6 +126,7 @@ class Config:
                 else:
                     template_path = self.templates_path / file_type.value / f"{file_stem}.{ext}"
                     self.template_files[file_type][file_stem] = template_path
+        self.macros = self._load_macros()
 
     @classmethod
     def config_dir(cls):
@@ -177,7 +178,7 @@ class Config:
         return Config.config_dir() / "cache"
 
     # this aint it
-    def macros(self) -> dict[FileType, dict[str, dict]]:
+    def _load_macros(self) -> dict[FileType, dict[str, str]]:
         r""" Gets all user commands from macro_path
         Macros beign parsed have the form:
             \newcommand{macro name}[nargs(int)]{
@@ -185,9 +186,6 @@ class Config:
                 }
         returns: dict of the form {cmd_name: {args: #, tex_cmd: ""}}
         """
-        if self._macros is not None:
-            return self._macros
-
         tex_path = self.template_files[FileType.LaTeX]["macros"]
         typst_path = self.template_files[FileType.Typst]["macros"]
         if tex_path.is_file():
@@ -204,8 +202,7 @@ class Config:
         else:
             typst_macros = {}
             print(f"Failed to load Typst macros, file {typst_path} does not exist")
-        self._macros = {FileType.Typst: typst_macros, FileType.LaTeX: tex_macros}
-        return self._macros
+        return {FileType.Typst: typst_macros, FileType.LaTeX: tex_macros}
 
 
     def _parse_latex_macros(self, lines: list[str]) -> dict[str, str]:

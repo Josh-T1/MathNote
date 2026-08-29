@@ -832,11 +832,11 @@ class FlashcardController:
             paths = [path]
 
         data_iterable = DataGenerator(paths)
-        clean_data_stage = CleanStage(CONFIG.macros())
+        clean_data_stage = CleanStage(CONFIG.macros)
         format_state = FormatStage()
         build_stage = FlashcardBuilderStage(section_names_dict)
         # TODO
-        build_stage.add_subsection_finder("PROOF")
+        build_stage.add_subsection_finder("Proof")
         pipeline = ProcessingPipeline(data_iterable)
         pipeline.add_stage(clean_data_stage)
         pipeline.add_stage(build_stage)
