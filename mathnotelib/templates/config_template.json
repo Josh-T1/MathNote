@@ -1,16 +1,10 @@
 {  
-    "root": "",
+  "root": "",
+  "section-names": {},
+  "macro-names": [],
+  "typst-packages": [],
+  "latex-packages": [],
+  "log-level": "INFO"
 
-    "section-names": {}
-
-    "macro-names": [],
-
-    "Typst-packages": [],
-
-    "LaTeX-packages": [],
-
-    "log-level": "DEBUG",
-
-    "set-note-title": true
 }   
 

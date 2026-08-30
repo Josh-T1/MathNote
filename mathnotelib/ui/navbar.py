@@ -1,7 +1,7 @@
 from PyQt6.QtGui import QIcon, QStandardItemModel
-from PyQt6.QtWidgets import (QAbstractItemView, QComboBox, QHBoxLayout, QLabel, QPushButton, QSizePolicy,
+from PyQt6.QtWidgets import (QAbstractItemView, QComboBox, QHBoxLayout, QLabel, QLineEdit, QPushButton, QSizePolicy,
                              QSpacerItem, QStackedWidget, QTreeView, QVBoxLayout, QWidget)
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import QSize, Qt, pyqtSignal
 
 from .style import BOXED_LABEL_CSS, BUTTON_CSS, COLOR_FOCUSED, COMBO_BOX_CSS, ICON_CSS, LABEL_CSS, TITLE_LABEL_CSS, TREE_VIEW_CSS
 from .widgets import PathLabel, TightStackedWidget
@@ -16,6 +16,8 @@ class SettingsNavbar(QWidget):
     pattern_changed = pyqtSignal(object, str, str)
     new_section = pyqtSignal()
     delete_section = pyqtSignal()
+    new_package = pyqtSignal()
+    delete_package = pyqtSignal()
 
     def __init__(self, config: Config):
         super().__init__()
@@ -28,8 +30,9 @@ class SettingsNavbar(QWidget):
         root_layout = QHBoxLayout()
         btn_layout = QHBoxLayout()
         log_layout = QHBoxLayout()
+        note_pkg_layout = QHBoxLayout()
+        pkg_combo_layout = QHBoxLayout()
 
-        ##Label
         self.root_label = QLabel("Root")
         self.root_val= PathLabel()
         self.section_names_label = QLabel("Sections")
@@ -37,41 +40,73 @@ class SettingsNavbar(QWidget):
         self.section_model = QStandardItemModel()
         self.log_level_label = QLabel("Log level")
         self.log_level_combo = QComboBox()
-        self.settings_title = QLabel("Settings")
-        ##Btn
+        self.settings_title = QLabel("General Settings")
+        self.flashcards_settings_title = QLabel("Flashcard Settings")
+        self.note_settings_title = QLabel("Note Settings")
+
+        self.typst_pkg_combo = QComboBox()
+        self.latex_pkg_label = QLabel()
+        self.typst_macro_label = QLabel()
+        self.latex_macro_label = QLabel()
+
+        self.pkg_label = QLabel("Default Package")
+        typst_pkg_label = QLabel("Typst")
+        latex_pkg_label = QLabel("LaTeX")
+
+        self.new_pkg_btn = QPushButton()
+        self.del_pkg_btn = QPushButton()
         self.save_btn = QPushButton("Save")
         self.trash_btn = QPushButton()
         self.new_btn = QPushButton()
 
-
         #Configure
-        main_layout.setContentsMargins(0, 12, 0, 0)
-        main_layout.setSpacing(12)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(4)
         main_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         btn_layout.setContentsMargins(0, 0, 0, 0)
         btn_layout.setSpacing(4)
         btn_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
-        root_layout.setContentsMargins(0, 12, 0, 8)
+        root_layout.setContentsMargins(0,0, 0, 0)
         root_layout.setSpacing(4)
         root_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
-        log_layout.setContentsMargins(0, 12, 0, 8)
+        log_layout.setContentsMargins(0, 4, 0, 0)
         log_layout.setSpacing(4)
         log_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+
+        note_pkg_layout.setContentsMargins(0, 0, 0, 0)
+        note_pkg_layout.setSpacing(4)
+        note_pkg_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+
+        pkg_combo_layout.setContentsMargins(0, 0, 0, 24)
+        pkg_combo_layout.setSpacing(4)
+        pkg_combo_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
         self.trash_btn.setIcon(QIcon(str(ICON_PATH / "trash.png")))
         self.trash_btn.setFixedSize(ICON_SIZE)
         self.trash_btn.setStyleSheet(ICON_CSS)
+
         self.new_btn.setIcon(QIcon(str(ICON_PATH / "add.png")))
         self.new_btn.setFixedSize(ICON_SIZE)
         self.new_btn.setStyleSheet(ICON_CSS)
 
+        self.new_pkg_btn.setIcon(QIcon(str(ICON_PATH / "add.png")))
+        self.new_pkg_btn.setFixedSize(ICON_SIZE)
+        self.new_pkg_btn.setStyleSheet(ICON_CSS)
+
+        self.del_pkg_btn.setIcon(QIcon(str(ICON_PATH / "trash.png")))
+        self.del_pkg_btn.setFixedSize(ICON_SIZE)
+        self.del_pkg_btn.setStyleSheet(ICON_CSS)
+
         self.new_btn.clicked.connect(self.new_section.emit)
         self.trash_btn.clicked.connect(self.delete_section.emit)
+        self.new_pkg_btn.clicked.connect(self.new_package.emit)
+        self.del_pkg_btn.clicked.connect(self.delete_package)
 
         self.root_label.setContentsMargins(0, 0, 8, 0)
+
 
         root_layout.addWidget(self.root_label)
         root_layout.addWidget(self.root_val)
@@ -88,17 +123,31 @@ class SettingsNavbar(QWidget):
         # TODO controller should populate combo using config
         log_levels = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 
-
         self.settings_title.setStyleSheet(TITLE_LABEL_CSS)
+        self.flashcards_settings_title.setStyleSheet(TITLE_LABEL_CSS)
+        self.note_settings_title.setStyleSheet(TITLE_LABEL_CSS)
+        self.flashcards_settings_title.setContentsMargins(0, 24, 0, 0)
+        self.note_settings_title.setContentsMargins(0, 24, 0, 0)
 
         self.log_level_combo.addItems(log_levels)
         self.log_level_combo.setStyleSheet(COMBO_BOX_CSS)
 
+        self.pkg_label.setStyleSheet(LABEL_CSS)
+        self.pkg_label.setFixedHeight(LABEL_HEIGHT)
+
         self.root_label.setStyleSheet(LABEL_CSS)
         self.root_label.setFixedHeight(LABEL_HEIGHT)
 
+        self.typst_macro_label.setStyleSheet(LABEL_CSS)
+        self.typst_macro_label.setFixedHeight(LABEL_HEIGHT)
+        self.latex_macro_label.setStyleSheet(LABEL_CSS)
+        self.latex_macro_label.setFixedHeight(LABEL_HEIGHT)
+
         self.root_val.setStyleSheet(BOXED_LABEL_CSS)
         self.root_val.setFixedHeight(LABEL_HEIGHT)
+
+        self.typst_pkg_combo.setStyleSheet(COMBO_BOX_CSS)
+        self.typst_pkg_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
 
         self.section_names_label.setStyleSheet(LABEL_CSS)
         self.section_view.setStyleSheet(TREE_VIEW_CSS)
@@ -113,11 +162,25 @@ class SettingsNavbar(QWidget):
 
         self.save_btn.setStyleSheet(BUTTON_CSS)
 
+        note_pkg_layout.addWidget(self.pkg_label)
+        note_pkg_layout.addWidget(self.del_pkg_btn)
+        note_pkg_layout.addWidget(self.new_pkg_btn)
+
+        pkg_combo_layout.addWidget(typst_pkg_label)
+        pkg_combo_layout.addWidget(self.typst_pkg_combo)
+
         main_layout.addWidget(self.settings_title)
         main_layout.addLayout(root_layout)
+        main_layout.addLayout(log_layout)
+
+        main_layout.addWidget(self.flashcards_settings_title)
         main_layout.addLayout(btn_layout)
         main_layout.addWidget(self.section_view)
-        main_layout.addLayout(log_layout)
+
+        main_layout.addWidget(self.note_settings_title)
+        main_layout.addLayout(note_pkg_layout)
+        main_layout.addLayout(pkg_combo_layout)
+
         main_layout.addWidget(self.save_btn)
 
         self.setLayout(main_layout)
