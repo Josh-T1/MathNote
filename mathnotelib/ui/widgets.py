@@ -1,13 +1,14 @@
+from pathlib import Path
 from typing import Iterable, Optional
 import json
 
 from PyQt6 import QtCore
-from PyQt6.QtGui import QFontMetrics, QStandardItemModel
+from PyQt6.QtGui import QFontMetrics, QIcon, QStandardItemModel
 from PyQt6.QtCore import  QModelIndex, Qt, pyqtBoundSignal
-from PyQt6.QtWidgets import QLabel, QStackedWidget
+from PyQt6.QtWidgets import QHBoxLayout, QLabel, QSizePolicy, QStackedWidget, QWidget
 
-
-from . import constants
+from .style import BOXED_LABEL_CSS, LABEL_CSS
+from .constants import ICON_PATH, FILE_ROLE, DIR_ROLE, COURSE_DIR, COURSE_CONTAINER_ROLE, LABEL_HEIGHT
 from ..models import Category, Note
 from ..services import NotesRepository
 
@@ -29,8 +30,8 @@ class StandardItemModel(QStandardItemModel):
             return super().mimeData(indexes)
 
 
-        maybe_note = item.data(constants.FILE_ROLE)
-        maybe_cat = item.data(constants.DIR_ROLE)
+        maybe_note = item.data(FILE_ROLE)
+        maybe_cat = item.data(DIR_ROLE)
 
         if isinstance(maybe_cat, Category) and mime_data:
             data = {
@@ -87,8 +88,8 @@ class StandardItemModel(QStandardItemModel):
 
     def hasChildren(self, parent: QModelIndex=QModelIndex()) -> bool:
         if (parent.isValid() is False or # Delete?
-            parent.data(constants.DIR_ROLE) or
-            parent.data(constants.COURSE_DIR) is not None
+            parent.data(DIR_ROLE) or
+            parent.data(COURSE_DIR) is not None
             ):
             return True
         return super().hasChildren(parent)
@@ -108,24 +109,35 @@ class TightStackedWidget(QStackedWidget):
         w = self.currentWidget()
         return w.maximumSize() if w else super().maximumSize()
 
+class PathLabel(QWidget):
+    def __init__(self):
+        super().__init__()
+#        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self.initUi()
 
+    def initUi(self):
+        layout = QHBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        self.label = QLabel()
+        self._warning_icon = QLabel()
 
-class PathLabel(QLabel):
-    def __init__(self, path: str = "", parent=None):
-        super().__init__(parent)
-        self._full_path = path
-        self.setText(path)
+        self.label.setStyleSheet(BOXED_LABEL_CSS)
+        self.label.setFixedHeight(LABEL_HEIGHT)
+        self.label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self._warning_icon.setPixmap(QIcon(str(ICON_PATH / "warning.png")).pixmap(16, 16))
+        self._warning_icon.setFixedSize(16, 16)
+#        self._warning_icon.setAlignment(Qt.AlignmentFlag.AlignRight)
+        self._warning_icon.hide()
+
+        layout.addWidget(self.label, stretch=1)
+#        layout.addStretch()
+        layout.addWidget(self._warning_icon)
+        self.setLayout(layout)
 
     def set_path(self, path: str):
-        self._full_path = path
-        self._update_elided_text()
+        self._full_path = path if path != "None" and len(path) > 0 else "Invalid Path"
+        self.label.setText(path)
+        is_valid = Path(path).exists() if path else True  # decide: empty path = valid or invalid?
+        self._warning_icon.setVisible(not is_valid)
+        self.setToolTip(self._full_path)
 
-    def resizeEvent(self, event):
-        self._update_elided_text()
-        super().resizeEvent(event)
-
-    def _update_elided_text(self):
-        metrics = QFontMetrics(self.font())
-        elided = metrics.elidedText(self._full_path, Qt.TextElideMode.ElideMiddle, self.width())
-        self.setText(elided)
-        self.setToolTip(self._full_path)  # full path still visible on hover

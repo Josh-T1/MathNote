@@ -46,7 +46,7 @@ class TypstPackage:
     version: str
     namespace: str = "local"
     is_default: bool = False
-    is_macro = False
+    is_macro: bool = False
 
     @property
     def import_target(self) -> str:
@@ -58,6 +58,7 @@ class TypstPackage:
             "version": self.version,
             "namespace": self.namespace,
             "default": self.is_default,
+            "is-macro": self.is_macro
         }
 
     @classmethod
@@ -67,6 +68,7 @@ class TypstPackage:
             version=data["version"],
             namespace=data.get("namespace", "local"),
             is_default=data.get("default", False),
+            is_macro=data.get("is-macro", False)
         )
 
 @dataclass(frozen=True)
@@ -113,17 +115,18 @@ class Config:
 
         self.decks_dir = self.root_path / "Decks"
         self.note_repo_dir = self.root_path / "NoteRepositories"
+        self.courses_dir = self.root_path / "Courses"
         self.templates_path = Path(__file__).parent / "templates"
         self.typst_preamble_path = None
         self.typst_macro_path = None
-        self.latex_macro_path = self.root_path / "Preambles" / "preamble.tex"
+        self.latex_macro_path = self.root_path / "Preambles" / "macros.tex"
         self.latex_preamble_path = self.root_path / "Preambles" / "preamble.tex"
+        self.enable_exp_export = False
 
         self.log_level = "DEBUG"
         self.template_files: dict[FileType, dict[str, Path]] = {}
         self.section_names: dict[str, Section] = {}
         self.typst_packages: list[TypstPackage] = []
-        self._macros: dict[FileType, dict[str, str]] = {}
 
         self._load_config_from_json()
         self._validate_and_set_defaults()
@@ -132,7 +135,9 @@ class Config:
     def _validate_and_set_defaults(self):
         flagged_macro = [pkg for pkg in self.typst_packages if pkg.is_macro is True]
         if len(flagged_macro) == 1:
-            self.typst_macro_path = flagged_macro[0]
+            print("okay")
+            self.typst_macro_path = typst_package_dir(flagged_macro[0])
+            print(self.typst_macro_path)
         elif len(flagged_macro) > 1:
             raise EnvironmentError(f"Multiple Typst packages configured as macro")
 
@@ -144,10 +149,18 @@ class Config:
             raise EnvironmentError("Multiple Typst packages set to default")
 
         if not self.latex_preamble_path.is_file():
-            raise EnvironmentError(f"LaTeX preamble path {self.latex_preamble_path} does not exist")
+            print("TODO")
+#            raise EnvironmentError(f"LaTeX preamble path {self.latex_preamble_path} does not exist")
 
         if not self.latex_macro_path.is_file():
-            raise EnvironmentError(f"LaTeX macro path {self.latex_macro_path} does not exist")
+            print("TODO")
+#            raise EnvironmentError(f"LaTeX macro path {self.latex_macro_path} does not exist")
+
+        if self.typst_preamble_path is None or (self.typst_preamble_path is not None and not self.typst_preamble_path.is_file()):
+            print("TODO")
+        if self.typst_macro_path is None or (self.typst_macro_path is not None and not self.typst_macro_path.is_file()):
+            print("TODO")
+
 
     def _load_config_from_json(self):
         """ Updates default values with values specified in config file """
@@ -176,9 +189,11 @@ class Config:
             self.log_level = data["log-level"]
 
         if "typst-packages" in data:
-            for pkg_data in data["typst-packages"].items():
+            for pkg_data in data["typst-packages"]:
+                print(pkg_data)
                 self.typst_packages.append(TypstPackage.from_dict(pkg_data))
-
+        if "enable-experimental-export" in data:
+            self.enable_exp_export = data['enable-experimental-export']
         files = [
                 "main_template",
                 "assignment_template",
@@ -224,6 +239,7 @@ class Config:
                 ],
             "typst-macros": None,
             "log-level": self.log_level,
+            "enable-experimental-export": self.enable_exp_export
         }
         config_path.write_text(json.dumps(data, indent=2))
 
@@ -231,137 +247,88 @@ class Config:
     def cache_dir():
         return Config.config_dir() / "cache"
 
-    # TODO remove parsing logic from config
-#    def _load_typst_macros(self) -> dict[str, str]:
-#        typst_path = self.preamble_path[FileType.Typst]
-#        if typst_path is None:
-#            return {}
-#        typst_doc = typst_path.read_text().splitlines()
-#        typst_macros = self._parse_typst_macros(typst_doc)
-#        return typst_macros
-
-#    def _load_tex_macros(self) -> dict[str, str]:
-#        r""" Gets all user commands from macro_path
-#        Macros beign parsed have the form:
-#            \newcommand{macro name}[nargs(int)]{
-#                command
-#                }
-#        returns: dict of the form {cmd_name: {args: #, tex_cmd: ""}}
-#        """
-#        tex_path = self.preamble_path[FileType.LaTeX]
-#        if tex_path is None:
-#            return {}
-#
-#        tex_doc = tex_path.read_text().splitlines()
-#        tex_macros = self._parse_latex_macros(tex_doc)
-#        return tex_macros
-#
-#    def _parse_latex_macros(self, lines: list[str]) -> dict[str, str]:
-#        macros = dict()
-#        pattern = r'\\newcommand\{(.*?)\}\[(.*?)\]'
-#        # Makes assumtion that the only characters in 'line' are part of command with the exception of whitespace
-#        for line in lines:
-#            match = re.search(pattern, line)
-#
-#            if not match:
-#                continue
-#            name = match.group(1).lstrip("\\")
-#
-#            if name in self.macro_names:
-#                tex_cmd = line.replace(match.group(0), "").strip()[1:-1] # remove enclosing curly braces
-#                macros[name] = {"num_args": match.group(2), "command": tex_cmd}
-#        return macros
-#
-#
-#    def _parse_typst_macros(self, lines: list[str]) -> dict:
-#        #TODO: for now we just import required packages (probably better solution anyways)
-#        return {}
-#
 CONFIG = Config()
-
 
 class MacroParser:
     def __init__(self):
-        self._cache: dict[FileType, dict[str, str]] = {}
+        self._cache: dict[FileType, dict] = {FileType.LaTeX: {}, FileType.Typst: {}}
 
-    def parse_macros(self, filetype: FileType) -> dict[str, str]:
-        if (data := self._cache.get(filetype)) is not None:
-            return data
+    def parse_macros(self) -> dict[FileType, dict]:
+        if len(self._cache[FileType.Typst]) == 0:
+            self._cache[FileType.Typst] = self._parse_typst()
+        if len(self._cache[FileType.LaTeX]) == 0:
+            self._cache[FileType.LaTeX] = self._parse_latex()
+        return self._cache
 
-        if filetype == FileType.LaTeX:
-            self._cache[filetype] = self._parse_latex()
-        else:
-            self._cache[filetype] = self._parse_typst()
-        return self._cache[filetype]
-
-    def _parse_latex(self) -> dict[str, str]:
+    def _parse_latex(self) -> dict[str, dict]:
         macros = {}
+
         pattern = r'\\newcommand\{(.*?)\}\[(.*?)\]'
         if CONFIG.latex_macro_path is None:
             return macros
-        lines = CONFIG.latex_macro_path.read_text().splitlines()
+        text = CONFIG.latex_macro_path.read_text()
+        # matches only the header: \newcommand{name}[nargs]{  -- stops right after the opening body brace
+        header_pattern = re.compile(r'\\newcommand\{\\?(\w+)\}\[(\d+)\]\{')
 
-        # Makes assumtion that the only characters in 'line' are part of command with the exception of whitespace
-        for line in lines:
-            match = re.search(pattern, line)
-            if not match:
+        for match in header_pattern.finditer(text):
+            name = match.group(1)
+            num_args = match.group(2)
+
+            body_start = match.end()  # position right after the opening '{'
+            body_end = self._find_matching_brace(text, body_start)
+            if body_end is None:
+                continue  # malformed / unbalanced — skip rather than crash
+
+            command = text[body_start:body_end]
+            macros[name] = {"num_args": num_args, "command": command}
+
+        return macros
+
+
+    def _find_matching_brace(self, text: str, open_pos: int) -> int | None:
+        """
+        Given a position in `text` right after an opening '{' has already been
+        consumed by the caller, scan forward tracking nested braces and return
+        the index of the matching closing '}'. Returns None if unbalanced.
+        """
+        depth = 1  # we've already consumed one '{' (the one at open_pos - 1)
+        i = open_pos
+        while i < len(text):
+            char = text[i]
+            if char == '\\' and i + 1 < len(text):
+                i += 2  # skip escaped characters like \{ \} so they don't affect depth
                 continue
-            name = match.group(1).lstrip("\\")
-            tex_cmd = line.replace(match.group(0), "").strip()[1:-1] # remove enclosing curly braces
-            macros[name] = {"num_args": match.group(2), "command": tex_cmd}
+            if char == '{':
+                depth += 1
+            elif char == '}':
+                depth -= 1
+                if depth == 0:
+                    return i
+            i += 1
+        return None
 
-    def _parse_typst(self, lines):
+    def _parse_typst(self) -> dict[str, dict]:
         macros = {}
-        pattern = r'\\newcommand\{(.*?)\}\[(.*?)\]' # TODO
         if CONFIG.typst_macro_path is None:
             return macros
-        lines = CONFIG.typst_macro_path.read_text().splitlines()
+        text = CONFIG.latex_macro_path.read_text()
+        # matches: #let name(args) = {   -- stops right after the opening body brace
+        header_pattern = re.compile(r'#let\s+(\w+)\(([^)]*)\)\s*=\s*\{')
 
-        for line in lines:
-            match = re.search(pattern, line)
-            if not match:
+        for match in header_pattern.finditer(text):
+            name = match.group(1)
+            params = match.group(2)
+
+            body_start = match.end()
+            body_end = self._find_matching_brace(text, body_start)
+            if body_end is None:
                 continue
-            name = match.group(1).lstrip("\\")
-            tex_cmd = line.replace(match.group(0), "").strip()[1:-1] # remove enclosing curly braces
-            macros[name] = {"num_args": match.group(2), "command": tex_cmd}
+
+            command = text[body_start:body_end].strip()
+            num_args = len([p for p in params.split(',') if p.strip()])
+            macros[name] = {"num_args": str(num_args), "params": params, "command": command}
+
         return macros
 
 
 MACROS = MacroParser()
-
-
-
-
-
-# TODO delete
-def get_hack_macros():
-    """tmp fix for removing macros"""
-    return {"framedtext": {"num_args": '1', "command": ""}}
-
-# TODO re work this
-def load_macros(macros_path: Path, macro_names: list[str]) -> dict[str,dict]:
-    r""" Gets all user commands from macro_path
-    Macros beign parsed have the form:
-        \newcommand{macro name}[nargs(int)]{
-            command
-            }
-    returns: dict of the form {cmd_name: {args: #, tex_cmd: ""}}
-    """
-    macros = dict()
-    document = Path(macros_path).read_text().splitlines()
-    pattern = r'\\newcommand\{(.*?)\}\[(.*?)\]'
-    # Makes assumtion that the only characters in 'line' are part of command with the exception of whitespace
-    for line in document:
-        match = re.search(pattern, line)
-
-        if not match:
-            continue
-        name = match.group(1).lstrip("\\")
-
-        if name in macro_names:
-            tex_cmd = line.replace(match.group(0), "").strip()[1:-1] # remove enclosing curly braces
-            macros[name] = {"num_args": match.group(2), "command": tex_cmd}
-    return macros
-
-
-

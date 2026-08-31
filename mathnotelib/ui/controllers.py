@@ -24,7 +24,7 @@ from .dialog import show_error_dialog
 from ..models import Category, Course, SourceFile, Note, FlashcardSideName
 from ..services import (CompileOptions, compile_source, NotesRepository, CourseRepository, NotesRepository, FlashcardSession,
                         FlashcardCache, FlashcardCompiler, open_pdf, DeckRepository, DataGenerator, FlashcardBuilderStage, CleanStage, DataGenerator, ProcessingPipeline, FormatStage)
-from ..config import CONFIG, Section
+from ..config import CONFIG, MACROS, Section
 from ..enums import FileType, OutputFormat
 from ..exceptions import (CompilationError, FlashcardCompilationError, LaTeXCompilationError, NoItemSelected, NoteExistsError, CategoryExistsError,
                           InvalidNameError, NoteExistsError, CourseExistsError, TypstCompilationError, FlashcardCompilationError, NoItemSelected)
@@ -831,8 +831,9 @@ class FlashcardController:
             path, section_names_dict, shuffle = self.generate_pipe_deck_config()
             paths = [path]
 
+        macros = MACROS.parse_macros()
         data_iterable = DataGenerator(paths)
-        clean_data_stage = CleanStage(CONFIG.macros)
+        clean_data_stage = CleanStage(macros)
         format_state = FormatStage()
         build_stage = FlashcardBuilderStage(section_names_dict)
         # TODO
@@ -943,6 +944,10 @@ class SettingsController(QObject):
         self.settings_nav.pattern_changed.connect(lambda: self.pattern_changed())
         self.settings_nav.save_btn.clicked.connect(lambda: self.handle_save())
         self.settings_nav.section_view.doubleClicked.connect(self._on_item_double_clicked)
+        self.settings_nav.experimental_export.connect(lambda checked: self.handle_export_checked(checked))
+
+    def handle_export_checked(self, checked: bool):
+        CONFIG.enable_exp_export = checked
 
     @with_error_dialog
     def handle_save(self):
@@ -1005,6 +1010,12 @@ class SettingsController(QObject):
 
     def _populate_view(self):
         self.settings_nav.root_val.set_path(str(CONFIG.root_path))
+        self.settings_nav.config_dir_val.set_path(str(CONFIG.config_dir()))
+        self.settings_nav.typst_preamble_path_val.set_path(str(CONFIG.typst_preamble_path))
+        self.settings_nav.latex_preamble_path_val.set_path(str(CONFIG.latex_preamble_path))
+        self.settings_nav.typst_macro_path_val.set_path(str(CONFIG.typst_macro_path))
+        self.settings_nav.latex_macro_path_val.set_path(str(CONFIG.latex_macro_path))
+        self.settings_nav.export_checkbox.setChecked(CONFIG.enable_exp_export)
 
         for name, ftype_map in CONFIG.section_names.items():
             self._build_section(name, ftype_map)

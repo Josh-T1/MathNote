@@ -1,10 +1,90 @@
-{  
+{
   "root": "",
-  "section-names": {},
-  "macro-names": [],
-  "typst-packages": [],
-  "latex-packages": [],
-  "log-level": "INFO"
-
-}   
+  "section-names": {
+    "Definition": {
+      "patterns": {
+        "LaTeX": "definition",
+        "Typst": "definition"
+      },
+      "parents": []
+    },
+    "Theorem": {
+      "patterns": {
+        "LaTeX": "theorem",
+        "Typst": "theorem"
+      },
+      "parents": []
+    },
+    "Corollary": {
+      "patterns": {
+        "LaTeX": "corollary",
+        "Typst": "corollary"
+      },
+      "parents": []
+    },
+    "Lemma": {
+      "patterns": {
+        "LaTeX": "lemma",
+        "Typst": "proposition"
+      },
+      "parents": []
+    },
+    "Proposition": {
+      "patterns": {
+        "LaTeX": "proposition",
+        "Typst": "proposition"
+      },
+      "parents": []
+    },
+    "Flashcard Question": {
+      "patterns": {
+        "LaTeX": "flashcardQ",
+        "Typst": "flashcardQ"
+      },
+      "parents": []
+    },
+    "Flashcard Answer": {
+      "patterns": {
+        "LaTeX": "flashcardA",
+        "Typst": "flashcardA"
+      },
+      "parents": [
+        "Flashcard Question"
+      ]
+    },
+    "Proof": {
+      "patterns": {
+        "LaTeX": "pf",
+        "Typst": "proof"
+      },
+      "parents": [
+        "Corollary",
+        "Definition",
+        "Flashcard Question",
+        "Lemma",
+        "Proposition",
+        "Theorem"
+      ]
+    }
+  },
+  "typst-packages": [
+    {
+      "name": "notes",
+      "version": "1.0.0",
+      "namespace": "local",
+      "default": true,
+      "is-macro": false
+    },
+    {
+      "name": "macros",
+      "version": "1.0.0",
+      "namespace": "local",
+      "default": false,
+      "is-macro": true
+    }
+  ],
+  "typst-macros": null,
+  "log-level": "INFO",
+  "enable-experimental-export": false
+}
 

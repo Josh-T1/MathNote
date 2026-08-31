@@ -1,2 +1,4 @@
-recursive-include mathnotelib/templates *.tex
+recursive-include mathnotelib/templates/LaTeX *.tex
+recursive-include mathnotelib/templates/Typst *.typ
+recursive-include mathnotelib/templates/LaTeX-Preambles *.typ
 recursive-include mathnotelib/templates *.json
