@@ -1,0 +1,314 @@
+% TODO
+\usepackage{varwidth, bookmark}
+% reference packages
+\usepackage{hyperref,theoremref, xr-hyper}
+% TODO
+\usepackage{amsmath,amsfonts,amsthm,amssymb,mathtools}
+% TODO all below
+\usepackage{graphicx}
+\usepackage[utf8]{inputenc}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{setspace}
+\usepackage{geometry}
+\geometry{%
+    letterpaper,
+    left=1.25in,
+    right=1.25in,
+    top=1in,
+    bottom=1in
+} 
+\onehalfspacing
+% prevent line indenting
+\setlength{\parindent}{0pt}
+% prevent word splitting
+\tolerance=1
+\emergencystretch=\maxdimen
+\hyphenpenalty=10000
+\hbadness=10000
+
+
+\usepackage[most,many,breakable]{tcolorbox}
+\definecolor{greybg}{rgb}{0.5, 0.5, 0.5}
+\definecolor{black}{rgb}{0.0, 0.0, 0.0}
+\definecolor{lightgray}{rgb}{0.83, 0.83, 0.83}
+\definecolor{carminered}{rgb}{1.0, 0.0, 0.22}
+\definecolor{lightpastelpurple}{rgb}{0.69, 0.61, 0.85}
+\definecolor{lightmauve}{rgb}{0.86, 0.82, 1.0}
+\definecolor{pastelyellow}{rgb}{0.99, 0.99, 0.59}
+\definecolor{pastelred}{rgb}{1.0, 0.41, 0.38}
+\definecolor{cobalt}{rgb}{0.0, 0.28, 0.67}
+\definecolor{deepskyblue}{rgb}{0.0, 0.75, 1.0}
+\definecolor{columbiablue}{rgb}{0.61, 0.87, 1.0}
+\definecolor{lavenderblue}{rgb}{0.8, 0.8, 1.0}
+\definecolor{pinksherbet}{rgb}{0.97, 0.56, 0.65}
+\definecolor{chromeyellow}{rgb}{1.0, 0.65, 0.0}
+\definecolor{lemonchiffon}{rgb}{1.0, 0.98, 0.8}
+\definecolor{cream}{rgb}{1.0, 0.99, 0.82}
+
+\newtcbtheorem[number within=section]{Theoremold}{Theoremold}{%
+	enhanced,
+	breakable,
+	colframe=black,
+	colbacktitle=pastelred,
+	boxrule=0.2mm,
+	colback=pastelyellow,
+	title=black,
+    coltitle=black,
+%	attach boxed title to top left={xshift=1cm,yshift*=1mm-\tcboxedtitleheight}
+%    varwidth boxed title*=-3cm,fonttitle=\bfseries,title={#2},#1}
+}{th}
+
+\newtcbtheorem[number within=section]{Solution}{Solution}{%
+	enhanced,
+    breakable,
+	colframe=white,
+    colbacktitle=white,
+	boxrule=0.2mm,
+	colback=white,
+	title=Solution,
+    coltitle=black,
+    fonttitle=\bfseries\large, % Style of the title text
+    sharp corners, % Optional: Adjusts corners to be sharp (remove if you want rounded corners)
+    attach boxed title to top left={xshift=-2mm}, % Adjust the position of the title
+%    attach boxed title to top left={yshift=-2mm}, % Adjust the position of the title
+}{sol}
+
+\newtcbtheorem[number within=section]{Problem}{Problem}{%
+	enhanced,
+    boxed title style = {%
+            enhanced,
+			bottom=0pt,
+%			interior style={fill=}
+    },
+	colframe=black,
+	colbacktitle=deepskyblue,
+	boxrule=0.2mm,
+	colback=white,
+	title=black,
+    fonttitle = \large\bfseries,
+    coltitle=black,
+}{pb}
+
+\newtcbtheorem[number within=section]{Theorem}{Theorem}{%
+	enhanced,
+    boxed title style = {%
+            enhanced,
+			bottom=0pt,
+%			interior style={fill=}
+    },
+    width=\textwidth,
+	colframe=black,
+	colbacktitle=chromeyellow,
+	boxrule=0.2mm,
+	colback=lemonchiffon,
+	title=black,
+    fonttitle = \large\bfseries,
+    coltitle=black,
+}{th}
+
+\newtcbtheorem{Lemma}{Lemma}{%
+	breakable,
+	colback =lemonchiffon,
+	frame hidden,
+	boxrule = 0sp,
+	borderline west = {2pt}{0pt}{pastelyellow},
+	sharp corners,
+	detach title,
+	before upper = \tcbtitle\par\smallskip,
+	coltitle = black,
+	fonttitle = \bfseries\sffamily,
+	description font = \mdseries,
+	separator sign none,
+%	segmentation style={solid, pastelyellow}
+}{} 
+
+\newtcbtheorem{Corollary}{Corollary}{%
+	breakable,
+	colback =cream,
+	frame hidden,
+	boxrule = 0sp,
+	borderline west = {2pt}{0pt}{cream},
+	sharp corners,
+	detach title,
+	before upper = \tcbtitle\par\smallskip,
+	coltitle = black,
+	fonttitle = \bfseries\sffamily,
+	description font = \mdseries,
+	separator sign none,
+%	segmentation style={solid, pastelyellow}
+}{} 
+\newtcbtheorem{Proposition}{Proposition}{%
+	breakable,
+	colback =cream,
+	frame hidden,
+	boxrule = 0sp,
+	borderline west = {2pt}{0pt}{cream},
+	sharp corners,
+	detach title,
+	before upper = \tcbtitle\par\smallskip,
+	coltitle = black,
+	fonttitle = \bfseries\sffamily,
+	description font = \mdseries,
+	separator sign none,
+%	segmentation style={solid, pastelyellow}
+}{} 
+
+\newtcbtheorem{Definition}{Definition}{%
+breakable,
+colback =lightgray,
+frame hidden,
+boxrule = 0sp,
+borderline west = {2pt}{0pt}{pastelyellow},
+sharp corners,
+detach title,
+before upper = \tcbtitle\par\smallskip,
+coltitle = black,
+fonttitle = \bfseries\sffamily,
+description font = \mdseries,
+separator sign none,
+}{} 
+
+
+\newtcbtheorem{Example}{Example}{%
+	breakable,
+	colback = deepskyblue,
+	frame hidden,
+	boxrule = 0sp,
+	borderline west = {2pt}{0pt}{pastelyellow},
+	sharp corners,
+	detach title,
+	before upper = \tcbtitle\par\smallskip,
+	coltitle = black,
+	fonttitle = \bfseries\sffamily,
+	description font = \mdseries,
+	separator sign none,
+%	segmentation style={solid, pastelyellow}
+}{} 
+
+\newtcbtheorem{Proof}{Proof}{%
+	breakable,
+	colback = lightmauve,
+	frame hidden,
+	boxrule = 0sp,
+	borderline west = {2pt}{0pt}{pastelyellow},
+	sharp corners,
+	detach title,
+	before upper = \tcbtitle\par\smallskip,
+	coltitle = black,
+	fonttitle = \bfseries\sffamily,
+	description font = \mdseries,
+	separator sign none,
+%	segmentation style={solid, pastelyellow}
+}{}
+
+\newtcbtheorem{Question}{Question}{%
+    enhanced,
+	breakable,
+	colback=white,
+	colframe=cobalt,
+	attach boxed title to top left={yshift*=-\tcboxedtitleheight},
+	fonttitle=\bfseries,
+%	title={#2},
+	boxed title size=title,
+	boxed title style={%
+			sharp corners,
+			rounded corners=northwest,
+			colback=tcbcolframe,
+			boxrule=0pt,
+		},
+	#1
+}{}
+
+\newtcbtheorem{Answer}{Answer}{%
+	enhanced,
+    breakable,
+	colframe=white,
+    colbacktitle=white,
+	boxrule=0.2mm,
+	colback=white,
+	title=Solution,
+    coltitle=black,
+    fonttitle=\bfseries\large, % Style of the title text
+    sharp corners, % Optional: Adjusts corners to be sharp (remove if you want rounded corners)
+    attach boxed title to top left={xshift=-2mm}, % Adjust the position of the title
+%    enhanced,
+%breakable,
+%colback=white,
+%colframe=cobalt,
+%attach boxed title to top left={yshift*=-\tcboxedtitleheight},
+%fonttitle=\bfseries,
+%boxed title size=title,
+%boxed title style={%
+%sharp corners,
+%rounded corners=northwest,
+%colback=tcbcolframe,
+%boxrule=0pt,
+%},
+%#1
+}{}
+
+\newcommand{\sol}[2]{
+    \begin{Solution*}{#1}{}
+        #2
+    \end{Solution*}
+}
+
+\newcommand{\prob}[2]{
+    \begin{Problem*}{#1}{}
+        #2
+    \end{Problem*}
+}
+
+\newcommand{\theo}[2]{
+    \begin{Theorem*}{#1}{}
+        #2
+    \end{Theorem*}
+}
+\newcommand{\lemma}[2]{
+    \begin{Lemma*}{#1}{}
+        #2
+    \end{Lemma*}
+}
+
+\newcommand{\corollary}[2]{
+    \begin{Corollary*}{#1}{}
+        #2
+    \end{Corollary*}
+}
+
+\newcommand{\proposition}[2]{
+    \begin{Proposition*}{#1}{}
+        #2
+    \end{Proposition*}
+}
+\newcommand{\defin}[2]{
+    \begin{Definition}{#1}{}
+        #2
+    \end{Definition}
+}
+\newcommand{\ex}[2]{
+    \begin{Example*}{#1}{}
+        #2
+    \end{Example*}
+}
+
+\newcommand{\pf}[2]{
+    \begin{Proof*}{#1}{}
+        #2
+    \end{Proof*}
+}
+
+\newcommand{\qs}[2]{
+    \begin{Question*}{#1}{}
+        #2
+    \end{Question*}
+}
+
+\newcommand{\ans}[2]{
+    \begin{Answer*}{#1}{}
+        #2
+    \end{Answer*}
+}
+
