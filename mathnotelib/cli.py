@@ -97,10 +97,10 @@ logging.config.dictConfig(config=logging_config)
 logger = logging.getLogger("mathnote")
 global_parser = argparse.ArgumentParser(prog="mathnote", description="Cli for streamlining the note taking process")
 
-#subparsers = global_parser.add_subparsers(title="Subcommands", help="Note taking commands", dest="command")
+subparsers = global_parser.add_subparsers(title="Subcommands", help="Note taking commands", dest="command")
 #course_parser = subparsers.add_parser("course", help="Create course file structure and inizialize course json file")
 #note_parser = subparsers.add_parser("note", help="Create latex notes")
-#view_parser = subparsers.add_parser("view", help="View notes with gui in browser")
+view_parser = subparsers.add_parser("view", help="View notes with gui in browser")
 #
 #course_parser_arguments = [
 #        ("name",{"nargs": 1, "help": "Course name"}),
@@ -144,7 +144,7 @@ global_parser = argparse.ArgumentParser(prog="mathnote", description="Cli for st
 #for arg in note_parser_arguments:
 #    note_parser.add_argument(*arg[:-1], **arg[-1])
 #
-args = global_parser.parse_args()
+
 
 
 command_mapping = {
@@ -154,6 +154,7 @@ command_mapping = {
         }
 
 def main():
+    args = global_parser.parse_args()
     if not user_config_dir.is_dir():
         build = input(f"Configuration directory {user_config_dir} does not exist\nWould you like to create? (yn): ")
         if build == "y":
