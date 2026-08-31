@@ -31,4 +31,5 @@ mathnotelib = [
     "templates/Typst/*.typ",
     "templates/LaTeX-Preambles/*.typ",
     "templates/*.json",
+    "ui/icons/*.png"
 ]
