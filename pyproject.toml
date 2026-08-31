@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mathnote"
+version = "1.0.0"
+description = "A Python note-taking application for Typst and LaTeX"
+readme = "README.md"
+authors = [{name = "Joshua Taylor", email = "joshua12.taylor12@outlook.com"}]
+license = {text = "MIT"}
+requires-python = ">=3.8"
+dependencies = [
+    "PyQt6",
+    "numpy",
+    "networkx",
+]
+
+[project.urls]
+Homepage = "https://github.com/Josh-T1/MathNote"
+
+[project.scripts]
+mathnote = "mathnotelib.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[tool.setuptools.package-data]
+mathnotelib = [
+    "templates/LaTeX/*.tex",
+    "templates/Typst/*.typ",
+    "templates/LaTeX-Preambles/*.typ",
+    "templates/*.json",
+]
