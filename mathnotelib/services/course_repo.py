@@ -110,12 +110,6 @@ class CourseRepository:
             courses.sort(key=_key)
         return courses
 
-    # TODO should these even be methods?
-    def macros_path(self, note_type: FileType = FileType.Typst):
-        return self.config.template_files[note_type]["macros"]
-
-    def preamble_path(self, note_type: FileType = FileType.Typst):
-        return self.config.template_files[note_type]["preamble"]
 
     def get_course(self, name: str) -> Course | None:
         return self.courses().get(name, None)

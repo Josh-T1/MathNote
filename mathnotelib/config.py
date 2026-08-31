@@ -5,8 +5,69 @@ import re
 import json
 from typing import Optional
 from dataclasses import dataclass, field
-
+import platform
+import subprocess
 from .enums import FileType
+
+def _typst_data_dir() -> Path:
+    """Ask the typst binary directly for its package path — most robust."""
+    try:
+        result = subprocess.run(
+            ["typst", "info"],
+            capture_output=True, text=True, timeout=5, check=True,
+        )
+        for line in result.stdout.splitlines():
+            if line.strip().lower().startswith("package path"):
+                path_str = line.split(":", 1)[1].strip()
+                return Path(path_str)
+    except (subprocess.SubprocessError, FileNotFoundError, IndexError):
+        pass
+
+    # fallback: platform convention table
+    system = platform.system()
+    if system == "Windows":
+        base = Path(os.environ["APPDATA"])
+    elif system == "Darwin":
+        base = Path.home() / "Library" / "Application Support"
+    else:  # Linux and other Unix
+        base = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
+    return base / "typst" / "packages"
+
+def typst_package_dir(package: "TypstPackage") -> Path:
+    if package.namespace != "local":
+        raise NotImplementedError(
+            f"Resolving non-local Typst packages ('{package.namespace}') is not yet supported"
+        )
+    return _typst_data_dir() / "local" / package.name / package.version
+
+@dataclass(frozen=True)
+class TypstPackage:
+    name: str
+    version: str
+    namespace: str = "local"
+    is_default: bool = False
+    is_macro = False
+
+    @property
+    def import_target(self) -> str:
+        return f"@{self.namespace}/{self.name}:{self.version}"
+
+    def to_dict(self) -> dict:
+        return {
+            "name": self.name,
+            "version": self.version,
+            "namespace": self.namespace,
+            "default": self.is_default,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "TypstPackage":
+        return cls(
+            name=data["name"],
+            version=data["version"],
+            namespace=data.get("namespace", "local"),
+            is_default=data.get("default", False),
+        )
 
 @dataclass(frozen=True)
 class Section:
@@ -39,18 +100,9 @@ class Config:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
-    # Should we even take args?
-    def __init__(self, root_path: Path | None = None):
-        """
-        Args:
-            root_path: Root directory for MathNote data
-            templates_path: Directory containing all template files (i.e., templates_path/LaTeX(Typst)/{template}.tex(typ))
-            macro_names: List of macro names used in typestting projects
-            log_level: Logging level
-            template_files: Dict: filetype -> (template_name -> template_path). Maps filetype to a a new map, which maps template name to template path
-            editor: Default editor to open files, nvim and vim are the only supported options
-        """
 
+    def __init__(self, root_path: Path | None = None):
+        """  """
         if getattr(self, "_initizialized", False): return
         self._initizialized = True
 
@@ -62,17 +114,40 @@ class Config:
         self.decks_dir = self.root_path / "Decks"
         self.note_repo_dir = self.root_path / "NoteRepositories"
         self.templates_path = Path(__file__).parent / "templates"
+        self.typst_preamble_path = None
+        self.typst_macro_path = None
+        self.latex_macro_path = self.root_path / "Preambles" / "preamble.tex"
+        self.latex_preamble_path = self.root_path / "Preambles" / "preamble.tex"
 
         self.log_level = "DEBUG"
         self.template_files: dict[FileType, dict[str, Path]] = {}
         self.section_names: dict[str, Section] = {}
-        self.macro_names = [] # TODO delete
-        self.macros: dict[FileType, dict[str, str]] = {}
-
-        self.typst_packages: dict[str, list] = {"local": list(), "global": list()}
-        self.latex_packages: list[str] = []
+        self.typst_packages: list[TypstPackage] = []
+        self._macros: dict[FileType, dict[str, str]] = {}
 
         self._load_config_from_json()
+        self._validate_and_set_defaults()
+
+
+    def _validate_and_set_defaults(self):
+        flagged_macro = [pkg for pkg in self.typst_packages if pkg.is_macro is True]
+        if len(flagged_macro) == 1:
+            self.typst_macro_path = flagged_macro[0]
+        elif len(flagged_macro) > 1:
+            raise EnvironmentError(f"Multiple Typst packages configured as macro")
+
+        flagged_default = [pkg for pkg in self.typst_packages if pkg.is_default is True]
+
+        if len(flagged_default) == 1:
+            self.typst_preamble_path = typst_package_dir(flagged_default[0])
+        elif len(flagged_default) > 1:
+            raise EnvironmentError("Multiple Typst packages set to default")
+
+        if not self.latex_preamble_path.is_file():
+            raise EnvironmentError(f"LaTeX preamble path {self.latex_preamble_path} does not exist")
+
+        if not self.latex_macro_path.is_file():
+            raise EnvironmentError(f"LaTeX macro path {self.latex_macro_path} does not exist")
 
     def _load_config_from_json(self):
         """ Updates default values with values specified in config file """
@@ -97,25 +172,17 @@ class Config:
                     name: Section.from_dict(name, sec_data) for name, sec_data in data["section-names"].items()
                     }
 
-        if "macro-names" in data:
-            self.macro_names = data["macro-names"]
-
         if "log-level" in data:
             self.log_level = data["log-level"]
-        if "Typst-packages" in data:
-            self.typst_packages = data["typst-packages"]
-        if "LaTeX-packages" in data:
-            self.latex_packages = data["LaTeX-packages"]
+
+        if "typst-packages" in data:
+            for pkg_data in data["typst-packages"].items():
+                self.typst_packages.append(TypstPackage.from_dict(pkg_data))
 
         files = [
                 "main_template",
                 "assignment_template",
-                "problems_template",
                 "note_template",
-                "macros",
-                "preamble",
-                "note_macros",
-                "note_preamble"
                 ]
         for file_type, ext in {FileType.LaTeX: "tex", FileType.Typst: "typ"}.items():
             self.template_files[file_type] = {}
@@ -126,7 +193,6 @@ class Config:
                 else:
                     template_path = self.templates_path / file_type.value / f"{file_stem}.{ext}"
                     self.template_files[file_type][file_stem] = template_path
-        self.macros = self._load_macros()
 
     @classmethod
     def config_dir(cls):
@@ -144,19 +210,6 @@ class Config:
             raise OSError("Unsupported operating system")
         return config_dir
 
-    def update_templates(self):
-        """Copies templates from user config directory to app templates directory"""
-        # TODO test
-        for file_type, ext in [(FileType.LaTeX, ".tex"), (FileType.Typst, ".typ")]:
-            macros_path = self.template_files[file_type]["macros"]
-            preamble_path = self.template_files[file_type]["preamble"]
-            note_macros_path = self.template_files[file_type]["note_macros"]
-            note_preamble_path = self.template_files[file_type]["note_preamble"]
-
-            shutil.copy(macros_path, self.templates_path / file_type.value / f"macros{ext}")
-            shutil.copy(preamble_path, self.templates_path / file_type.value / f"preamble{ext}")
-            shutil.copy(note_macros_path, self.templates_path / file_type.value / f"note_macros{ext}")
-            shutil.copy(note_preamble_path, self.templates_path / file_type.value / f"note_preamble{ext}")
 
     # TODO validate parents
     def save(self):
@@ -166,9 +219,10 @@ class Config:
             "section-names": {
                 name: section.to_dict() for name, section in self.section_names.items()
             },
-            "macro-names": self.macro_names,
-            "typst-packages": self.typst_packages,
-            "latex-packages": self.latex_packages,
+            "typst-packages": [
+                pkg.to_dict() for pkg in self.typst_packages
+                ],
+            "typst-macros": None,
             "log-level": self.log_level,
         }
         config_path.write_text(json.dumps(data, indent=2))
@@ -177,54 +231,106 @@ class Config:
     def cache_dir():
         return Config.config_dir() / "cache"
 
-    # this aint it
-    def _load_macros(self) -> dict[FileType, dict[str, str]]:
-        r""" Gets all user commands from macro_path
-        Macros beign parsed have the form:
-            \newcommand{macro name}[nargs(int)]{
-                command
-                }
-        returns: dict of the form {cmd_name: {args: #, tex_cmd: ""}}
-        """
-        tex_path = self.template_files[FileType.LaTeX]["macros"]
-        typst_path = self.template_files[FileType.Typst]["macros"]
-        if tex_path.is_file():
-            tex_doc = tex_path.read_text().splitlines()
-            tex_macros = self._parse_latex_macros(tex_doc)
+    # TODO remove parsing logic from config
+#    def _load_typst_macros(self) -> dict[str, str]:
+#        typst_path = self.preamble_path[FileType.Typst]
+#        if typst_path is None:
+#            return {}
+#        typst_doc = typst_path.read_text().splitlines()
+#        typst_macros = self._parse_typst_macros(typst_doc)
+#        return typst_macros
+
+#    def _load_tex_macros(self) -> dict[str, str]:
+#        r""" Gets all user commands from macro_path
+#        Macros beign parsed have the form:
+#            \newcommand{macro name}[nargs(int)]{
+#                command
+#                }
+#        returns: dict of the form {cmd_name: {args: #, tex_cmd: ""}}
+#        """
+#        tex_path = self.preamble_path[FileType.LaTeX]
+#        if tex_path is None:
+#            return {}
+#
+#        tex_doc = tex_path.read_text().splitlines()
+#        tex_macros = self._parse_latex_macros(tex_doc)
+#        return tex_macros
+#
+#    def _parse_latex_macros(self, lines: list[str]) -> dict[str, str]:
+#        macros = dict()
+#        pattern = r'\\newcommand\{(.*?)\}\[(.*?)\]'
+#        # Makes assumtion that the only characters in 'line' are part of command with the exception of whitespace
+#        for line in lines:
+#            match = re.search(pattern, line)
+#
+#            if not match:
+#                continue
+#            name = match.group(1).lstrip("\\")
+#
+#            if name in self.macro_names:
+#                tex_cmd = line.replace(match.group(0), "").strip()[1:-1] # remove enclosing curly braces
+#                macros[name] = {"num_args": match.group(2), "command": tex_cmd}
+#        return macros
+#
+#
+#    def _parse_typst_macros(self, lines: list[str]) -> dict:
+#        #TODO: for now we just import required packages (probably better solution anyways)
+#        return {}
+#
+CONFIG = Config()
+
+
+class MacroParser:
+    def __init__(self):
+        self._cache: dict[FileType, dict[str, str]] = {}
+
+    def parse_macros(self, filetype: FileType) -> dict[str, str]:
+        if (data := self._cache.get(filetype)) is not None:
+            return data
+
+        if filetype == FileType.LaTeX:
+            self._cache[filetype] = self._parse_latex()
         else:
-            # TODO: LOg
-            tex_macros = {}
-            print(f"Failed to load LaTeX macros, file {tex_path} does not exist")
+            self._cache[filetype] = self._parse_typst()
+        return self._cache[filetype]
 
-        if typst_path.is_file():
-            typst_doc = typst_path.read_text().splitlines()
-            typst_macros = self._parse_typst_macros(typst_doc)
-        else:
-            typst_macros = {}
-            print(f"Failed to load Typst macros, file {typst_path} does not exist")
-        return {FileType.Typst: typst_macros, FileType.LaTeX: tex_macros}
-
-
-    def _parse_latex_macros(self, lines: list[str]) -> dict[str, str]:
-        macros = dict()
+    def _parse_latex(self) -> dict[str, str]:
+        macros = {}
         pattern = r'\\newcommand\{(.*?)\}\[(.*?)\]'
+        if CONFIG.latex_macro_path is None:
+            return macros
+        lines = CONFIG.latex_macro_path.read_text().splitlines()
+
         # Makes assumtion that the only characters in 'line' are part of command with the exception of whitespace
         for line in lines:
             match = re.search(pattern, line)
-
             if not match:
                 continue
             name = match.group(1).lstrip("\\")
+            tex_cmd = line.replace(match.group(0), "").strip()[1:-1] # remove enclosing curly braces
+            macros[name] = {"num_args": match.group(2), "command": tex_cmd}
 
-            if name in self.macro_names:
-                tex_cmd = line.replace(match.group(0), "").strip()[1:-1] # remove enclosing curly braces
-                macros[name] = {"num_args": match.group(2), "command": tex_cmd}
+    def _parse_typst(self, lines):
+        macros = {}
+        pattern = r'\\newcommand\{(.*?)\}\[(.*?)\]' # TODO
+        if CONFIG.typst_macro_path is None:
+            return macros
+        lines = CONFIG.typst_macro_path.read_text().splitlines()
+
+        for line in lines:
+            match = re.search(pattern, line)
+            if not match:
+                continue
+            name = match.group(1).lstrip("\\")
+            tex_cmd = line.replace(match.group(0), "").strip()[1:-1] # remove enclosing curly braces
+            macros[name] = {"num_args": match.group(2), "command": tex_cmd}
         return macros
 
 
-    def _parse_typst_macros(self, lines: list[str]) -> dict:
-        #TODO: for now we just import required packages (probably better solution anyways)
-        return {}
+MACROS = MacroParser()
+
+
+
 
 
 # TODO delete
@@ -258,4 +364,4 @@ def load_macros(macros_path: Path, macro_names: list[str]) -> dict[str,dict]:
     return macros
 
 
-CONFIG = Config()
+

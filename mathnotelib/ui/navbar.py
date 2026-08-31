@@ -1,5 +1,5 @@
 from PyQt6.QtGui import QIcon, QStandardItemModel
-from PyQt6.QtWidgets import (QAbstractItemView, QComboBox, QHBoxLayout, QLabel, QLineEdit, QPushButton, QSizePolicy,
+from PyQt6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QHBoxLayout, QLabel, QLineEdit, QPushButton, QSizePolicy,
                              QSpacerItem, QStackedWidget, QTreeView, QVBoxLayout, QWidget)
 from PyQt6.QtCore import QSize, Qt, pyqtSignal
 
@@ -10,6 +10,30 @@ from .file_navbar import NotesNavbar, CourseNavbar
 from .flashcard_navbar import FlashcardNavbar
 from ..config import Config
 
+def make_styled_label(text: str = "", boxed = False) -> QLabel:
+    label = QLabel(text)
+    if boxed:
+        label.setStyleSheet(BOXED_LABEL_CSS)
+        label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+    else:
+        label.setStyleSheet(LABEL_CSS)
+    label.setFixedHeight(LABEL_HEIGHT)
+    return label
+
+def make_row_layout(left: int = 0, top: int = 0, right: int = 0, bottom: int = 0, spacing=8) -> QHBoxLayout:
+    layout = QHBoxLayout()
+    layout.setContentsMargins(left, top, right, bottom)
+    layout.setSpacing(spacing)
+    layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+    return layout
+
+
+def make_icon_btn(icon_name: str) -> QPushButton:
+    btn = QPushButton()
+    btn.setIcon(QIcon(str(ICON_PATH / f"{icon_name}.png")))
+    btn.setFixedSize(ICON_SIZE)
+    btn.setStyleSheet(ICON_CSS)
+    return btn
 
 # this needs note repositories
 class SettingsNavbar(QWidget):
@@ -27,13 +51,18 @@ class SettingsNavbar(QWidget):
     def initUI(self):
         # Create layouts/Widgets
         main_layout = QVBoxLayout()
-        root_layout = QHBoxLayout()
-        btn_layout = QHBoxLayout()
-        log_layout = QHBoxLayout()
-        note_pkg_layout = QHBoxLayout()
-        pkg_combo_layout = QHBoxLayout()
+        root_layout = make_row_layout(top=4)
+        btn_layout = make_row_layout(top=4)
+        log_layout = make_row_layout()
+        export_layout = make_row_layout()
 
-        self.root_label = QLabel("Root")
+        note_pkg_layout = make_row_layout(top=4)
+        pkg_combo_layout = make_row_layout(left=8)
+        latex_pkg_layout = make_row_layout(left=8)
+        typst_macro_layout = make_row_layout(left=8)
+        latex_macro_layout = make_row_layout(left=8, bottom=24)
+
+        self.root_label = make_styled_label("Root")
         self.root_val= PathLabel()
         self.section_names_label = QLabel("Sections")
         self.section_view = QTreeView()
@@ -43,86 +72,31 @@ class SettingsNavbar(QWidget):
         self.settings_title = QLabel("General Settings")
         self.flashcards_settings_title = QLabel("Flashcard Settings")
         self.note_settings_title = QLabel("Note Settings")
+        self.export_checkbox = QCheckBox()
 
         self.typst_pkg_combo = QComboBox()
-        self.latex_pkg_label = QLabel()
-        self.typst_macro_label = QLabel()
-        self.latex_macro_label = QLabel()
 
-        self.pkg_label = QLabel("Default Package")
-        typst_pkg_label = QLabel("Typst")
-        latex_pkg_label = QLabel("LaTeX")
+        self.new_pkg_btn = make_icon_btn("add")
+        self.del_pkg_btn = make_icon_btn("trash")
+        self.trash_btn = make_icon_btn("trash")
+        self.new_btn = make_icon_btn("add")
 
-        self.new_pkg_btn = QPushButton()
-        self.del_pkg_btn = QPushButton()
         self.save_btn = QPushButton("Save")
-        self.trash_btn = QPushButton()
-        self.new_btn = QPushButton()
 
         #Configure
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(4)
         main_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
-        btn_layout.setContentsMargins(0, 0, 0, 0)
-        btn_layout.setSpacing(4)
-        btn_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
-
-        root_layout.setContentsMargins(0,0, 0, 0)
-        root_layout.setSpacing(4)
-        root_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
-
-        log_layout.setContentsMargins(0, 4, 0, 0)
-        log_layout.setSpacing(4)
-        log_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
-
-        note_pkg_layout.setContentsMargins(0, 0, 0, 0)
-        note_pkg_layout.setSpacing(4)
-        note_pkg_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
-
-        pkg_combo_layout.setContentsMargins(0, 0, 0, 24)
-        pkg_combo_layout.setSpacing(4)
-        pkg_combo_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
-
-        self.trash_btn.setIcon(QIcon(str(ICON_PATH / "trash.png")))
-        self.trash_btn.setFixedSize(ICON_SIZE)
-        self.trash_btn.setStyleSheet(ICON_CSS)
-
-        self.new_btn.setIcon(QIcon(str(ICON_PATH / "add.png")))
-        self.new_btn.setFixedSize(ICON_SIZE)
-        self.new_btn.setStyleSheet(ICON_CSS)
-
-        self.new_pkg_btn.setIcon(QIcon(str(ICON_PATH / "add.png")))
-        self.new_pkg_btn.setFixedSize(ICON_SIZE)
-        self.new_pkg_btn.setStyleSheet(ICON_CSS)
-
-        self.del_pkg_btn.setIcon(QIcon(str(ICON_PATH / "trash.png")))
-        self.del_pkg_btn.setFixedSize(ICON_SIZE)
-        self.del_pkg_btn.setStyleSheet(ICON_CSS)
-
         self.new_btn.clicked.connect(self.new_section.emit)
         self.trash_btn.clicked.connect(self.delete_section.emit)
         self.new_pkg_btn.clicked.connect(self.new_package.emit)
         self.del_pkg_btn.clicked.connect(self.delete_package)
 
-        self.root_label.setContentsMargins(0, 0, 8, 0)
-
-
-        root_layout.addWidget(self.root_label)
-        root_layout.addWidget(self.root_val)
-
-        btn_layout.addWidget(self.section_names_label)
-        btn_layout.addWidget(self.trash_btn)
-        btn_layout.addWidget(self.new_btn)
-
-
-        log_layout.addWidget(self.log_level_label)
-        log_layout.addStretch()
-        log_layout.addWidget(self.log_level_combo)
 
         # TODO controller should populate combo using config
         log_levels = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
-
+        self.root_val.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         self.settings_title.setStyleSheet(TITLE_LABEL_CSS)
         self.flashcards_settings_title.setStyleSheet(TITLE_LABEL_CSS)
         self.note_settings_title.setStyleSheet(TITLE_LABEL_CSS)
@@ -131,17 +105,6 @@ class SettingsNavbar(QWidget):
 
         self.log_level_combo.addItems(log_levels)
         self.log_level_combo.setStyleSheet(COMBO_BOX_CSS)
-
-        self.pkg_label.setStyleSheet(LABEL_CSS)
-        self.pkg_label.setFixedHeight(LABEL_HEIGHT)
-
-        self.root_label.setStyleSheet(LABEL_CSS)
-        self.root_label.setFixedHeight(LABEL_HEIGHT)
-
-        self.typst_macro_label.setStyleSheet(LABEL_CSS)
-        self.typst_macro_label.setFixedHeight(LABEL_HEIGHT)
-        self.latex_macro_label.setStyleSheet(LABEL_CSS)
-        self.latex_macro_label.setFixedHeight(LABEL_HEIGHT)
 
         self.root_val.setStyleSheet(BOXED_LABEL_CSS)
         self.root_val.setFixedHeight(LABEL_HEIGHT)
@@ -162,16 +125,40 @@ class SettingsNavbar(QWidget):
 
         self.save_btn.setStyleSheet(BUTTON_CSS)
 
-        note_pkg_layout.addWidget(self.pkg_label)
+        root_layout.addWidget(self.root_label)
+        root_layout.addWidget(self.root_val)
+
+
+        btn_layout.addWidget(self.section_names_label)
+        btn_layout.addWidget(self.trash_btn)
+        btn_layout.addWidget(self.new_btn)
+
+        log_layout.addWidget(self.log_level_label)
+        log_layout.addStretch()
+        log_layout.addWidget(self.log_level_combo)
+
+        note_pkg_layout.addWidget(make_styled_label("Default Preamble"))
         note_pkg_layout.addWidget(self.del_pkg_btn)
         note_pkg_layout.addWidget(self.new_pkg_btn)
 
-        pkg_combo_layout.addWidget(typst_pkg_label)
+        pkg_combo_layout.addWidget(make_styled_label("Typst"))
         pkg_combo_layout.addWidget(self.typst_pkg_combo)
 
+        latex_pkg_layout.addWidget(make_styled_label("LaTeX"))
+        latex_pkg_layout.addWidget(make_styled_label(boxed=True))
+
+        typst_macro_layout.addWidget(make_styled_label("Typst"))
+        typst_macro_layout.addWidget(make_styled_label(boxed=True))
+        latex_macro_layout.addWidget(make_styled_label("LaTeX"))
+        latex_macro_layout.addWidget(make_styled_label(boxed=True))
+
+        export_layout.addWidget(make_styled_label("Enable Experimental Export"))
+        export_layout.addStretch()
+        export_layout.addWidget(self.export_checkbox)
         main_layout.addWidget(self.settings_title)
         main_layout.addLayout(root_layout)
         main_layout.addLayout(log_layout)
+        main_layout.addLayout(export_layout)
 
         main_layout.addWidget(self.flashcards_settings_title)
         main_layout.addLayout(btn_layout)
@@ -180,7 +167,10 @@ class SettingsNavbar(QWidget):
         main_layout.addWidget(self.note_settings_title)
         main_layout.addLayout(note_pkg_layout)
         main_layout.addLayout(pkg_combo_layout)
-
+        main_layout.addLayout(latex_pkg_layout)
+        main_layout.addWidget(make_styled_label("Default Macros"))
+        main_layout.addLayout(typst_macro_layout)
+        main_layout.addLayout(latex_macro_layout)
         main_layout.addWidget(self.save_btn)
 
         self.setLayout(main_layout)

@@ -74,9 +74,6 @@ class NotesRepository:
         shutil.copy(note_template, note_path)
         new_note = Note(note_path, parent)
         parent.notes.append(new_note)
-
-        if CONFIG.set_note_title:
-            self.insert_title(new_note)
         return new_note
 
     # TODO make new_parent_cat an arg not kwarg
