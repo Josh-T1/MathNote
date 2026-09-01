@@ -154,9 +154,10 @@ class Config:
         if not self.latex_macro_path.is_file():
             logger.warning(f"LaTeX macro path {self.latex_macro_path} does not exist")
 
-        if self.typst_preamble_path is None or (self.typst_preamble_path is not None and not self.typst_preamble_path.is_file()):
+        if self.typst_preamble_path is None or (self.typst_preamble_path is not None and not self.typst_preamble_path.exists()):
             logging.warning("Invalid or non existant typst preamble package")
-        if self.typst_macro_path is None or (self.typst_macro_path is not None and not self.typst_macro_path.is_file()):
+
+        if self.typst_macro_path is None or (self.typst_macro_path is not None and not self.typst_macro_path.exists()):
             logging.warning("Invalid or non existant typst macro package")
 
     def _load_config_from_json(self):
@@ -187,8 +188,8 @@ class Config:
 
         if "typst-packages" in data:
             for pkg_data in data["typst-packages"]:
-                print(pkg_data)
                 self.typst_packages.append(TypstPackage.from_dict(pkg_data))
+
         if "enable-experimental-export" in data:
             self.enable_exp_export = data['enable-experimental-export']
         files = [
@@ -244,6 +245,11 @@ class Config:
     def cache_dir():
         return Config.config_dir() / "cache"
 
+    def set_log_level(self, level: str):
+        self.log_level = level
+        level = getattr(logging, level)
+        logging.getLogger().setLevel(level)
+
 CONFIG = Config()
 
 class MacroParser:
@@ -260,7 +266,7 @@ class MacroParser:
     def _parse_latex(self) -> dict[str, dict]:
         macros = {}
 
-        pattern = r'\\newcommand\{(.*?)\}\[(.*?)\]'
+#        pattern = r'\\newcommand\{(.*?)\}\[(.*?)\]'
         if CONFIG.latex_macro_path is None:
             return macros
         text = CONFIG.latex_macro_path.read_text()

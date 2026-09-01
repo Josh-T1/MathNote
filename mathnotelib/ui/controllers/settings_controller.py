@@ -31,6 +31,10 @@ class SettingsController(QObject):
         self.settings_nav.save_btn.clicked.connect(lambda: self.handle_save())
         self.settings_nav.section_view.doubleClicked.connect(self._on_item_double_clicked)
         self.settings_nav.experimental_export.connect(lambda checked: self.handle_export_checked(checked))
+        self.settings_nav.log_level_combo.currentIndexChanged.connect(lambda level: self.handle_update_log_level(level))
+
+    def handle_update_log_level(self, level: str):
+        CONFIG.set_log_level(self.settings_nav.log_level_combo.currentText())
 
     def handle_export_checked(self, checked: bool):
         CONFIG.enable_exp_export = checked

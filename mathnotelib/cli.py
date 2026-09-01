@@ -88,17 +88,17 @@ logging_config = {
             }
         },
 
-    "loggers": {
-        "mathnote": {
-            "level": "DEBUG",
-            "handlers": ["file"]
-        }
-    }
+#    "loggers": {
+#        "mathnote": {
+#            "level": CONFIG.log_level,
+#            "handlers": ["file"]
+#        }
+#    }
 }
 
 
 logging.config.dictConfig(config=logging_config)
-logger = logging.getLogger("mathnote")
+logger = logging.getLogger(__name__)
 
 
 def main():

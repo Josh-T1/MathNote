@@ -9,7 +9,7 @@ from .widgets import PathLabel, TightStackedWidget
 from .constants import ICON_PATH, LABEL_HEIGHT, ICON_SIZE
 from .file_navbar import NotesNavbar, CourseNavbar
 from .flashcard_navbar import FlashcardNavbar
-from ..config import Config
+from ..config import CONFIG, Config
 
 def make_styled_label(text: str = "", boxed = False) -> QLabel:
     label = QLabel(text)
@@ -110,6 +110,7 @@ class SettingsNavbar(QWidget):
         self.note_settings_title.setContentsMargins(0, 24, 0, 0)
 
         self.log_level_combo.addItems(log_levels)
+        self.log_level_combo.setCurrentText(CONFIG.log_level)
         self.log_level_combo.setStyleSheet(COMBO_BOX_CSS)
 
 #        self.root_val.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
