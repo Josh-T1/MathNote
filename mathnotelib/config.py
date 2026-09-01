@@ -1,5 +1,4 @@
 from pathlib import Path
-import shutil
 import os
 import re
 import json
@@ -8,6 +7,9 @@ from dataclasses import dataclass, field
 import platform
 import subprocess
 from .enums import FileType
+import logging
+
+logger = logging.getLogger(__name__)
 
 def _typst_data_dir() -> Path:
     """Ask the typst binary directly for its package path — most robust."""
@@ -135,9 +137,7 @@ class Config:
     def _validate_and_set_defaults(self):
         flagged_macro = [pkg for pkg in self.typst_packages if pkg.is_macro is True]
         if len(flagged_macro) == 1:
-            print("okay")
             self.typst_macro_path = typst_package_dir(flagged_macro[0])
-            print(self.typst_macro_path)
         elif len(flagged_macro) > 1:
             raise EnvironmentError(f"Multiple Typst packages configured as macro")
 
@@ -149,18 +149,15 @@ class Config:
             raise EnvironmentError("Multiple Typst packages set to default")
 
         if not self.latex_preamble_path.is_file():
-            print("TODO")
-#            raise EnvironmentError(f"LaTeX preamble path {self.latex_preamble_path} does not exist")
+            logger.warning(f"LaTeX preamble path {self.latex_preamble_path} does not exist")
 
         if not self.latex_macro_path.is_file():
-            print("TODO")
-#            raise EnvironmentError(f"LaTeX macro path {self.latex_macro_path} does not exist")
+            logger.warning(f"LaTeX macro path {self.latex_macro_path} does not exist")
 
         if self.typst_preamble_path is None or (self.typst_preamble_path is not None and not self.typst_preamble_path.is_file()):
-            print("TODO")
+            logging.warning("Invalid or non existant typst preamble package")
         if self.typst_macro_path is None or (self.typst_macro_path is not None and not self.typst_macro_path.is_file()):
-            print("TODO")
-
+            logging.warning("Invalid or non existant typst macro package")
 
     def _load_config_from_json(self):
         """ Updates default values with values specified in config file """
