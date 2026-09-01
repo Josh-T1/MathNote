@@ -7,15 +7,14 @@ import logging
 
 from .source_file import Assignment, FileType, Lecture, StandaloneSourceFile
 
-logger = logging.getLogger("mathnote")
+logger = logging.getLogger(__name__)
 
 def number2filename(num: int, filetype: FileType) -> str:
     return f'lec_{num:02d}{filetype.extension}'
 
 
-# TODO: refactor this. Some directories are required while some are optional
 class Course:
-    source_file_directories = [Path("assignments"), Path("main/lectures"), Path("problems"), Path("projects")]
+    source_file_directories = [Path("assignments"), Path("main/lectures")]
 
     def __init__(self,
                  path: Path,
@@ -62,8 +61,16 @@ class Course:
         return self._course_info
 
     def _load_course_info(self) -> dict:
-        with open(self.path / "course_info.json", 'r') as f:
-            info = json.load(f)
+        info_path = self.path / "course_info.json"
+        try:
+            with open(info_path, 'r') as f:
+                info = json.load(f)
+        except FileNotFoundError:
+            logger.error(f"Missing course_info.json for course '{self.path.name}' at {info_path}")
+            raise
+        except json.JSONDecodeError as e:
+            logger.error(f"Malformed course_info.json for course '{self.path.name}': {e}")
+            raise
 
         info["weekdays"] = [] if not info["weekdays"] else self._weekdays_string_to_list(info["weekdays"])
         info["name"] = self.name
@@ -75,6 +82,7 @@ class Course:
         # add logging
         end_date = self.course_info.get("end-date", "")
         if not end_date:
+            logger.warning(f"No 'end-date' set for course '{self.name}', treating course as not current")
             return False
         return datetime.strptime(end_date, "%Y-%m-%d") > datetime.today()
 
@@ -108,15 +116,6 @@ class Course:
             res = []
         return res
 
-    def get_week(self, lecture: Lecture) -> int:
-        """
-        TODO: week can not be determined without additional info of schedule
-        returns: the week as int (1 indexed).
-        * returns 0 when week can not be determined from lecture object
-        """
-        if len(self.days()) == 0:
-            return 0
-        return ceil(lecture.number() / len(self.days()))
 
     # adjust this
     def include_template(self) -> Callable[[str], str]:
@@ -153,4 +152,4 @@ class Course:
         return self.path == other.path
 
     def __repr__(self) -> str:
-        return f"{self.__class__.name}(path={self.path}, lectures={self.lectures}, assignments={self.assignments})"
+        return f"{self.__class__.__name__}(path={self.path}, lectures={self.lectures}, assignments={self.assignments})"

@@ -10,7 +10,7 @@ from ..models import Course, Assignment, Lecture
 from ..enums import FileType
 from ..exceptions import CourseExistsError, InvalidNameError
 
-logger = logging.getLogger(__name__) # TODO
+logger = logging.getLogger(__name__)
 
 def get_header_footer(filepath: Path,
                       end_header_pattern: str = "begin lectures",
@@ -45,7 +45,7 @@ def get_header_footer(filepath: Path,
 
     return (header, body, footer)
 
-# TODO: I dont want to pass CONFIG to repo
+
 class CourseRepository:
     """ Container for all Course objects """
     _instances: dict[Path, 'CourseRepository'] = {}
@@ -288,4 +288,3 @@ class CourseRepository:
         if sort:
             lectures.sort(key=lambda lec: lec.number())
         return lectures
-

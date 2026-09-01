@@ -19,11 +19,6 @@ COURSE_CONTAINER_ROLE = Qt.ItemDataRole.UserRole + 4
 COURSE_DIR = Qt.ItemDataRole.UserRole + 5
 EMPTY = Qt.ItemDataRole.UserRole + 6 # TODO delete?
 
-
-
-
-#MAIN_WINDOW_CSS = """
-#QMainWindow {
-#        background-color: #2E2E2E;
-#        }
-#"""
+LABEL_ROLE = Qt.ItemDataRole.UserRole + 10   # which field this value-item maps to, e.g. "latex" / "typst"
+SECTION_ROLE = Qt.ItemDataRole.UserRole + 11 # the section object, stored on the parent row
+PARENTS_ROLE = Qt.ItemDataRole.UserRole + 12 # the section object, stored on the parent row

@@ -24,12 +24,6 @@ class FileType(Enum):
         }
         return extension_map.get(extension, cls.Unsupported)
 
-# TODO: delete?
-class CourseSubdir(Enum):
-    Assignment = auto()
-    Lectures = auto()
-
-
 class OutputFormat(Enum):
     PDF = "pdf"
     SVG = "svg"

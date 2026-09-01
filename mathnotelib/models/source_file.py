@@ -4,11 +4,6 @@ import re
 from typing import Callable, Iterable, Iterator, SupportsIndex, Union
 from ..enums import FileType
 
-"""
-TODO: we get errors from latexmk, but output is still produced. Look into different error code meanings.
-Currently we can just check for output file to validate compilation
-"""
-
 
 @dataclass
 class SourceFile:
@@ -73,7 +68,7 @@ class Lecture(ProjectSourceFile):
         """ Returns most recent edit in seconds """
         return self.path.stat().st_mtime
 
-
+# TODO evenetually this can be removed
 # There is an issue with this. In typst optional args can be sarrounded by '()' or '[]' (inline vs block), we will assume users always use '[]'
 @dataclass(frozen=True)
 class LanguageChars:

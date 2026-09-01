@@ -67,20 +67,20 @@ class FlashcardDoubleLinkedList:
             counter += 1
         return counter
 
-    def remove(self, index: int) -> None:
-        """ Remove node at index """
-        if index > len(self) or index < 0:
-            raise IndexError(f"Index {index} is out of range for remove operation")
-
-        for _index, node in enumerate(self):
-            if _index != index:
-                continue
-            # adjust next, prev referecnes
-            if (next_node := node.next):
-                next_node.prev = node.prev
-            if (prev_node := node.prev):
-                prev_node.next = node.next
-            break
+#    def remove(self, index: int) -> None:
+#        """ Remove node at index """
+#        if index > len(self) or index < 0:
+#            raise IndexError(f"Index {index} is out of range for remove operation")
+#
+#        for _index, node in enumerate(self):
+#            if _index != index:
+#                continue
+#            # adjust next, prev referecnes
+#            if (next_node := node.next):
+#                next_node.prev = node.prev
+#            if (prev_node := node.prev):
+#                prev_node.next = node.next
+#            break
 
 
     def append(self, data) -> None:
@@ -94,6 +94,7 @@ class FlashcardDoubleLinkedList:
             while cur.prev:
                 cur = cur.prev
             cur.prev = new_node
+            new_node.next = cur
 
     def prepend(self, data: Flashcard) -> None:
         new_node = Node(data)
@@ -105,7 +106,6 @@ class FlashcardDoubleLinkedList:
         else:
             self.current = new_node
             self.head = new_node
-            self.tail = new_node
 
     def get_next(self) -> Flashcard:
         # Current node exists and has next reference, then return next reference and set current to next

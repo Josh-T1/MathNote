@@ -9,7 +9,7 @@ from ..models import Flashcard, langauage_char_registry, TrackedText, FlashcardS
 from ..enums import FileType
 from ..config import CONFIG, Section
 
-logger = logging.getLogger("mathnote")
+logger = logging.getLogger(__name__)
 
 Input = TypeVar("Input")
 Output = TypeVar("Output")

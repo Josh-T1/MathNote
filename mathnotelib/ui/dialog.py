@@ -5,7 +5,6 @@ from PyQt6.QtWidgets import (QCheckBox, QComboBox, QDateEdit, QDialog, QDialogBu
 from ..enums import FileType
 
 
-
 def show_error_dialog(window: QWidget, msg: str):
     dialog = QMessageBox(window)
     dialog.setIcon(QMessageBox.Icon.Critical)

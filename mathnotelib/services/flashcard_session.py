@@ -9,12 +9,12 @@ from typing import Deque
 from PyQt6.QtCore import QObject, pyqtSignal
 
 from .pipeline import ProcessingPipeline
+from .compiler import FlashcardCompiler
 from ..models import Flashcard, FlashcardDoubleLinkedList
-from ..services import FlashcardCompiler
 from ..config import Config
 from ..enums import FileType
 
-logger = logging.getLogger("mathnote")
+logger = logging.getLogger(__name__)
 
 
 """
