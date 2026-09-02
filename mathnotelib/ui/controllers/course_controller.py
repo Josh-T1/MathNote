@@ -6,7 +6,7 @@ from PyQt6.QtCore import QModelIndex, QObject, Qt
 from PyQt6.QtGui import QStandardItem
 from PyQt6.QtWidgets import QMainWindow
 
-from .ui_utils import with_error_dialog
+from .ui_utils import with_error_dialog, rendered_sorted_key
 from ..constants import DIR_ROLE, COURSE_CONTAINER_ROLE, COURSE_DIR, FILE_ROLE, LOADED_ROLE, OUTPUT_FILE_STEM
 from ..navbar import CourseNavbar
 from ..dialog import NewCourseDialog, confirm_delete

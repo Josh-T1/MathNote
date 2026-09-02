@@ -6,7 +6,7 @@ import logging
 from PyQt6.QtCore import QFileSystemWatcher, QTimer
 from PyQt6.QtWidgets import QMainWindow
 
-from .ui_utils import with_error_dialog
+from .ui_utils import with_error_dialog, rendered_sorted_key
 from ..constants import OUTPUT_FILE_STEM
 from ..file_viewer import TabWidget, TabbedSvgViewer
 from ...models import SourceFile
