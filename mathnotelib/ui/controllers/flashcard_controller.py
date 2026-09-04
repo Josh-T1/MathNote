@@ -99,7 +99,7 @@ class FlashcardController:
         all_box = QStandardItem('All')
         all_box.setCheckable(True)
         model.appendRow(all_box)
-        for i in range(1, len(course.lectures)):
+        for i in range(1, len(course.lectures) + 1):
             list_item = QStandardItem(f"Lecture {i}")
             list_item.setCheckable(True)
             model.appendRow(list_item)
